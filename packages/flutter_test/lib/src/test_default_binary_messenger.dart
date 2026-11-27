@@ -14,7 +14,10 @@ import 'widget_tester.dart';
 /// A function which takes the name of the method channel, it's handler,
 /// platform message and asynchronously returns an encoded response.
 typedef AllMessagesHandler = Future<ByteData?>? Function(
-    String channel, MessageHandler? handler, ByteData? message);
+  String channel,
+  MessageHandler? handler,
+  ByteData? message,
+);
 
 /// A [BinaryMessenger] subclass that is used as the default binary messenger
 /// under testing environment.
@@ -47,8 +50,6 @@ typedef AllMessagesHandler = Future<ByteData?>? Function(
 /// Listeners for these messages are configured using [setMessageHandler].
 class TestDefaultBinaryMessenger extends BinaryMessenger {
   /// Creates a [TestDefaultBinaryMessenger] instance.
-  ///
-  /// The [delegate] instance must not be null.
   TestDefaultBinaryMessenger(
     this.delegate, {
     Map<String, MessageHandler> outboundHandlers = const <String, MessageHandler>{},
@@ -102,7 +103,10 @@ class TestDefaultBinaryMessenger extends BinaryMessenger {
     }
     result ??= Future<ByteData?>.value();
     if (callback != null) {
-      result = result.then((ByteData? result) { callback(result); return result; });
+      result = result.then((ByteData? result) {
+        callback(result);
+        return result;
+      });
     }
     return result;
   }
@@ -113,7 +117,8 @@ class TestDefaultBinaryMessenger extends BinaryMessenger {
       _inboundHandlers.remove(channel);
       delegate.setMessageHandler(channel, null);
     } else {
-      _inboundHandlers[channel] = handler; // used to handle fake messages sent via handlePlatformMessage
+      _inboundHandlers[channel] =
+          handler; // used to handle fake messages sent via handlePlatformMessage
       delegate.setMessageHandler(channel, handler); // used to handle real messages from the engine
     }
   }
@@ -149,11 +154,13 @@ class TestDefaultBinaryMessenger extends BinaryMessenger {
     if (resultFuture != null) {
       _pendingMessages.add(resultFuture);
       resultFuture
-        // TODO(srawlins): Fix this static issue,
-        // https://github.com/flutter/flutter/issues/105750.
-        // ignore: body_might_complete_normally_catch_error
-        .catchError((Object error) { /* errors are the responsibility of the caller */ })
-        .whenComplete(() => _pendingMessages.remove(resultFuture));
+          // TODO(srawlins): Fix this static issue,
+          // https://github.com/flutter/flutter/issues/105750.
+          // ignore: body_might_complete_normally_catch_error
+          .catchError((Object error) {
+            /* errors are the responsibility of the caller */
+          })
+          .whenComplete(() => _pendingMessages.remove(resultFuture));
     }
     return resultFuture;
   }
@@ -208,7 +215,7 @@ class TestDefaultBinaryMessenger extends BinaryMessenger {
   ///
   ///  * [setMockStreamHandler], which wraps [setMockMethodCallHandler] to
   ///    handle [EventChannel] messages.
-  void setMockMessageHandler(String channel, MessageHandler? handler, [ Object? identity ]) {
+  void setMockMessageHandler(String channel, MessageHandler? handler, [Object? identity]) {
     if (handler == null) {
       _outboundHandlers.remove(channel);
       _outboundHandlerIdentities.remove(channel);
@@ -251,7 +258,10 @@ class TestDefaultBinaryMessenger extends BinaryMessenger {
   ///
   ///  * [setMockStreamHandler], which wraps [setMockMethodCallHandler] to
   ///    handle [EventChannel] messages.
-  void setMockDecodedMessageHandler<T>(BasicMessageChannel<T> channel, Future<T> Function(T? message)? handler) {
+  void setMockDecodedMessageHandler<T>(
+    BasicMessageChannel<T> channel,
+    Future<T> Function(T? message)? handler,
+  ) {
     if (handler == null) {
       setMockMessageHandler(channel.name, null);
       return;
@@ -293,7 +303,10 @@ class TestDefaultBinaryMessenger extends BinaryMessenger {
   ///
   ///  * [setMockDecodedMessageHandler], which is similar but decodes
   ///    the messages using a [MessageCodec].
-  void setMockMethodCallHandler(MethodChannel channel, Future<Object?>? Function(MethodCall message)? handler) {
+  void setMockMethodCallHandler(
+    MethodChannel channel,
+    Future<Object?>? Function(MethodCall message)? handler,
+  ) {
     if (handler == null) {
       setMockMessageHandler(channel.name, null);
       return;
@@ -352,39 +365,38 @@ class TestDefaultBinaryMessenger extends BinaryMessenger {
       return;
     }
 
-    final StreamController<Object?> controller = StreamController<Object?>();
-    addTearDown(controller.close);
+    final controller = StreamController<Object?>();
 
-    setMockMethodCallHandler(MethodChannel(channel.name, channel.codec), (MethodCall call) async {
-      switch (call.method) {
-        case 'listen':
-          return handler.onListen(call.arguments, MockStreamHandlerEventSink(controller.sink));
-        case 'cancel':
-          return handler.onCancel(call.arguments);
-        default:
-          throw UnimplementedError('Method ${call.method} not implemented');
-      }
-    });
+    setMockMethodCallHandler(
+      MethodChannel(channel.name, channel.codec),
+      (MethodCall call) async => switch (call.method) {
+        'listen' => handler.onListen(call.arguments, MockStreamHandlerEventSink(controller.sink)),
+        'cancel' => handler.onCancel(call.arguments),
+        _ => throw UnimplementedError('Method ${call.method} not implemented'),
+      },
+    );
 
     final StreamSubscription<Object?> sub = controller.stream.listen(
-      (Object? e) => handlePlatformMessage(
-        channel.name,
-        channel.codec.encodeSuccessEnvelope(e),
-        null,
-      ),
+      (Object? e) =>
+          handlePlatformMessage(channel.name, channel.codec.encodeSuccessEnvelope(e), null),
     );
-    addTearDown(sub.cancel);
+    addTearDown(() async {
+      await sub.cancel();
+      // If the handler already closed the stream (for example with
+      // MockStreamHandlerEventSink.endOfStream inside a testWidgets body), the
+      // done future belongs to the test's fake async zone. Tear down does not
+      // run that zone, so awaiting the done future again does not return.
+      if (!controller.isClosed) {
+        await controller.close();
+      }
+    });
     sub.onError((Object? e) {
       if (e is! PlatformException) {
         throw ArgumentError('Stream error must be a PlatformException');
       }
       handlePlatformMessage(
         channel.name,
-        channel.codec.encodeErrorEnvelope(
-          code: e.code,
-          message: e.message,
-          details: e.details,
-        ),
+        channel.codec.encodeErrorEnvelope(code: e.code, message: e.message, details: e.details),
         null,
       );
     });
@@ -407,5 +419,6 @@ class TestDefaultBinaryMessenger extends BinaryMessenger {
   /// `channel` is not set.
   ///
   /// Registered callbacks are cleared after each test.
-  bool checkMockMessageHandler(String channel, Object? handler) => _outboundHandlerIdentities[channel] == handler;
+  bool checkMockMessageHandler(String channel, Object? handler) =>
+      _outboundHandlerIdentities[channel] == handler;
 }

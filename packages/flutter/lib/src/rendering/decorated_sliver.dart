@@ -5,7 +5,6 @@
 import 'object.dart';
 import 'proxy_box.dart';
 import 'proxy_sliver.dart';
-import 'sliver.dart';
 
 /// Paints a [Decoration] either before or after its child paints.
 ///
@@ -14,18 +13,16 @@ import 'sliver.dart';
 class RenderDecoratedSliver extends RenderProxySliver {
   /// Creates a decorated sliver.
   ///
-  /// The [decoration], [position], and [configuration] arguments must not be
+  /// The [_decoration], [_position], and [_configuration] arguments must not be
   /// null. By default the decoration paints behind the child.
   ///
   /// The [ImageConfiguration] will be passed to the decoration (with the size
   /// filled in) to let it resolve images.
   RenderDecoratedSliver({
-    required Decoration decoration,
-    DecorationPosition position = DecorationPosition.background,
-    ImageConfiguration configuration = ImageConfiguration.empty,
-  }) : _decoration = decoration,
-       _position = position,
-       _configuration = configuration;
+    required this._decoration,
+    this._position = DecorationPosition.background,
+    this._configuration = ImageConfiguration.empty,
+  });
 
   /// What decoration to paint.
   ///
@@ -93,32 +90,30 @@ class RenderDecoratedSliver extends RenderProxySliver {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (child != null && child!.geometry!.visible) {
-      final SliverPhysicalParentData childParentData = child!.parentData! as SliverPhysicalParentData;
-      final Size childSize;
-      final Offset scrollOffset;
-
-      // In the case where the child sliver has infinite scroll extent, the decoration
-      // should only extend down to the bottom cache extent.
-      final double cappedMainAxisExtent = child!.geometry!.scrollExtent.isInfinite
-        ? constraints.scrollOffset + child!.geometry!.cacheExtent + constraints.cacheOrigin
-        : child!.geometry!.scrollExtent;
-      switch (constraints.axis) {
-        case Axis.vertical:
-          childSize = Size(constraints.crossAxisExtent, cappedMainAxisExtent);
-          scrollOffset = Offset(0.0, -constraints.scrollOffset);
-        case Axis.horizontal:
-          childSize = Size(cappedMainAxisExtent, constraints.crossAxisExtent);
-          scrollOffset = Offset(-constraints.scrollOffset, 0.0);
-      }
-      final Offset childOffset = offset + childParentData.paintOffset;
-      if (position == DecorationPosition.background) {
-        _painter!.paint(context.canvas, childOffset + scrollOffset, configuration.copyWith(size: childSize));
-      }
-      context.paintChild(child!, childOffset);
-      if (position == DecorationPosition.foreground) {
-        _painter!.paint(context.canvas, childOffset + scrollOffset, configuration.copyWith(size: childSize));
-      }
+    if (child == null || !child!.geometry!.visible) {
+      return;
     }
+
+    final Rect paintRect = getMaxPaintRect();
+    void paintDecoration() => _painter!.paint(
+      context.canvas,
+      offset + paintRect.topLeft,
+      configuration.copyWith(size: paintRect.size),
+    );
+    switch (position) {
+      case DecorationPosition.background:
+        paintDecoration();
+        context.paintChild(child!, offset);
+      case DecorationPosition.foreground:
+        context.paintChild(child!, offset);
+        paintDecoration();
+    }
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(_decoration.toDiagnosticsNode(name: 'decoration'));
+    properties.add(DiagnosticsProperty<ImageConfiguration>('configuration', configuration));
   }
 }

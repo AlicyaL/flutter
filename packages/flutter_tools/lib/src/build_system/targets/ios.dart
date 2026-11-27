@@ -3,26 +3,32 @@
 // found in the LICENSE file.
 
 import 'package:meta/meta.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../../artifacts.dart';
 import '../../base/build.dart';
 import '../../base/common.dart';
 import '../../base/file_system.dart';
 import '../../base/io.dart';
+import '../../base/logger.dart' show Logger;
 import '../../base/process.dart';
+import '../../base/version.dart';
 import '../../build_info.dart';
-import '../../globals.dart' as globals;
+import '../../darwin/darwin.dart';
+import '../../devfs.dart';
 import '../../ios/mac.dart';
+import '../../isolated/native_assets/dart_hook_result.dart';
 import '../../macos/xcode.dart';
 import '../../project.dart';
-import '../../reporting/reporting.dart';
 import '../build_system.dart';
 import '../depfile.dart';
 import '../exceptions.dart';
+import '../tools/shader_compiler.dart';
 import 'assets.dart';
 import 'common.dart';
+import 'darwin.dart';
 import 'icon_tree_shaker.dart';
-import 'shader_compiler.dart';
+import 'native_assets.dart';
 
 /// Supports compiling a dart kernel file to an assembly file.
 ///
@@ -36,10 +42,10 @@ abstract class AotAssemblyBase extends Target {
 
   @override
   Future<void> build(Environment environment) async {
-    final AOTSnapshotter snapshotter = AOTSnapshotter(
+    final snapshotter = AOTSnapshotter(
       fileSystem: environment.fileSystem,
       logger: environment.logger,
-      xcode: globals.xcode!,
+      xcode: environment.xcode,
       artifacts: environment.artifacts,
       processManager: environment.processManager,
     );
@@ -49,7 +55,7 @@ abstract class AotAssemblyBase extends Target {
       throw MissingDefineException(kBuildMode, 'aot_assembly');
     }
     final String? environmentTargetPlatform = environment.defines[kTargetPlatform];
-    if (environmentTargetPlatform== null) {
+    if (environmentTargetPlatform == null) {
       throw MissingDefineException(kTargetPlatform, 'aot_assembly');
     }
     final String? sdkRoot = environment.defines[kSdkRoot];
@@ -57,56 +63,62 @@ abstract class AotAssemblyBase extends Target {
       throw MissingDefineException(kSdkRoot, 'aot_assembly');
     }
 
-    final List<String> extraGenSnapshotOptions = decodeCommaSeparated(environment.defines, kExtraGenSnapshotOptions);
-    final BuildMode buildMode = BuildMode.fromCliName(environmentBuildMode);
-    final TargetPlatform targetPlatform = getTargetPlatformForName(environmentTargetPlatform);
+    final List<String> extraGenSnapshotOptions = decodeCommaSeparated(
+      environment.defines,
+      kExtraGenSnapshotOptions,
+    );
+    final buildMode = BuildMode.fromCliName(environmentBuildMode);
+    final targetPlatform = TargetPlatform.fromName(environmentTargetPlatform);
     final String? splitDebugInfo = environment.defines[kSplitDebugInfo];
-    final bool dartObfuscation = environment.defines[kDartObfuscation] == 'true';
-    final List<DarwinArch> darwinArchs = environment.defines[kIosArchs]
-      ?.split(' ')
-      .map(getIOSArchForName)
-      .toList()
-      ?? <DarwinArch>[DarwinArch.arm64];
+    final dartObfuscation = environment.defines[kDartObfuscation] == 'true';
+    final List<CpuArch> cpuArchs =
+        environment.defines[kIosArchs]?.split(' ').map(getCpuArchForName).toList() ??
+        <CpuArch>[CpuArch.arm64];
     if (targetPlatform != TargetPlatform.ios) {
       throw Exception('aot_assembly is only supported for iOS applications.');
     }
 
-    final EnvironmentType? environmentType = environmentTypeFromSdkroot(sdkRoot, environment.fileSystem);
+    final EnvironmentType environmentType = environmentTypeFromSdkroot(
+      sdkRoot,
+      environment.fileSystem,
+    );
     if (environmentType == EnvironmentType.simulator) {
       throw Exception(
         'release/profile builds are only supported for physical devices. '
-        'attempted to build for simulator.'
+        'attempted to build for simulator.',
       );
     }
     final String? codeSizeDirectory = environment.defines[kCodeSizeDirectory];
 
     // If we're building multiple iOS archs the binaries need to be lipo'd
     // together.
-    final List<Future<int>> pending = <Future<int>>[];
-    for (final DarwinArch darwinArch in darwinArchs) {
-      final List<String> archExtraGenSnapshotOptions = List<String>.of(extraGenSnapshotOptions);
+    final pending = <Future<int>>[];
+    for (final cpuArch in cpuArchs) {
+      final archExtraGenSnapshotOptions = List<String>.of(extraGenSnapshotOptions);
       if (codeSizeDirectory != null) {
         final File codeSizeFile = environment.fileSystem
-          .directory(codeSizeDirectory)
-          .childFile('snapshot.${darwinArch.name}.json');
+            .directory(codeSizeDirectory)
+            .childFile('snapshot.${cpuArch.darwinArchName}.json');
         final File precompilerTraceFile = environment.fileSystem
-          .directory(codeSizeDirectory)
-          .childFile('trace.${darwinArch.name}.json');
+            .directory(codeSizeDirectory)
+            .childFile('trace.${cpuArch.darwinArchName}.json');
         archExtraGenSnapshotOptions.add('--write-v8-snapshot-profile-to=${codeSizeFile.path}');
         archExtraGenSnapshotOptions.add('--trace-precompiler-to=${precompilerTraceFile.path}');
       }
-      pending.add(snapshotter.build(
-        platform: targetPlatform,
-        buildMode: buildMode,
-        mainPath: environment.buildDir.childFile('app.dill').path,
-        outputPath: environment.fileSystem.path.join(buildOutputPath, darwinArch.name),
-        darwinArch: darwinArch,
-        sdkRoot: sdkRoot,
-        quiet: true,
-        splitDebugInfo: splitDebugInfo,
-        dartObfuscation: dartObfuscation,
-        extraGenSnapshotOptions: archExtraGenSnapshotOptions,
-      ));
+      pending.add(
+        snapshotter.build(
+          platform: targetPlatform,
+          buildMode: buildMode,
+          mainPath: environment.buildDir.childFile('app.dill').path,
+          outputPath: environment.fileSystem.path.join(buildOutputPath, cpuArch.darwinArchName),
+          cpuArch: cpuArch,
+          sdkRoot: sdkRoot,
+          quiet: true,
+          splitDebugInfo: splitDebugInfo,
+          dartObfuscation: dartObfuscation,
+          extraGenSnapshotOptions: archExtraGenSnapshotOptions,
+        ),
+      );
     }
     final List<int> results = await Future.wait(pending);
     if (results.any((int result) => result != 0)) {
@@ -116,7 +128,7 @@ abstract class AotAssemblyBase extends Target {
     // Combine the app lib into a fat framework.
     await Lipo.create(
       environment,
-      darwinArchs,
+      cpuArchs,
       relativePath: 'App.framework/App',
       inputDir: buildOutputPath,
     );
@@ -124,7 +136,7 @@ abstract class AotAssemblyBase extends Target {
     // And combine the dSYM for each architecture too, if it was created.
     await Lipo.create(
       environment,
-      darwinArchs,
+      cpuArchs,
       relativePath: 'App.framework.dSYM/Contents/Resources/DWARF/App',
       inputDir: buildOutputPath,
       // Don't fail if the dSYM wasn't created (i.e. during a debug build).
@@ -156,17 +168,11 @@ class AotAssemblyRelease extends AotAssemblyBase {
   ];
 
   @override
-  List<Source> get outputs => const <Source>[
-    Source.pattern('{OUTPUT_DIR}/App.framework/App'),
-  ];
+  List<Source> get outputs => const <Source>[Source.pattern('{OUTPUT_DIR}/App.framework/App')];
 
   @override
-  List<Target> get dependencies => const <Target>[
-    ReleaseUnpackIOS(),
-    KernelSnapshot(),
-  ];
+  List<Target> get dependencies => const <Target>[ReleaseUnpackIOS(), KernelSnapshot()];
 }
-
 
 /// Generate an assembly target from a dart kernel file in profile mode.
 class AotAssemblyProfile extends AotAssemblyBase {
@@ -191,15 +197,10 @@ class AotAssemblyProfile extends AotAssemblyBase {
   ];
 
   @override
-  List<Source> get outputs => const <Source>[
-    Source.pattern('{OUTPUT_DIR}/App.framework/App'),
-  ];
+  List<Source> get outputs => const <Source>[Source.pattern('{OUTPUT_DIR}/App.framework/App')];
 
   @override
-  List<Target> get dependencies => const <Target>[
-    ProfileUnpackIOS(),
-    KernelSnapshot(),
-  ];
+  List<Target> get dependencies => const <Target>[ProfileUnpackIOS(), KernelSnapshot()];
 }
 
 /// Create a trivial App.framework file for debug iOS builds.
@@ -210,20 +211,15 @@ class DebugUniversalFramework extends Target {
   String get name => 'debug_universal_framework';
 
   @override
-  List<Target> get dependencies => const <Target>[
-    DebugUnpackIOS(),
-    KernelSnapshot(),
-  ];
+  List<Target> get dependencies => const <Target>[DebugUnpackIOS(), KernelSnapshot()];
 
   @override
   List<Source> get inputs => const <Source>[
-     Source.pattern('{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/ios.dart'),
+    Source.pattern('{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/ios.dart'),
   ];
 
   @override
-  List<Source> get outputs => const <Source>[
-    Source.pattern('{BUILD_DIR}/App.framework/App'),
-  ];
+  List<Source> get outputs => const <Source>[Source.pattern('{BUILD_DIR}/App.framework/App')];
 
   @override
   Future<void> build(Environment environment) async {
@@ -234,16 +230,9 @@ class DebugUniversalFramework extends Target {
 
     // Generate a trivial App.framework.
     final Set<String>? iosArchNames = environment.defines[kIosArchs]?.split(' ').toSet();
-    final File output = environment.buildDir
-      .childDirectory('App.framework')
-      .childFile('App');
+    final File output = environment.buildDir.childDirectory('App.framework').childFile('App');
     environment.buildDir.createSync(recursive: true);
-    await _createStubAppFramework(
-      output,
-      environment,
-      iosArchNames,
-      sdkRoot,
-    );
+    await _createStubAppFramework(output, environment, iosArchNames, sdkRoot);
   }
 }
 
@@ -252,30 +241,28 @@ class DebugUniversalFramework extends Target {
 /// This class is abstract to share logic between the three concrete
 /// implementations. The shelling out is done to avoid complications with
 /// preserving special files (e.g., symbolic links) in the framework structure.
-abstract class UnpackIOS extends Target {
+abstract class UnpackIOS extends UnpackDarwin {
   const UnpackIOS();
 
   @override
   List<Source> get inputs => <Source>[
-        const Source.pattern(
-            '{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/ios.dart'),
-        Source.artifact(
-          Artifact.flutterXcframework,
-          platform: TargetPlatform.ios,
-          mode: buildMode,
-        ),
-      ];
+    const Source.pattern(
+      '{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/ios.dart',
+    ),
+    Source.artifact(Artifact.flutterXcframework, platform: TargetPlatform.ios, mode: buildMode),
+  ];
 
   @override
-  List<Source> get outputs => const <Source>[
-        Source.pattern('{OUTPUT_DIR}/Flutter.framework/Flutter'),
-      ];
+  List<Source> get outputs => const <Source>[kFlutterIOSFrameworkBinarySource];
 
   @override
   List<Target> get dependencies => <Target>[];
 
   @visibleForOverriding
   BuildMode get buildMode;
+
+  @override
+  FlutterDarwinPlatform get darwinPlatform => FlutterDarwinPlatform.ios;
 
   @override
   Future<void> build(Environment environment) async {
@@ -287,105 +274,64 @@ abstract class UnpackIOS extends Target {
     if (archs == null) {
       throw MissingDefineException(kIosArchs, name);
     }
-    _copyFramework(environment, sdkRoot);
 
-    final File frameworkBinary = environment.outputDir.childDirectory('Flutter.framework').childFile('Flutter');
+    // Copy Flutter framework.
+    final EnvironmentType environmentType = environmentTypeFromSdkroot(
+      sdkRoot,
+      environment.fileSystem,
+    );
+    await copyFramework(
+      environment,
+      environmentType: environmentType,
+      framework: Artifact.flutterFramework,
+      targetPlatform: TargetPlatform.ios,
+      buildMode: buildMode,
+    );
+    await _copyFrameworkDysm(environment, sdkRoot: sdkRoot, environmentType: environmentType);
+
+    final File frameworkBinary = environment.outputDir
+        .childDirectory(FlutterDarwinPlatform.ios.frameworkName)
+        .childFile(FlutterDarwinPlatform.ios.binaryName);
     final String frameworkBinaryPath = frameworkBinary.path;
     if (!frameworkBinary.existsSync()) {
       throw Exception('Binary $frameworkBinaryPath does not exist, cannot thin');
     }
-    _thinFramework(environment, frameworkBinaryPath, archs);
-    if (buildMode == BuildMode.release) {
-      _bitcodeStripFramework(environment, frameworkBinaryPath);
-    }
+    await thinFramework(environment, frameworkBinaryPath, archs);
+
     await _signFramework(environment, frameworkBinary, buildMode);
   }
 
-  void _copyFramework(Environment environment, String sdkRoot) {
-    final EnvironmentType? environmentType = environmentTypeFromSdkroot(sdkRoot, environment.fileSystem);
-    final String basePath = environment.artifacts.getArtifactPath(
-      Artifact.flutterFramework,
-      platform: TargetPlatform.ios,
-      mode: buildMode,
-      environmentType: environmentType,
+  Future<void> _copyFrameworkDysm(
+    Environment environment, {
+    required String sdkRoot,
+    EnvironmentType? environmentType,
+  }) async {
+    // Copy Flutter framework dSYM (debug symbol) bundle, if present.
+    final Directory frameworkDsym = environment.fileSystem.directory(
+      environment.artifacts.getArtifactPath(
+        Artifact.flutterFrameworkDsym,
+        platform: TargetPlatform.ios,
+        mode: buildMode,
+        environmentType: environmentType,
+      ),
     );
-
-    final ProcessResult result = environment.processManager.runSync(<String>[
-      'rsync',
-      '-av',
-      '--delete',
-      '--filter',
-      '- .DS_Store/',
-      basePath,
-      environment.outputDir.path,
-    ]);
-    if (result.exitCode != 0) {
-      throw Exception(
-        'Failed to copy framework (exit ${result.exitCode}:\n'
-        '${result.stdout}\n---\n${result.stderr}',
-      );
-    }
-  }
-
-  /// Destructively thin Flutter.framework to include only the specified architectures.
-  void _thinFramework(Environment environment, String frameworkBinaryPath, String archs) {
-    final List<String> archList = archs.split(' ').toList();
-    final ProcessResult infoResult = environment.processManager.runSync(<String>[
-      'lipo',
-      '-info',
-      frameworkBinaryPath,
-    ]);
-    final String lipoInfo = infoResult.stdout as String;
-
-    final ProcessResult verifyResult = environment.processManager.runSync(<String>[
-      'lipo',
-      frameworkBinaryPath,
-      '-verify_arch',
-      ...archList,
-    ]);
-
-    if (verifyResult.exitCode != 0) {
-      throw Exception('Binary $frameworkBinaryPath does not contain $archs. Running lipo -info:\n$lipoInfo');
-    }
-
-    // Skip thinning for non-fat executables.
-    if (lipoInfo.startsWith('Non-fat file:')) {
-      environment.logger.printTrace('Skipping lipo for non-fat file $frameworkBinaryPath');
-      return;
-    }
-
-    // Thin in-place.
-    final ProcessResult extractResult = environment.processManager.runSync(<String>[
-      'lipo',
-      '-output',
-      frameworkBinaryPath,
-      for (final String arch in archList)
-        ...<String>[
-          '-extract',
-          arch,
-        ],
-      ...<String>[frameworkBinaryPath],
-    ]);
-
-    if (extractResult.exitCode != 0) {
-      throw Exception('Failed to extract $archs for $frameworkBinaryPath.\n${extractResult.stderr}\nRunning lipo -info:\n$lipoInfo');
-    }
-  }
-
-  /// Destructively strip bitcode from the framework. This can be removed
-  /// when the framework is no longer built with bitcode.
-  void _bitcodeStripFramework(Environment environment, String frameworkBinaryPath) {
-    final ProcessResult stripResult = environment.processManager.runSync(<String>[
-      'xcrun',
-      'bitcode_strip',
-      frameworkBinaryPath,
-      '-r', // Delete the bitcode segment.
-      '-o',
-      frameworkBinaryPath,
-    ]);
-
-    if (stripResult.exitCode != 0) {
-      throw Exception('Failed to strip bitcode for $frameworkBinaryPath.\n${stripResult.stderr}');
+    if (frameworkDsym.existsSync()) {
+      final ProcessResult result = await environment.processManager.run(<String>[
+        'rsync',
+        '-av',
+        '--delete',
+        '--filter',
+        '- .DS_Store/',
+        '--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r',
+        frameworkDsym.path,
+        environment.outputDir.path,
+      ]);
+      if (result.exitCode != 0) {
+        throw Exception(
+          'Failed to copy framework dSYM (exit ${result.exitCode}:\n'
+          '${result.stdout}\n---\n${result.stderr}',
+        );
+      }
     }
   }
 }
@@ -423,6 +369,250 @@ class DebugUnpackIOS extends UnpackIOS {
   BuildMode get buildMode => BuildMode.debug;
 }
 
+// TODO(gaaclarke): Remove this after a reasonable amount of time where the
+// UISceneDelegate migration being on stable. This incurs a minor build time
+// cost.
+Future<void> _checkForLaunchRootViewControllerAccessDeprecation(
+  Logger logger,
+  File file,
+  Pattern usage,
+  Pattern terminator,
+) async {
+  final List<String> lines = file.readAsLinesSync();
+
+  var inDidFinishLaunchingWithOptions = false;
+  var lineNumber = 0;
+  for (final line in lines) {
+    lineNumber += 1;
+    if (!inDidFinishLaunchingWithOptions) {
+      if (line.contains('didFinishLaunchingWithOptions')) {
+        inDidFinishLaunchingWithOptions = true;
+      }
+    } else {
+      if (line.startsWith(terminator)) {
+        inDidFinishLaunchingWithOptions = false;
+      } else if (line.contains(usage)) {
+        _printWarning(
+          logger,
+          file.path,
+          lineNumber,
+          // TODO(gaaclarke): Add a link to the migration guide when it's written.
+          'Flutter deprecation: Accessing rootViewController in `application:didFinishLaunchingWithOptions:` [flutter-launch-rootvc].\n'
+          '\tnote: \n' // The space after `note:` is meaningful, it is required associate the note with the warning in Xcode.
+          '\tAfter the UISceneDelegate migration the `UIApplicationDelegate.window` and '
+          '`UIWindow.rootViewController` properties will not be set in '
+          '`application:didFinishLaunchingWithOptions:`. If you are relying on that '
+          'in order to register platform channels at application launch use the '
+          '`FlutterPluginRegistry` API instead. Other setup can be moved to a '
+          'FlutterViewController subclass (ex: `awakeFromNib`).',
+        );
+      }
+    }
+  }
+}
+
+/// Checks [file] representing objc code for deprecated usage of the
+/// rootViewController and writes it to [logger].
+@visibleForTesting
+Future<void> checkForLaunchRootViewControllerAccessDeprecationObjc(Logger logger, File file) async {
+  try {
+    await _checkForLaunchRootViewControllerAccessDeprecation(
+      logger,
+      file,
+      RegExp('self.*?window.*?rootViewController'),
+      RegExp('^}'),
+    );
+    // ignore: avoid_catches_without_on_clauses
+  } catch (_) {}
+}
+
+/// Checks [file] representing swift code for deprecated usage of the
+/// rootViewController and writes it to [logger].
+@visibleForTesting
+Future<void> checkForLaunchRootViewControllerAccessDeprecationSwift(
+  Logger logger,
+  File file,
+) async {
+  try {
+    await _checkForLaunchRootViewControllerAccessDeprecation(
+      logger,
+      file,
+      'window?.rootViewController',
+      RegExp(r'^.*?func\s*?\S*?\('),
+    );
+    // ignore: avoid_catches_without_on_clauses
+  } catch (_) {}
+}
+
+void _printWarning(Logger logger, String path, int line, String warning) {
+  logger.printWarning('$path:$line: warning: $warning');
+}
+
+class _IssueLaunchRootViewControllerAccess extends Target {
+  const _IssueLaunchRootViewControllerAccess();
+
+  @override
+  Future<void> build(Environment environment) async {
+    final FlutterProject flutterProject = FlutterProject.fromDirectory(
+      environment.projectDir,
+      logger: environment.logger,
+    );
+    if (flutterProject.ios.appDelegateSwift.existsSync()) {
+      await checkForLaunchRootViewControllerAccessDeprecationSwift(
+        environment.logger,
+        flutterProject.ios.appDelegateSwift,
+      );
+    }
+    if (flutterProject.ios.appDelegateObjcImplementation.existsSync()) {
+      await checkForLaunchRootViewControllerAccessDeprecationObjc(
+        environment.logger,
+        flutterProject.ios.appDelegateObjcImplementation,
+      );
+    }
+  }
+
+  @override
+  List<Target> get dependencies => <Target>[];
+
+  @override
+  List<Source> get inputs {
+    return <Source>[
+      const Source.pattern(
+        '{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/ios.dart',
+      ),
+      Source.fromProject(
+        (FlutterProject project) => project.ios.appDelegateObjcImplementation,
+        optional: true,
+      ),
+      Source.fromProject((FlutterProject project) => project.ios.appDelegateSwift, optional: true),
+    ];
+  }
+
+  @override
+  String get name => 'IssueLaunchRootViewControllerAccess';
+
+  @override
+  List<Source> get outputs => <Source>[];
+}
+
+/// This target verifies that the Xcode project has an LLDB Init File set within
+/// at least one scheme.
+///
+/// LLDB Init File is needed for debugging on physical iOS 26+ devices.
+class DebugIosLLDBInit extends Target {
+  const DebugIosLLDBInit();
+
+  @override
+  String get name => 'debug_ios_lldb_init';
+
+  @override
+  List<Source> get inputs => const <Source>[
+    Source.pattern('{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/ios.dart'),
+    Source.pattern(
+      '{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/darwin.dart',
+    ),
+  ];
+
+  @override
+  List<Source> get outputs => <Source>[
+    Source.fromProject((FlutterProject project) => project.ios.lldbInitFile),
+  ];
+
+  @override
+  List<Target> get dependencies => <Target>[];
+
+  @override
+  Future<bool> canSkip(Environment environment) async {
+    // The `build swift-package` is not run on a device and therefore does not need an LLDB Init File.
+    return environment.defines[kBuildSwiftPackage] == 'true';
+  }
+
+  @override
+  Future<void> build(Environment environment) async {
+    final String? sdkRoot = environment.defines[kSdkRoot];
+    if (sdkRoot == null) {
+      throw MissingDefineException(kSdkRoot, name);
+    }
+    final EnvironmentType environmentType = environmentTypeFromSdkroot(
+      sdkRoot,
+      environment.fileSystem,
+    );
+
+    // LLDB Init File is only required for physical devices in debug mode.
+    if (environmentType != EnvironmentType.physical) {
+      return;
+    }
+
+    final String? targetDeviceVersionString = environment.defines[kTargetDeviceOSVersion];
+    if (targetDeviceVersionString == null) {
+      // Skip if TARGET_DEVICE_OS_VERSION is not found. TARGET_DEVICE_OS_VERSION
+      // is not set if "build ios-framework" is called, which builds the
+      // DebugIosApplicationBundle directly rather than through flutter assemble.
+      // If may also be null if the build is targeting multiple architectures.
+      return;
+    }
+
+    final Version? targetDeviceVersion = Version.parse(targetDeviceVersionString);
+    if (targetDeviceVersion == null) {
+      environment.logger.printError(
+        'Failed to parse TARGET_DEVICE_OS_VERSION: $targetDeviceVersionString',
+      );
+      return;
+    }
+
+    // LLDB Init File is only needed for iOS 26+.
+    if (targetDeviceVersion < Version(26, 0, null)) {
+      return;
+    }
+
+    final String? srcRoot = environment.defines[kSrcRoot];
+    if (srcRoot == null) {
+      environment.logger.printError('Failed to find $srcRoot');
+      return;
+    }
+
+    final Directory xcodeProjectDir = environment.fileSystem.directory(srcRoot);
+    if (!xcodeProjectDir.existsSync()) {
+      environment.logger.printError('Failed to find ${xcodeProjectDir.path}');
+      return;
+    }
+
+    // The scheme name is not available in Xcode Build Phases Run Scripts.
+    // Instead, find all xcscheme files in the Xcode project (this may be the
+    // Flutter Xcode project or an Add to App native Xcode project) and check
+    // if any of them contain "customLLDBInitFile". If none have it set, print
+    // a warning.
+    // Also, this cannot check for a specific path/name for the LLDB Init File
+    // since Flutter's LLDB Init file may be imported from within a user's
+    // custom LLDB Init File.
+    final FlutterProject flutterProject = FlutterProject.fromDirectory(
+      environment.projectDir,
+      logger: environment.logger,
+    );
+    if (flutterProject.isModule) {
+      var anyLLDBInitFound = false;
+      await for (final FileSystemEntity entity in xcodeProjectDir.list(recursive: true)) {
+        if (environment.fileSystem.path.extension(entity.path) == '.xcscheme' && entity is File) {
+          if (entity.readAsStringSync().contains('customLLDBInitFile')) {
+            anyLLDBInitFound = true;
+            break;
+          }
+        }
+      }
+      if (!anyLLDBInitFound) {
+        printXcodeWarning(
+          'Debugging Flutter on new iOS versions requires an LLDB Init File. To '
+          'ensure debug mode works, please complete instructions found in '
+          '"Embed a Flutter module in your iOS app > Use CocoaPods > Set LLDB Init File" '
+          'section of https://docs.flutter.dev/to/ios-add-to-app-embed-setup.',
+          logger: environment.logger,
+        );
+      }
+    }
+    return;
+  }
+}
+
 /// The base class for all iOS bundle targets.
 ///
 /// This is responsible for setting up the basic App.framework structure, including:
@@ -436,12 +626,16 @@ abstract class IosAssetBundle extends Target {
   @override
   List<Target> get dependencies => const <Target>[
     KernelSnapshot(),
+    InstallCodeAssets(),
+    _IssueLaunchRootViewControllerAccess(),
+    LinkHooks(),
   ];
 
   @override
   List<Source> get inputs => const <Source>[
     Source.pattern('{BUILD_DIR}/App.framework/App'),
     Source.pattern('{PROJECT_DIR}/pubspec.yaml'),
+    Source.pattern('{BUILD_DIR}/${LinkHooks.resultFilename}'),
     ...IconTreeShaker.inputs,
     ...ShaderCompiler.inputs,
   ];
@@ -453,9 +647,7 @@ abstract class IosAssetBundle extends Target {
   ];
 
   @override
-  List<String> get depfiles => <String>[
-    'flutter_assets.d',
-  ];
+  List<String> get depfiles => <String>['flutter_assets.d'];
 
   @override
   Future<void> build(Environment environment) async {
@@ -463,7 +655,7 @@ abstract class IosAssetBundle extends Target {
     if (environmentBuildMode == null) {
       throw MissingDefineException(kBuildMode, name);
     }
-    final BuildMode buildMode = BuildMode.fromCliName(environmentBuildMode);
+    final buildMode = BuildMode.fromCliName(environmentBuildMode);
     final Directory frameworkDirectory = environment.outputDir.childDirectory('App.framework');
     final File frameworkBinary = frameworkDirectory.childFile('App');
     final Directory assetDirectory = frameworkDirectory.childDirectory('flutter_assets');
@@ -474,57 +666,75 @@ abstract class IosAssetBundle extends Target {
     if (buildMode == BuildMode.debug) {
       // Copy the App.framework to the output directory.
       environment.buildDir
-        .childDirectory('App.framework')
-        .childFile('App')
-        .copySync(frameworkBinary.path);
+          .childDirectory('App.framework')
+          .childFile('App')
+          .copySync(frameworkBinary.path);
 
-      final String vmSnapshotData = environment.artifacts.getArtifactPath(Artifact.vmSnapshotData, mode: BuildMode.debug);
-      final String isolateSnapshotData = environment.artifacts.getArtifactPath(Artifact.isolateSnapshotData, mode: BuildMode.debug);
-      environment.buildDir.childFile('app.dill')
+      final String vmSnapshotData = environment.artifacts.getArtifactPath(
+        Artifact.vmSnapshotData,
+        mode: BuildMode.debug,
+      );
+      final String isolateSnapshotData = environment.artifacts.getArtifactPath(
+        Artifact.isolateSnapshotData,
+        mode: BuildMode.debug,
+      );
+      environment.buildDir
+          .childFile('app.dill')
           .copySync(assetDirectory.childFile('kernel_blob.bin').path);
-      environment.fileSystem.file(vmSnapshotData)
+      environment.fileSystem
+          .file(vmSnapshotData)
           .copySync(assetDirectory.childFile('vm_snapshot_data').path);
-      environment.fileSystem.file(isolateSnapshotData)
+      environment.fileSystem
+          .file(isolateSnapshotData)
           .copySync(assetDirectory.childFile('isolate_snapshot_data').path);
     } else {
-      environment.buildDir.childDirectory('App.framework').childFile('App')
-        .copySync(frameworkBinary.path);
+      environment.buildDir
+          .childDirectory('App.framework')
+          .childFile('App')
+          .copySync(frameworkBinary.path);
     }
 
     // Copy the dSYM
     if (environment.buildDir.childDirectory('App.framework.dSYM').existsSync()) {
-      final File dsymOutputBinary = environment
-        .outputDir
-        .childDirectory('App.framework.dSYM')
-        .childDirectory('Contents')
-        .childDirectory('Resources')
-        .childDirectory('DWARF')
-        .childFile('App');
+      final File dsymOutputBinary = environment.outputDir
+          .childDirectory('App.framework.dSYM')
+          .childDirectory('Contents')
+          .childDirectory('Resources')
+          .childDirectory('DWARF')
+          .childFile('App');
       dsymOutputBinary.parent.createSync(recursive: true);
-      environment
-        .buildDir
-        .childDirectory('App.framework.dSYM')
-        .childDirectory('Contents')
-        .childDirectory('Resources')
-        .childDirectory('DWARF')
-        .childFile('App')
-        .copySync(dsymOutputBinary.path);
+      environment.buildDir
+          .childDirectory('App.framework.dSYM')
+          .childDirectory('Contents')
+          .childDirectory('Resources')
+          .childDirectory('DWARF')
+          .childFile('App')
+          .copySync(dsymOutputBinary.path);
     }
 
-    final FlutterProject flutterProject = FlutterProject.fromDirectory(environment.projectDir);
+    final FlutterProject flutterProject = environment.projectFactory.fromDirectory(
+      environment.projectDir,
+    );
+    final String? flavor = await flutterProject.ios.parseFlavorFromConfiguration(environment);
 
     // Copy the assets.
+    final DartHooksResult dartHookResult = await LinkHooks.loadHookResult(environment);
     final Depfile assetDepfile = await copyAssets(
       environment,
       assetDirectory,
+      dartHookResult: dartHookResult,
       targetPlatform: TargetPlatform.ios,
-      // Always specify an impeller shader target so that we support runtime toggling and
-      // the --enable-impeller debug flag.
-      shaderTarget: ShaderTarget.impelleriOS,
+      buildMode: buildMode,
       additionalInputs: <File>[
         flutterProject.ios.infoPlist,
         flutterProject.ios.appFrameworkInfoPlist,
       ],
+      additionalContent: <String, DevFSContent>{
+        'NativeAssetsManifest.json': DevFSFileContent(
+          environment.buildDir.childFile('native_assets.json'),
+        ),
+      },
+      flavor: flavor,
     );
     environment.depFileService.writeToFile(
       assetDepfile,
@@ -532,10 +742,12 @@ abstract class IosAssetBundle extends Target {
     );
 
     // Copy the plist from either the project or module.
-    flutterProject.ios.appFrameworkInfoPlist
-      .copySync(environment.outputDir
-      .childDirectory('App.framework')
-      .childFile('Info.plist').path);
+    final File appFrameworkInfoPlist = environment.outputDir
+        .childDirectory('App.framework')
+        .childFile('Info.plist');
+    flutterProject.ios.appFrameworkInfoPlist.copySync(appFrameworkInfoPlist.path);
+
+    await _updateMinimumOSVersion(appFrameworkInfoPlist, environment);
 
     await _signFramework(environment, frameworkBinary, buildMode);
   }
@@ -567,6 +779,7 @@ class DebugIosApplicationBundle extends IosAssetBundle {
   @override
   List<Target> get dependencies => <Target>[
     const DebugUniversalFramework(),
+    const DebugIosLLDBInit(),
     ...super.dependencies,
   ];
 }
@@ -596,9 +809,7 @@ class ProfileIosApplicationBundle extends _IosAssetBundleWithDSYM {
   String get name => 'profile_ios_bundle_flutter_assets';
 
   @override
-  List<Target> get dependencies => const <Target>[
-    AotAssemblyProfile(),
-  ];
+  List<Target> get dependencies => const <Target>[AotAssemblyProfile(), InstallCodeAssets()];
 }
 
 /// Build a release iOS application bundle.
@@ -609,16 +820,14 @@ class ReleaseIosApplicationBundle extends _IosAssetBundleWithDSYM {
   String get name => 'release_ios_bundle_flutter_assets';
 
   @override
-  List<Target> get dependencies => const <Target>[
-    AotAssemblyRelease(),
-  ];
+  List<Target> get dependencies => const <Target>[AotAssemblyRelease(), InstallCodeAssets()];
 
   @override
   Future<void> build(Environment environment) async {
-    bool buildSuccess = true;
+    var buildSuccess = true;
     try {
       await super.build(environment);
-    } catch (_) {  // ignore: avoid_catches_without_on_clauses
+    } catch (_) {
       buildSuccess = false;
       rethrow;
     } finally {
@@ -627,14 +836,35 @@ class ReleaseIosApplicationBundle extends _IosAssetBundleWithDSYM {
       // archive command from Xcode, this is a more accurate count than `flutter build ipa` alone.
       if (environment.defines[kXcodeAction]?.toLowerCase() == 'install') {
         environment.logger.printTrace('Sending archive event if usage enabled.');
-        UsageEvent(
-          'assemble',
-          'ios-archive',
-          label: buildSuccess ? 'success' : 'fail',
-          flutterUsage: environment.usage,
-        ).send();
+        environment.analytics.send(
+          Event.appleUsageEvent(
+            workflow: 'assemble',
+            parameter: 'ios-archive',
+            result: buildSuccess ? 'success' : 'fail',
+          ),
+        );
       }
     }
+  }
+}
+
+/// Update the MinimumOSVersion key in the given Info.plist file.
+Future<void> _updateMinimumOSVersion(File infoPlist, Environment environment) async {
+  final minimumOSVersion = FlutterDarwinPlatform.ios.deploymentTarget().toString();
+  final plutilArgs = <String>[
+    'plutil',
+    '-replace',
+    'MinimumOSVersion',
+    '-string',
+    minimumOSVersion,
+    infoPlist.path,
+  ];
+  final ProcessResult result = await environment.processManager.run(plutilArgs);
+  if (result.exitCode != 0) {
+    printXcodeWarning(
+      'Failed to update MinimumOSVersion in ${infoPlist.path}. This may cause AppStore validation failures. Please file an issue at https://github.com/flutter/flutter/issues/new/choose',
+      logger: environment.logger,
+    );
   }
 }
 
@@ -643,8 +873,12 @@ class ReleaseIosApplicationBundle extends _IosAssetBundleWithDSYM {
 /// This framework needs to exist for the Xcode project to link/bundle,
 /// but it isn't actually executed. To generate something valid, we compile a trivial
 /// constant.
-Future<void> _createStubAppFramework(File outputFile, Environment environment,
-    Set<String>? iosArchNames, String sdkRoot) async {
+Future<void> _createStubAppFramework(
+  File outputFile,
+  Environment environment,
+  Set<String>? iosArchNames,
+  String sdkRoot,
+) async {
   try {
     outputFile.createSync(recursive: true);
   } on Exception catch (e) {
@@ -652,17 +886,18 @@ Future<void> _createStubAppFramework(File outputFile, Environment environment,
   }
 
   final FileSystem fileSystem = environment.fileSystem;
-  final Directory tempDir = fileSystem.systemTempDirectory
-    .createTempSync('flutter_tools_stub_source.');
+  final Directory tempDir = fileSystem.systemTempDirectory.createTempSync(
+    'flutter_tools_stub_source.',
+  );
   try {
     final File stubSource = tempDir.childFile('debug_app.cc')
       ..writeAsStringSync(r'''
   static const int Moo = 88;
   ''');
 
-    final EnvironmentType? environmentType = environmentTypeFromSdkroot(sdkRoot, fileSystem);
+    final EnvironmentType environmentType = environmentTypeFromSdkroot(sdkRoot, fileSystem);
 
-    await globals.xcode!.clang(<String>[
+    await environment.xcode!.clang(<String>[
       '-x',
       'c',
       for (final String arch in iosArchNames ?? <String>{}) ...<String>['-arch', arch],
@@ -670,9 +905,9 @@ Future<void> _createStubAppFramework(File outputFile, Environment environment,
       '-dynamiclib',
       // Keep version in sync with AOTSnapshotter flag
       if (environmentType == EnvironmentType.physical)
-        '-miphoneos-version-min=11.0'
+        '-miphoneos-version-min=${FlutterDarwinPlatform.ios.deploymentTarget()}'
       else
-        '-miphonesimulator-version-min=11.0',
+        '-miphonesimulator-version-min=${FlutterDarwinPlatform.ios.deploymentTarget()}',
       '-Xlinker', '-rpath', '-Xlinker', '@executable_path/Frameworks',
       '-Xlinker', '-rpath', '-Xlinker', '@loader_path/Frameworks',
       '-fapplication-extension',
@@ -694,7 +929,7 @@ Future<void> _createStubAppFramework(File outputFile, Environment environment,
 }
 
 Future<void> _signFramework(Environment environment, File binary, BuildMode buildMode) async {
-  await removeFinderExtendedAttributes(
+  await removeExtendedAttributes(
     binary,
     ProcessUtils(processManager: environment.processManager, logger: environment.logger),
     environment.logger,
@@ -718,7 +953,7 @@ Future<void> _signFramework(Environment environment, File binary, BuildMode buil
   if (result.exitCode != 0) {
     final String stdout = (result.stdout as String).trim();
     final String stderr = (result.stderr as String).trim();
-    final StringBuffer output = StringBuffer();
+    final output = StringBuffer();
     output.writeln('Failed to codesign ${binary.path} with identity $codesignIdentity.');
     if (stdout.isNotEmpty) {
       output.writeln(stdout);

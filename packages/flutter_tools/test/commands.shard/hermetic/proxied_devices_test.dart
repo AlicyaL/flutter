@@ -6,22 +6,26 @@ import 'dart:async';
 
 import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_device.dart';
-import 'package:flutter_tools/src/android/java.dart';
 import 'package:flutter_tools/src/application_package.dart';
+import 'package:flutter_tools/src/asset.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/build_info.dart';
+import 'package:flutter_tools/src/build_system/build_system.dart';
 import 'package:flutter_tools/src/commands/daemon.dart';
 import 'package:flutter_tools/src/daemon.dart';
 import 'package:flutter_tools/src/device.dart';
+import 'package:flutter_tools/src/isolated/build_targets.dart';
 import 'package:flutter_tools/src/proxied_devices/devices.dart';
 import 'package:flutter_tools/src/vmservice.dart';
 import 'package:test/fake.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../../src/common.dart';
-import '../../src/context.dart';
 import '../../src/fake_devices.dart';
+import '../../src/fake_process_manager.dart';
 import '../../src/fakes.dart';
+import '../../src/test_build_system.dart';
 
 void main() {
   Daemon? daemon;
@@ -32,6 +36,7 @@ void main() {
   late FakeApplicationPackageFactory applicationPackageFactory;
   late MemoryFileSystem memoryFileSystem;
   late FakeProcessManager fakeProcessManager;
+  late FakeToolContext toolContext;
 
   group('ProxiedDevices', () {
     late DaemonConnection serverDaemonConnection;
@@ -39,12 +44,12 @@ void main() {
     setUp(() {
       bufferLogger = BufferLogger.test();
       notifyingLogger = NotifyingLogger(verbose: false, parent: bufferLogger);
-      final FakeDaemonStreams serverDaemonStreams = FakeDaemonStreams();
+      final serverDaemonStreams = FakeDaemonStreams();
       serverDaemonConnection = DaemonConnection(
         daemonStreams: serverDaemonStreams,
         logger: bufferLogger,
       );
-      final FakeDaemonStreams clientDaemonStreams = FakeDaemonStreams();
+      final clientDaemonStreams = FakeDaemonStreams();
       clientDaemonConnection = DaemonConnection(
         daemonStreams: clientDaemonStreams,
         logger: bufferLogger,
@@ -56,6 +61,11 @@ void main() {
       applicationPackageFactory = FakeApplicationPackageFactory();
       memoryFileSystem = MemoryFileSystem();
       fakeProcessManager = FakeProcessManager.empty();
+      toolContext = FakeToolContext(
+        fs: memoryFileSystem,
+        logger: bufferLogger,
+        processManager: fakeProcessManager,
+      );
     });
 
     tearDown(() async {
@@ -67,17 +77,26 @@ void main() {
       await clientDaemonConnection.dispose();
     });
 
-    testUsingContext('can list devices', () async {
+    test('can list devices', () async {
       daemon = Daemon(
         serverDaemonConnection,
+        analytics: const NoOpAnalytics(),
+        applicationPackageFactory: applicationPackageFactory,
+        assetBundleFactory: _FakeAssetBundleFactory(),
+        devtoolsLauncher: FakeDevtoolsLauncher(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        buildTargets: const BuildTargetsImpl(),
+        toolContext: toolContext,
+        xcode: null,
         notifyingLogger: notifyingLogger,
+        featureFlags: TestFeatureFlags(),
       );
       fakeDevice = FakeAndroidDevice();
-      final FakePollingDeviceDiscovery discoverer = FakePollingDeviceDiscovery();
+      final discoverer = FakePollingDeviceDiscovery();
       daemon!.deviceDomain.addDeviceDiscoverer(discoverer);
       discoverer.addDevice(fakeDevice);
 
-      final ProxiedDevices proxiedDevices = ProxiedDevices(clientDaemonConnection, logger: bufferLogger);
+      final proxiedDevices = ProxiedDevices(clientDaemonConnection, logger: bufferLogger);
 
       final List<Device> devices = await proxiedDevices.discoverDevices();
       expect(devices, hasLength(1));
@@ -88,17 +107,26 @@ void main() {
       expect(await device.isLocalEmulator, await fakeDevice.isLocalEmulator);
     });
 
-    testUsingContext('calls supportsRuntimeMode', () async {
+    test('calls supportsRuntimeMode', () async {
       daemon = Daemon(
         serverDaemonConnection,
+        analytics: const NoOpAnalytics(),
+        applicationPackageFactory: applicationPackageFactory,
+        assetBundleFactory: _FakeAssetBundleFactory(),
+        devtoolsLauncher: FakeDevtoolsLauncher(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        buildTargets: const BuildTargetsImpl(),
+        toolContext: toolContext,
+        xcode: null,
         notifyingLogger: notifyingLogger,
+        featureFlags: TestFeatureFlags(),
       );
       fakeDevice = FakeAndroidDevice();
-      final FakePollingDeviceDiscovery discoverer = FakePollingDeviceDiscovery();
+      final discoverer = FakePollingDeviceDiscovery();
       daemon!.deviceDomain.addDeviceDiscoverer(discoverer);
       discoverer.addDevice(fakeDevice);
 
-      final ProxiedDevices proxiedDevices = ProxiedDevices(clientDaemonConnection, logger: bufferLogger);
+      final proxiedDevices = ProxiedDevices(clientDaemonConnection, logger: bufferLogger);
 
       final List<Device> devices = await proxiedDevices.devices();
       expect(devices, hasLength(1));
@@ -106,23 +134,30 @@ void main() {
       final bool supportsRuntimeMode = await device.supportsRuntimeMode(BuildMode.release);
       expect(fakeDevice.supportsRuntimeModeCalledBuildMode, BuildMode.release);
       expect(supportsRuntimeMode, true);
-    }, overrides: <Type, Generator>{
-      Java: () => FakeJava(),
     });
 
-    testUsingContext('redirects logs', () async {
+    test('redirects logs', () async {
       daemon = Daemon(
         serverDaemonConnection,
+        analytics: const NoOpAnalytics(),
+        applicationPackageFactory: applicationPackageFactory,
+        assetBundleFactory: _FakeAssetBundleFactory(),
+        devtoolsLauncher: FakeDevtoolsLauncher(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        buildTargets: const BuildTargetsImpl(),
+        toolContext: toolContext,
+        xcode: null,
         notifyingLogger: notifyingLogger,
+        featureFlags: TestFeatureFlags(),
       );
       fakeDevice = FakeAndroidDevice();
-      final FakePollingDeviceDiscovery discoverer = FakePollingDeviceDiscovery();
+      final discoverer = FakePollingDeviceDiscovery();
       daemon!.deviceDomain.addDeviceDiscoverer(discoverer);
       discoverer.addDevice(fakeDevice);
 
-      final ProxiedDevices proxiedDevices = ProxiedDevices(clientDaemonConnection, logger: bufferLogger);
+      final proxiedDevices = ProxiedDevices(clientDaemonConnection, logger: bufferLogger);
 
-      final FakeDeviceLogReader fakeLogReader = FakeDeviceLogReader();
+      final fakeLogReader = FakeDeviceLogReader();
       fakeDevice.logReader = fakeLogReader;
 
       final List<Device> devices = await proxiedDevices.devices();
@@ -136,22 +171,32 @@ void main() {
 
       // Now try to stop the log reader
       expect(fakeLogReader.disposeCalled, false);
-      logReader.dispose();
+      await logReader.dispose();
       await pumpEventQueue();
       expect(fakeLogReader.disposeCalled, true);
     });
-    testUsingContext('starts and stops app', () async {
+
+    test('starts and stops app', () async {
       daemon = Daemon(
         serverDaemonConnection,
+        analytics: const NoOpAnalytics(),
+        applicationPackageFactory: applicationPackageFactory,
+        assetBundleFactory: _FakeAssetBundleFactory(),
+        devtoolsLauncher: FakeDevtoolsLauncher(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        buildTargets: const BuildTargetsImpl(),
+        toolContext: toolContext,
+        xcode: null,
         notifyingLogger: notifyingLogger,
+        featureFlags: TestFeatureFlags(),
       );
       fakeDevice = FakeAndroidDevice();
-      final FakePollingDeviceDiscovery discoverer = FakePollingDeviceDiscovery();
+      final discoverer = FakePollingDeviceDiscovery();
       daemon!.deviceDomain.addDeviceDiscoverer(discoverer);
       discoverer.addDevice(fakeDevice);
 
-      final ProxiedDevices proxiedDevices = ProxiedDevices(clientDaemonConnection, logger: bufferLogger);
-      final FakePrebuiltApplicationPackage prebuiltApplicationPackage = FakePrebuiltApplicationPackage();
+      final proxiedDevices = ProxiedDevices(clientDaemonConnection, logger: bufferLogger);
+      final prebuiltApplicationPackage = FakePrebuiltApplicationPackage();
       final File dummyApplicationBinary = memoryFileSystem.file('/directory/dummy_file');
       dummyApplicationBinary.parent.createSync();
       dummyApplicationBinary.writeAsStringSync('dummy content');
@@ -162,7 +207,7 @@ void main() {
       final Device device = devices[0];
 
       // Now try to start the app
-      final FakeApplicationPackage applicationPackage = FakeApplicationPackage();
+      final applicationPackage = FakeApplicationPackage();
       applicationPackageFactory.applicationPackage = applicationPackage;
 
       final Uri vmServiceUri = Uri.parse('http://127.0.0.1:12345/vmService');
@@ -177,7 +222,10 @@ void main() {
       // The returned vmServiceUri was a forwarded port, so we cannot compare them directly.
       expect(launchResult.vmServiceUri!.path, vmServiceUri.path);
 
-      expect(applicationPackageFactory.applicationBinaryRequested!.readAsStringSync(), 'dummy content');
+      expect(
+        applicationPackageFactory.applicationBinaryRequested!.readAsStringSync(),
+        'dummy content',
+      );
       expect(applicationPackageFactory.platformRequested, TargetPlatform.android_arm);
 
       expect(fakeDevice.startAppPackage, applicationPackage);
@@ -186,47 +234,47 @@ void main() {
       final bool stopAppResult = await device.stopApp(prebuiltApplicationPackage);
       expect(fakeDevice.stopAppPackage, applicationPackage);
       expect(stopAppResult, true);
-    }, overrides: <Type, Generator>{
-      Java: () => FakeJava(),
-      ApplicationPackageFactory: () => applicationPackageFactory,
-      FileSystem: () => memoryFileSystem,
-      ProcessManager: () => fakeProcessManager,
     });
 
-    testUsingContext('takes screenshot', () async {
+    test('takes screenshot', () async {
       daemon = Daemon(
         serverDaemonConnection,
+        analytics: const NoOpAnalytics(),
+        applicationPackageFactory: applicationPackageFactory,
+        assetBundleFactory: _FakeAssetBundleFactory(),
+        devtoolsLauncher: FakeDevtoolsLauncher(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        buildTargets: const BuildTargetsImpl(),
+        toolContext: toolContext,
+        xcode: null,
         notifyingLogger: notifyingLogger,
+        featureFlags: TestFeatureFlags(),
       );
       fakeDevice = FakeAndroidDevice();
-      final FakePollingDeviceDiscovery discoverer = FakePollingDeviceDiscovery();
+      final discoverer = FakePollingDeviceDiscovery();
       daemon!.deviceDomain.addDeviceDiscoverer(discoverer);
       discoverer.addDevice(fakeDevice);
 
-      final ProxiedDevices proxiedDevices = ProxiedDevices(clientDaemonConnection, logger: bufferLogger);
+      final proxiedDevices = ProxiedDevices(clientDaemonConnection, logger: bufferLogger);
 
       final List<Device> devices = await proxiedDevices.devices();
       expect(devices, hasLength(1));
       final Device device = devices[0];
 
-      final List<int> screenshot = <int>[1,2,3,4,5];
+      final screenshot = <int>[1, 2, 3, 4, 5];
       fakeDevice.screenshot = screenshot;
 
       final File screenshotOutputFile = memoryFileSystem.file('screenshot_file');
       await device.takeScreenshot(screenshotOutputFile);
 
       expect(await screenshotOutputFile.readAsBytes(), screenshot);
-    }, overrides: <Type, Generator>{
-      Java: () => FakeJava(),
-      FileSystem: () => memoryFileSystem,
-      ProcessManager: () => fakeProcessManager,
     });
   });
 }
 
 class FakeDaemonStreams implements DaemonStreams {
-  final StreamController<DaemonMessage> inputs = StreamController<DaemonMessage>();
-  final StreamController<DaemonMessage> outputs = StreamController<DaemonMessage>();
+  final inputs = StreamController<DaemonMessage>();
+  final outputs = StreamController<DaemonMessage>();
 
   @override
   Stream<DaemonMessage> get inputStream {
@@ -234,7 +282,7 @@ class FakeDaemonStreams implements DaemonStreams {
   }
 
   @override
-  void send(Map<String, dynamic> message, [ List<int>? binary ]) {
+  void send(Map<String, dynamic> message, [List<int>? binary]) {
     outputs.add(DaemonMessage(message, binary != null ? Stream<List<int>>.value(binary) : null));
   }
 
@@ -246,21 +294,24 @@ class FakeDaemonStreams implements DaemonStreams {
   }
 }
 
-// Unfortunately Device, despite not being immutable, has an `operator ==`.
-// Until we fix that, we have to also ignore related lints here.
-// ignore: avoid_implementing_value_types
 class FakeAndroidDevice extends Fake implements AndroidDevice {
   @override
-  final String id = 'device';
+  final id = 'device';
 
   @override
-  final String name = 'device';
+  final name = 'device';
+
+  @override
+  String get displayName => name;
 
   @override
   Future<String> get emulatorId async => 'device';
 
   @override
   Future<TargetPlatform> get targetPlatform async => TargetPlatform.android_arm;
+
+  @override
+  Future<CpuArch> get cpuArch async => CpuArch.arm64;
 
   @override
   Future<bool> get isLocalEmulator async => false;
@@ -272,10 +323,13 @@ class FakeAndroidDevice extends Fake implements AndroidDevice {
   final PlatformType platformType = PlatformType.android;
 
   @override
-  final bool ephemeral = false;
+  final ephemeral = false;
 
   @override
   bool get isConnected => true;
+
+  @override
+  final DeviceConnectionInterface connectionInterface = DeviceConnectionInterface.attached;
 
   @override
   Future<String> get sdkNameAndVersion async => 'Android 12';
@@ -288,9 +342,6 @@ class FakeAndroidDevice extends Fake implements AndroidDevice {
 
   @override
   bool get supportsScreenshot => true;
-
-  @override
-  bool get supportsFastStart => true;
 
   @override
   bool get supportsFlutterExit => true;
@@ -313,6 +364,7 @@ class FakeAndroidDevice extends Fake implements AndroidDevice {
   FutureOr<DeviceLogReader> getLogReader({
     ApplicationPackage? app,
     bool includePastLogs = false,
+    bool adbLogFiltering = true,
   }) => logReader;
 
   ApplicationPackage? startAppPackage;
@@ -334,10 +386,7 @@ class FakeAndroidDevice extends Fake implements AndroidDevice {
 
   ApplicationPackage? stopAppPackage;
   @override
-  Future<bool> stopApp(
-    ApplicationPackage? app, {
-    String? userIdentifier,
-  }) async {
+  Future<bool> stopApp(ApplicationPackage? app, {String? userIdentifier}) async {
     stopAppPackage = app;
     return true;
   }
@@ -350,17 +399,14 @@ class FakeAndroidDevice extends Fake implements AndroidDevice {
 }
 
 class FakeDeviceLogReader implements DeviceLogReader {
-  final StreamController<String> logLinesController = StreamController<String>();
+  final logLinesController = StreamController<String>();
   bool disposeCalled = false;
 
   @override
-  int? appPid;
+  Future<void> provideVmService(FlutterVmService? connectedVmService) async {}
 
   @override
-  FlutterVmService? connectedVMService;
-
-  @override
-  void dispose() {
+  Future<void> dispose() async {
     disposeCalled = true;
   }
 
@@ -369,7 +415,6 @@ class FakeDeviceLogReader implements DeviceLogReader {
 
   @override
   String get name => 'device';
-
 }
 
 class FakeApplicationPackageFactory implements ApplicationPackageFactory {
@@ -378,7 +423,11 @@ class FakeApplicationPackageFactory implements ApplicationPackageFactory {
   ApplicationPackage? applicationPackage;
 
   @override
-  Future<ApplicationPackage?> getPackageForPlatform(TargetPlatform platform, {BuildInfo? buildInfo, File? applicationBinary}) async {
+  Future<ApplicationPackage?> getPackageForPlatform(
+    TargetPlatform platform, {
+    BuildInfo? buildInfo,
+    File? applicationBinary,
+  }) async {
     platformRequested = platform;
     applicationBinaryRequested = applicationBinary;
     return applicationPackage;
@@ -391,3 +440,5 @@ class FakePrebuiltApplicationPackage extends Fake implements PrebuiltApplication
   @override
   late File applicationPackage;
 }
+
+class _FakeAssetBundleFactory extends Fake implements AssetBundleFactory {}

@@ -19,9 +19,7 @@ class PictureCacheComplexityScoringPage extends StatelessWidget {
           // pinned: true,
           // expandedHeight: 50.0,
           // forceElevated: innerBoxIsScrolled,
-          bottom: TabBar(
-            tabs: kTabNames.map((String name) => Tab(text: name)).toList(),
-          ),
+          bottom: TabBar(tabs: kTabNames.map((String name) => Tab(text: name)).toList()),
         ),
         body: TabBarView(
           key: const Key('tabbar_view_complexity'), // this key is used by the driver test
@@ -34,14 +32,16 @@ class PictureCacheComplexityScoringPage extends StatelessWidget {
   }
 
   // For now we just test a single case where the widget being cached is actually
-  // relatively cheap to rasterise, and so should not be in the cache.
+  // relatively cheap to rasterize, and so should not be in the cache.
   //
   // Eventually we can extend this to add new test cases based on the tab name.
   Widget _buildComplexityScoringWidgets(String name) {
-    return Column(children: <Widget>[
-      Slider(value: 50, label: 'Slider 1', onChanged: (double _) {}, max: 100, divisions: 10,),
-      Slider(value: 50, label: 'Slider 2', onChanged: (double _) {}, max: 100, divisions: 10,),
-      Slider(value: 50, label: 'Slider 3', onChanged: (double _) {}, max: 100, divisions: 10,),
-    ]);
+    return Column(
+      children: <Widget>[
+        Slider(value: 50, label: 'Slider 1', onChanged: (double _) {}, max: 100, divisions: 10),
+        Slider(value: 50, label: 'Slider 2', onChanged: (double _) {}, max: 100, divisions: 10),
+        Slider(value: 50, label: 'Slider 3', onChanged: (double _) {}, max: 100, divisions: 10),
+      ],
+    );
   }
 }

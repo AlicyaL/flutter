@@ -17,7 +17,6 @@ final String gradlewExecutable = Platform.isWindows ? '.\\$gradlew' : './$gradle
 /// it has custom build types and flavors.
 Future<void> main() async {
   await task(() async {
-
     section('Find Java');
 
     final String? javaHome = await findJavaHome();
@@ -29,13 +28,10 @@ Future<void> main() async {
 
     section('Create Flutter module project');
 
-    await flutter(
-      'precache',
-      options: <String>['--android', '--no-ios'],
-    );
+    await flutter('precache', options: <String>['--android', '--no-ios']);
 
     final Directory tempDir = Directory.systemTemp.createTempSync('flutter_module_test.');
-    final Directory projectDir = Directory(path.join(tempDir.path, 'hello'));
+    final projectDir = Directory(path.join(tempDir.path, 'hello'));
     try {
       await inDirectory(tempDir, () async {
         await flutter(
@@ -47,15 +43,12 @@ Future<void> main() async {
       section('Run flutter pub get');
 
       await inDirectory(projectDir, () async {
-        await flutter(
-          'pub',
-          options: <String>['get'],
-        );
+        await flutter('pub', options: <String>['get']);
       });
 
       section('Add to existing Android app');
 
-      final Directory hostAppDir = Directory(path.join(tempDir.path, 'hello_host_app_with_custom_build'));
+      final hostAppDir = Directory(path.join(tempDir.path, 'hello_host_app_with_custom_build'));
       mkdir(hostAppDir);
       recursiveCopy(
         Directory(
@@ -68,10 +61,7 @@ Future<void> main() async {
         ),
         hostAppDir,
       );
-      copy(
-        File(path.join(projectDir.path, '.android', gradlew)),
-        hostAppDir,
-      );
+      copy(File(path.join(projectDir.path, '.android', gradlew)), hostAppDir);
       copy(
         File(path.join(projectDir.path, '.android', 'gradle', 'wrapper', 'gradle-wrapper.jar')),
         Directory(path.join(hostAppDir.path, 'gradle', 'wrapper')),
@@ -80,11 +70,10 @@ Future<void> main() async {
       Future<void> clean() async {
         section('Clean');
         await inDirectory(hostAppDir, () async {
-          await exec(gradlewExecutable,
+          await exec(
+            gradlewExecutable,
             <String>['clean'],
-            environment: <String, String>{
-              'JAVA_HOME': javaHome,
-            },
+            environment: <String, String>{'JAVA_HOME': javaHome},
           );
         });
       }
@@ -101,11 +90,10 @@ Future<void> main() async {
       section('Run app:assembleDemoDebug');
 
       await inDirectory(hostAppDir, () async {
-        await exec(gradlewExecutable,
+        await exec(
+          gradlewExecutable,
           <String>['app:assembleDemoDebug'],
-          environment: <String, String>{
-            'JAVA_HOME': javaHome,
-          },
+          environment: <String, String>{'JAVA_HOME': javaHome},
         );
       });
 
@@ -138,7 +126,8 @@ Future<void> main() async {
       section('Run app:assembleDemoDebug - Merge assets before processing manifest');
 
       await inDirectory(hostAppDir, () async {
-        await exec(gradlewExecutable,
+        await exec(
+          gradlewExecutable,
           <String>[
             // Normally, `app:processDemoDebugManifest` runs before `app:mergeDemoDebugAssets`.
             // In this case, we run `app:mergeDemoDebugAssets` first.
@@ -146,9 +135,7 @@ Future<void> main() async {
             'app:processDemoDebugManifest',
             'app:assembleDemoDebug',
           ],
-          environment: <String, String>{
-            'JAVA_HOME': javaHome,
-          },
+          environment: <String, String>{'JAVA_HOME': javaHome},
         );
       });
 
@@ -179,11 +166,10 @@ Future<void> main() async {
       section('Run app:assembleDemoStaging');
 
       await inDirectory(hostAppDir, () async {
-        await exec(gradlewExecutable,
+        await exec(
+          gradlewExecutable,
           <String>['app:assembleDemoStaging'],
-          environment: <String, String>{
-            'JAVA_HOME': javaHome,
-          },
+          environment: <String, String>{'JAVA_HOME': javaHome},
         );
       });
 
@@ -216,11 +202,10 @@ Future<void> main() async {
       section('Run app:assembleDemoRelease');
 
       await inDirectory(hostAppDir, () async {
-        await exec(gradlewExecutable,
+        await exec(
+          gradlewExecutable,
           <String>['app:assembleDemoRelease'],
-          environment: <String, String>{
-            'JAVA_HOME': javaHome,
-          },
+          environment: <String, String>{'JAVA_HOME': javaHome},
         );
       });
 
@@ -253,12 +238,11 @@ Future<void> main() async {
 
       section('Run app:assembleDemoProd');
 
-       await inDirectory(hostAppDir, () async {
-        await exec(gradlewExecutable,
+      await inDirectory(hostAppDir, () async {
+        await exec(
+          gradlewExecutable,
           <String>['app:assembleDemoProd'],
-          environment: <String, String>{
-            'JAVA_HOME': javaHome,
-          },
+          environment: <String, String>{'JAVA_HOME': javaHome},
         );
       });
 
@@ -287,10 +271,62 @@ Future<void> main() async {
         'lib/armeabi-v7a/libflutter.so',
       ], await getFilesInApk(demoProdApk));
 
+      await clean();
+
+      section('Run app:assembleDemoQa with android.newDsl=true');
+
+      // The fixture's gradle.properties sets android.newDsl=false. With
+      // android.newDsl=true, AGP has no `libraryVariants` or `applicationVariants`.
+      final String demoQaOutput = await inDirectory(hostAppDir, () async {
+        return eval(
+          gradlewExecutable,
+          <String>[
+            'app:assembleDemoQa',
+            '-Pandroid.newDsl=true',
+            '-Pflutter.hostAppProjectName=app',
+          ],
+          environment: <String, String>{'JAVA_HOME': javaHome},
+        );
+      });
+
+      if (!demoQaOutput.contains(
+        "The Gradle property 'flutter.hostAppProjectName' has no effect.",
+      )) {
+        return TaskResult.failure(
+          'Expected a warning that flutter.hostAppProjectName has no effect',
+        );
+      }
+
+      final String demoQaApk = path.join(
+        hostAppDir.path,
+        'app',
+        'build',
+        'outputs',
+        'apk',
+        'demo',
+        'qa',
+        'app-demo-qa.apk',
+      );
+
+      if (!exists(File(demoQaApk))) {
+        return TaskResult.failure('Failed to build app-demo-qa.apk');
+      }
+
+      section('Verify AOT ELF in app-demo-qa.apk');
+
+      final Iterable<String> demoQaFiles = await getFilesInApk(demoQaApk);
+      checkCollectionContains<String>(<String>[
+        ...flutterAssets,
+        'lib/arm64-v8a/libapp.so',
+        'lib/armeabi-v7a/libapp.so',
+      ], demoQaFiles);
+      checkCollectionDoesNotContain<String>(debugAssets, demoQaFiles);
+
       return TaskResult.success(null);
     } on TaskResult catch (taskResult) {
       return taskResult;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('Task exception stack trace:\n$stackTrace');
       return TaskResult.failure(e.toString());
     } finally {
       rmTree(tempDir);

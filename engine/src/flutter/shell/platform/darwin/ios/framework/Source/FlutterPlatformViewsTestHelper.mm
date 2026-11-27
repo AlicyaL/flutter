@@ -1,0 +1,54 @@
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#import "flutter/shell/platform/darwin/ios/framework/Source/FlutterPlatformViewsTestHelper.h"
+#include "flutter/fml/message_loop.h"
+#import "flutter/shell/platform/darwin/ios/framework/Source/FlutterFMLTaskRunner+FML.h"
+#import "flutter/shell/platform/darwin/ios/framework/Source/FlutterFMLTaskRunner.h"
+#import "flutter/shell/platform/darwin/ios/framework/Source/FlutterPlatformViewsController.h"
+#import "flutter/shell/platform/darwin/ios/ios_external_view_embedder.h"
+
+namespace flutter {
+namespace testing {
+
+FlutterFMLTaskRunner* GetDefaultTaskRunner() {
+  fml::MessageLoop::EnsureInitializedForCurrentThread();
+  return [[FlutterFMLTaskRunner alloc]
+      initWithTaskRunner:fml::MessageLoop::GetCurrent().GetTaskRunner()];
+}
+
+FlutterFMLTaskRunners* CreateTestTaskRunners(NSString* label) {
+  return [[FlutterFMLTaskRunners alloc] initWithLabel:label
+                                   platformTaskRunner:GetDefaultTaskRunner()
+                                     rasterTaskRunner:GetDefaultTaskRunner()
+                                         uiTaskRunner:GetDefaultTaskRunner()
+                                         ioTaskRunner:GetDefaultTaskRunner()];
+}
+
+FlutterPlatformViewsController* CreateTestPlatformViewsController(NSString* label) {
+  FlutterPlatformViewsController* controller = [[FlutterPlatformViewsController alloc] init];
+  controller.taskRunner = GetDefaultTaskRunner();
+  return controller;
+}
+
+std::unique_ptr<ExternalViewEmbedder> CreateTestExternalViewEmbedder(
+    FlutterPlatformViewsController* controller) {
+  return std::make_unique<IOSExternalViewEmbedder>(controller, std::make_shared<FakeIOSContext>());
+}
+
+std::unique_ptr<Texture> FakeIOSContext::CreateExternalTexture(int64_t texture_id,
+                                                               NSObject<FlutterTexture>* texture) {
+  return nullptr;
+}
+
+std::unique_ptr<SurfaceFrame> CreateTestSurfaceFrame() {
+  return std::make_unique<SurfaceFrame>(
+      nullptr, SurfaceFrame::FramebufferInfo{},
+      [](const SurfaceFrame& surface_frame, DlCanvas* canvas) { return true; },
+      [](const SurfaceFrame& surface_frame) { return true; },
+      /*frame_size=*/DlISize(800, 600), nullptr, /*display_list_fallback=*/true);
+}
+
+}  // namespace testing
+}  // namespace flutter

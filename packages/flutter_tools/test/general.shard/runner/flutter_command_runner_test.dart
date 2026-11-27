@@ -2,30 +2,35 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:args/args.dart';
+import 'package:args/command_runner.dart';
 import 'package:file/memory.dart';
-import 'package:flutter_tools/src/base/bot_detector.dart';
+import 'package:flutter_tools/src/artifacts.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
+import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/base/terminal.dart';
 import 'package:flutter_tools/src/cache.dart';
-import 'package:flutter_tools/src/globals.dart' as globals;
+import 'package:flutter_tools/src/experimental/extension_arg_parser.dart';
 import 'package:flutter_tools/src/runner/flutter_command.dart';
 import 'package:flutter_tools/src/runner/flutter_command_runner.dart';
-import 'package:flutter_tools/src/version.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
-import '../../src/context.dart';
+import '../../src/common.dart';
+import '../../src/fake_process_manager.dart';
 import '../../src/fakes.dart';
 import '../../src/test_flutter_command_runner.dart';
 import 'utils.dart';
 
-const String _kFlutterRoot = '/flutter/flutter';
-const String _kProjectRoot = '/project';
+const _kFlutterRoot = '/flutter/flutter';
+const _kProjectRoot = '/project';
 
 void main() {
   group('FlutterCommandRunner', () {
     late MemoryFileSystem fileSystem;
     late Platform platform;
+    late FakeAnalytics fakeAnalytics;
 
     setUpAll(() {
       Cache.disableLocking();
@@ -36,243 +41,896 @@ void main() {
       fileSystem.directory(_kFlutterRoot).createSync(recursive: true);
       fileSystem.directory(_kProjectRoot).createSync(recursive: true);
       fileSystem.currentDirectory = _kProjectRoot;
+      fakeAnalytics = getInitializedFakeAnalyticsInstance(
+        fs: fileSystem,
+        fakeFlutterVersion: FakeFlutterVersion(),
+      );
 
       platform = FakePlatform(
-        environment: <String, String>{
-          'FLUTTER_ROOT': _kFlutterRoot,
-        },
+        environment: <String, String>{'FLUTTER_ROOT': _kFlutterRoot},
         version: '1 2 3 4 5',
       );
     });
 
     group('run', () {
-      testUsingContext('checks that Flutter installation is up-to-date', () async {
-        final FlutterCommandRunner runner = createTestCommandRunner(DummyFlutterCommand()) as FlutterCommandRunner;
-        final FakeFlutterVersion version = globals.flutterVersion as FakeFlutterVersion;
+      test('checks that Flutter installation is up-to-date', () async {
+        final version = FakeFlutterVersion();
+        final toolContext = FakeToolContext(
+          botDetector: const FakeBotDetector(false),
+          flutterVersion: version,
+          fs: fileSystem,
+          outputPreferences: OutputPreferences.test(),
+          platform: platform,
+        );
+        final runner = createTestCommandRunner(
+          DummyFlutterCommand(toolContext: toolContext),
+          null,
+          toolContext,
+        ) as FlutterCommandRunner;
 
         await runner.run(<String>['dummy']);
 
         expect(version.didCheckFlutterVersionFreshness, true);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Platform: () => platform,
-        FlutterVersion: () => FakeFlutterVersion(),
-        BotDetector: () => const FakeBotDetector(false),
-        OutputPreferences: () => OutputPreferences.test(),
       });
 
-      testUsingContext('does not check that Flutter installation is up-to-date with --machine flag', () async {
-        final FlutterCommandRunner runner = createTestCommandRunner(DummyFlutterCommand()) as FlutterCommandRunner;
-        final FakeFlutterVersion version = globals.flutterVersion as FakeFlutterVersion;
+      test('does not check that Flutter installation is up-to-date with --machine flag', () async {
+        final version = FakeFlutterVersion();
+        final toolContext = FakeToolContext(
+          botDetector: const FakeBotDetector(true),
+          flutterVersion: version,
+          fs: fileSystem,
+          outputPreferences: OutputPreferences.test(),
+          platform: platform,
+        );
+        final runner = createTestCommandRunner(
+          DummyFlutterCommand(toolContext: toolContext),
+          null,
+          toolContext,
+        ) as FlutterCommandRunner;
 
         await runner.run(<String>['dummy', '--machine', '--version']);
 
         expect(version.didCheckFlutterVersionFreshness, false);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Platform: () => platform,
-        FlutterVersion: () => FakeFlutterVersion(),
-        OutputPreferences: () => OutputPreferences.test(),
       });
 
-      testUsingContext('does not check that Flutter installation is up-to-date with CI=true in environment', () async {
-        final FlutterCommandRunner runner = createTestCommandRunner(DummyFlutterCommand()) as FlutterCommandRunner;
-        final FakeFlutterVersion version = globals.flutterVersion as FakeFlutterVersion;
+      test('does not check that Flutter installation is up-to-date with --machine flag present anywhere', () async {
+        final version = FakeFlutterVersion();
+        final toolContext = FakeToolContext(
+          botDetector: const FakeBotDetector(true),
+          flutterVersion: version,
+          fs: fileSystem,
+          outputPreferences: OutputPreferences.test(),
+          platform: platform,
+        );
+        final runner = createTestCommandRunner(
+          _FlutterCommandWithItsOwnMachineFlag(verboseHelp: false, toolContext: toolContext),
+          null,
+          toolContext,
+        ) as FlutterCommandRunner;
 
-        await runner.run(<String>['dummy', '--version']);
+        await runner.run(<String>['dummy-with-machine', '--machine']);
 
         expect(version.didCheckFlutterVersionFreshness, false);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Platform: () => platform,
-        BotDetector: () => const FakeBotDetector(true),
-      }, initializeFlutterRoot: false);
+      });
 
-      testUsingContext('checks that Flutter installation is up-to-date with CI=true and --machine when explicit --version-check', () async {
-        final FlutterCommandRunner runner = createTestCommandRunner(DummyFlutterCommand()) as FlutterCommandRunner;
-        final FakeFlutterVersion version = globals.flutterVersion as FakeFlutterVersion;
+      test(
+        'does not check that Flutter installation is up-to-date with CI=true in environment',
+        () async {
+          final version = FakeFlutterVersion();
+          final toolContext = FakeToolContext(
+            botDetector: const FakeBotDetector(true),
+            flutterVersion: version,
+            fs: fileSystem,
+            platform: platform,
+          );
+          final runner = createTestCommandRunner(
+            DummyFlutterCommand(toolContext: toolContext),
+            null,
+            toolContext,
+          ) as FlutterCommandRunner;
+
+          await runner.run(<String>['dummy', '--version']);
+
+          expect(version.didCheckFlutterVersionFreshness, false);
+        },
+      );
+
+      test('checks that Flutter installation is up-to-date with CI=true and --machine when explicit --version-check', () async {
+        final version = FakeFlutterVersion();
+        final toolContext = FakeToolContext(
+          botDetector: const FakeBotDetector(true),
+          flutterVersion: version,
+          fs: fileSystem,
+          platform: platform,
+        );
+        final runner = createTestCommandRunner(
+          DummyFlutterCommand(toolContext: toolContext),
+          null,
+          toolContext,
+        ) as FlutterCommandRunner;
 
         await runner.run(<String>['dummy', '--version', '--machine', '--version-check']);
 
-         expect(version.didCheckFlutterVersionFreshness, true);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Platform: () => platform,
-        BotDetector: () => const FakeBotDetector(true),
-      }, initializeFlutterRoot: false);
-
-      testUsingContext('checks that Flutter installation is up-to-date if shell completion to terminal', () async {
-        final FlutterCommand command = DummyFlutterCommand(name: 'bash-completion');
-        final FlutterCommandRunner runner = createTestCommandRunner(command) as FlutterCommandRunner;
-        final FakeFlutterVersion version = globals.flutterVersion as FakeFlutterVersion;
-
-        await runner.run(<String>['bash-completion']);
-
         expect(version.didCheckFlutterVersionFreshness, true);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Platform: () => platform,
-        FlutterVersion: () => FakeFlutterVersion(),
-        BotDetector: () => const FakeBotDetector(false),
-        Stdio: () => FakeStdio(hasFakeTerminal: true),
       });
 
-      testUsingContext('does not check that Flutter installation is up-to-date if redirecting shell completion', () async {
-        final FlutterCommand command = DummyFlutterCommand(name: 'bash-completion');
-        final FlutterCommandRunner runner = createTestCommandRunner(command) as FlutterCommandRunner;
-        final FakeFlutterVersion version = globals.flutterVersion as FakeFlutterVersion;
+      test(
+        'checks that Flutter installation is up-to-date if shell completion to terminal',
+        () async {
+          final version = FakeFlutterVersion();
+          final toolContext = FakeToolContext(
+            botDetector: const FakeBotDetector(false),
+            flutterVersion: version,
+            fs: fileSystem,
+            platform: platform,
+            stdio: FakeStdio(hasFakeTerminal: true),
+          );
+          final FlutterCommand command = DummyFlutterCommand(
+            name: 'bash-completion',
+            toolContext: toolContext,
+          );
+          final runner =
+              createTestCommandRunner(command, null, toolContext) as FlutterCommandRunner;
 
-        await runner.run(<String>['bash-completion']);
+          await runner.run(<String>['bash-completion']);
 
-        expect(version.didCheckFlutterVersionFreshness, false);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Platform: () => platform,
-        FlutterVersion: () => FakeFlutterVersion(),
-        BotDetector: () => const FakeBotDetector(false),
-        Stdio: () => FakeStdio(hasFakeTerminal: false),
-      });
+          expect(version.didCheckFlutterVersionFreshness, true);
+        },
+      );
 
-      testUsingContext('Fetches tags when --version is used', () async {
-        final FlutterCommandRunner runner = createTestCommandRunner(DummyFlutterCommand()) as FlutterCommandRunner;
-        final FakeFlutterVersion version = globals.flutterVersion as FakeFlutterVersion;
+      test(
+        'does not check that Flutter installation is up-to-date if redirecting shell completion',
+        () async {
+          final version = FakeFlutterVersion();
+          final toolContext = FakeToolContext(
+            botDetector: const FakeBotDetector(false),
+            flutterVersion: version,
+            fs: fileSystem,
+            platform: platform,
+            stdio: FakeStdio(hasFakeTerminal: false),
+          );
+          final FlutterCommand command = DummyFlutterCommand(
+            name: 'bash-completion',
+            toolContext: toolContext,
+          );
+          final runner =
+              createTestCommandRunner(command, null, toolContext) as FlutterCommandRunner;
+
+          await runner.run(<String>['bash-completion']);
+
+          expect(version.didCheckFlutterVersionFreshness, false);
+        },
+      );
+
+      test('Fetches tags when --version is used', () async {
+        final os = FakeOperatingSystemUtils();
+        final version = FakeFlutterVersion();
+        final toolContext = FakeToolContext(
+          botDetector: const FakeBotDetector(true),
+          flutterVersion: version,
+          fs: fileSystem,
+          os: os,
+          outputPreferences: OutputPreferences.test(),
+          platform: platform,
+        );
+        final runner = createTestCommandRunner(
+          DummyFlutterCommand(toolContext: toolContext),
+          fakeAnalytics,
+          toolContext,
+        ) as FlutterCommandRunner;
 
         await runner.run(<String>['--version']);
-
         expect(version.didFetchTagsAndUpdate, true);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Platform: () => platform,
-        FlutterVersion: () => FakeFlutterVersion(),
-        OutputPreferences: () => OutputPreferences.test(),
+        expect(
+          fakeAnalytics.sentEvents,
+          contains(
+            Event.flutterCommandResult(
+              commandPath: 'version',
+              result: 'success',
+              commandHasTerminal: false,
+              hostArch: os.hostPlatform.cliName,
+            ),
+          ),
+        );
       });
 
-    testUsingContext("Doesn't crash on invalid .packages file", () async {
-      final FlutterCommandRunner runner = createTestCommandRunner(DummyFlutterCommand()) as FlutterCommandRunner;
-      fileSystem.file('pubspec.yaml').createSync();
-      fileSystem.file('.packages')
-        ..createSync()
-        ..writeAsStringSync('Not a valid package');
+      // TODO(bkonyi): remove when ready to serve DevTools from DDS.
+      group('${FlutterGlobalOptions.kPrintDtd} flag', () {
+        test('sets DevtoolsLauncher.printDtdUri to false when not present', () async {
+          final toolContext = FakeToolContext(
+            cache: Cache.test(processManager: FakeProcessManager.any()),
+          );
+          final devtoolsLauncher = FakeDevtoolsLauncher()..dtdUri = Uri();
+          final runner = TestFlutterCommandRunner(
+            devtoolsLauncher: devtoolsLauncher,
+            toolContext: toolContext,
+          )..addCommand(DummyFlutterCommand(toolContext: toolContext));
+          await runner.run(<String>[]);
+          expect(devtoolsLauncher.printDtdUri, false);
+        });
 
-      await runner.run(<String>['dummy']);
+        test('sets DevtoolsLauncher.printDtdUri to true when present', () async {
+          final toolContext = FakeToolContext(
+            cache: Cache.test(processManager: FakeProcessManager.any()),
+          );
+          final devtoolsLauncher = FakeDevtoolsLauncher()..dtdUri = Uri();
+          final runner = TestFlutterCommandRunner(
+            devtoolsLauncher: devtoolsLauncher,
+            toolContext: toolContext,
+          )..addCommand(DummyFlutterCommand(toolContext: toolContext));
+          await runner.run(<String>['--${FlutterGlobalOptions.kPrintDtd}']);
+          expect(devtoolsLauncher.printDtdUri, true);
+        });
+      });
 
-    }, overrides: <Type, Generator>{
-      FileSystem: () => fileSystem,
-      ProcessManager: () => FakeProcessManager.any(),
-      Platform: () => platform,
-      OutputPreferences: () => OutputPreferences.test(),
+      test("Doesn't crash on invalid package_config.json file", () async {
+        final toolContext = FakeToolContext(
+          fs: fileSystem,
+          outputPreferences: OutputPreferences.test(),
+          platform: platform,
+          processManager: FakeProcessManager.any(),
+        );
+        final runner = createTestCommandRunner(
+          DummyFlutterCommand(toolContext: toolContext),
+        ) as FlutterCommandRunner;
+        fileSystem.file('pubspec.yaml').createSync();
+        fileSystem.directory('.dart_tool').childFile('package_config.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('Not a valid package config');
+
+        await runner.run(<String>['dummy']);
+      });
+
+      group('getRepoPackages', () {
+        setUp(() {
+          fileSystem
+              .directory(fileSystem.path.join(_kFlutterRoot, 'examples'))
+              .createSync(recursive: true);
+          fileSystem
+              .directory(fileSystem.path.join(_kFlutterRoot, 'packages'))
+              .createSync(recursive: true);
+          fileSystem
+              .directory(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools', 'aatool'))
+              .createSync(recursive: true);
+
+          fileSystem
+              .file(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools', 'pubspec.yaml'))
+              .createSync();
+          fileSystem
+              .file(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools', 'aatool', 'pubspec.yaml'))
+              .createSync();
+        });
+
+        test('returns all packages in dev, examples, and packages', () {
+          final toolContext = FakeToolContext(
+            cache: Cache.test(
+              flutterRoot: _kFlutterRoot,
+              fileSystem: fileSystem,
+              processManager: FakeProcessManager.any(),
+            ),
+            flutterVersion: FakeFlutterVersion(),
+            fs: fileSystem,
+            outputPreferences: OutputPreferences.test(),
+            platform: platform,
+            processManager: FakeProcessManager.any(),
+          );
+          final runner = createTestCommandRunner(
+            DummyFlutterCommand(toolContext: toolContext),
+          ) as FlutterCommandRunner;
+          final List<String> packagePaths = runner
+              .getRepoPackages()
+              .map((Directory d) => d.path)
+              .toList();
+          expect(packagePaths, <String>[
+            fileSystem
+                .directory(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools', 'aatool'))
+                .path,
+            fileSystem.directory(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools')).path,
+          ]);
+        });
+
+        test('ignores .dart_tool and build directories', () {
+          fileSystem
+              .file(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools', 'build', 'pubspec.yaml'))
+              .createSync(recursive: true);
+          fileSystem
+              .file(
+                fileSystem.path.join(
+                  _kFlutterRoot,
+                  'dev',
+                  'tools',
+                  'build',
+                  'ios',
+                  'SourcePackages',
+                  'pkg',
+                  'pubspec.yaml',
+                ),
+              )
+              .createSync(recursive: true);
+          fileSystem
+              .file(
+                fileSystem.path.join(_kFlutterRoot, 'dev', 'tools', '.dart_tool', 'pubspec.yaml'),
+              )
+              .createSync(recursive: true);
+
+          final toolContext = FakeToolContext(
+            cache: Cache.test(
+              flutterRoot: _kFlutterRoot,
+              fileSystem: fileSystem,
+              processManager: FakeProcessManager.any(),
+            ),
+            flutterVersion: FakeFlutterVersion(),
+            fs: fileSystem,
+            outputPreferences: OutputPreferences.test(),
+            platform: platform,
+            processManager: FakeProcessManager.any(),
+          );
+          final runner = createTestCommandRunner(
+            DummyFlutterCommand(toolContext: toolContext),
+          ) as FlutterCommandRunner;
+          final List<String> packagePaths = runner
+              .getRepoPackages()
+              .map((Directory d) => d.path)
+              .toList();
+          expect(packagePaths, <String>[
+            fileSystem
+                .directory(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools', 'aatool'))
+                .path,
+            fileSystem.directory(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools')).path,
+          ]);
+        });
+      });
+
+      group('wrapping', () {
+        test('checks that output wrapping is turned on when writing to a terminal', () async {
+          final toolContext = FakeToolContext(
+            fs: fileSystem,
+            outputPreferences: OutputPreferences.test(),
+            processManager: FakeProcessManager.any(),
+            stdio: FakeStdio(hasFakeTerminal: true),
+          );
+          final runner = createTestCommandRunner(
+            DummyFlutterCommand(toolContext: toolContext),
+          ) as FlutterCommandRunner;
+          final fakeCommand = FakeFlutterCommand(toolContext: toolContext);
+          runner.addCommand(fakeCommand);
+          await runner.run(<String>['fake']);
+          expect(fakeCommand.preferences.wrapText, isTrue);
+        });
+
+        test('checks that output wrapping is turned off when not writing to a terminal', () async {
+          final toolContext = FakeToolContext(
+            fs: fileSystem,
+            outputPreferences: OutputPreferences.test(),
+            processManager: FakeProcessManager.any(),
+            stdio: FakeStdio(hasFakeTerminal: false),
+          );
+          final runner = createTestCommandRunner(
+            DummyFlutterCommand(toolContext: toolContext),
+          ) as FlutterCommandRunner;
+          final fakeCommand = FakeFlutterCommand(toolContext: toolContext);
+          runner.addCommand(fakeCommand);
+          await runner.run(<String>['fake']);
+          expect(fakeCommand.preferences.wrapText, isFalse);
+        });
+
+        test('checks that output wrapping is turned off when set on the command line and writing to a terminal', () async {
+          final toolContext = FakeToolContext(
+            fs: fileSystem,
+            outputPreferences: OutputPreferences.test(),
+            processManager: FakeProcessManager.any(),
+            stdio: FakeStdio(hasFakeTerminal: true),
+          );
+          final runner = createTestCommandRunner(
+            DummyFlutterCommand(toolContext: toolContext),
+          ) as FlutterCommandRunner;
+          final fakeCommand = FakeFlutterCommand(toolContext: toolContext);
+          runner.addCommand(fakeCommand);
+          await runner.run(<String>['--no-wrap', 'fake']);
+          expect(fakeCommand.preferences.wrapText, isFalse);
+        });
+
+        test('checks that output wrapping is turned on when set on the command line, but not writing to a terminal', () async {
+          final toolContext = FakeToolContext(
+            fs: fileSystem,
+            outputPreferences: OutputPreferences.test(),
+            processManager: FakeProcessManager.any(),
+            stdio: FakeStdio(hasFakeTerminal: false),
+          );
+          final runner = createTestCommandRunner(
+            DummyFlutterCommand(toolContext: toolContext),
+          ) as FlutterCommandRunner;
+          final fakeCommand = FakeFlutterCommand(toolContext: toolContext);
+          runner.addCommand(fakeCommand);
+          await runner.run(<String>['--wrap', 'fake']);
+          expect(fakeCommand.preferences.wrapText, isTrue);
+        });
+      });
+
+      group('toolContext', () {
+        test('is preserved when provided to constructor', () {
+          final fakeToolContext = FakeToolContext();
+          final runner = TestFlutterCommandRunner(toolContext: fakeToolContext);
+          expect(runner.toolContext, same(fakeToolContext));
+        });
+
+        test('command preserves provided toolContext', () {
+          final fakeToolContext = FakeToolContext();
+          final runner = TestFlutterCommandRunner(toolContext: fakeToolContext);
+          final command = FakeFlutterCommand(toolContext: fakeToolContext);
+          runner.addCommand(command);
+          expect(command.toolContext, same(fakeToolContext));
+        });
+      });
+
+      group('findCommandName', () {
+        test('finds a command given on its own', () {
+          expect(FlutterCommandRunner.findCommandName(<String>['doctor']), 'doctor');
+          expect(FlutterCommandRunner.findCommandName(<String>['help']), 'help');
+        });
+
+        test('finds a command followed by its own arguments', () {
+          expect(FlutterCommandRunner.findCommandName(<String>['doctor', '-v']), 'doctor');
+          expect(
+            FlutterCommandRunner.findCommandName(<String>['doctor', '--android-licenses']),
+            'doctor',
+          );
+          expect(
+            FlutterCommandRunner.findCommandName(<String>['test', 'test/widget_test.dart']),
+            'test',
+          );
+        });
+
+        test('finds a command preceded by global options', () {
+          expect(FlutterCommandRunner.findCommandName(<String>['-v', 'doctor']), 'doctor');
+          expect(
+            FlutterCommandRunner.findCommandName(<String>['--no-version-check', 'doctor', '-v']),
+            'doctor',
+          );
+          expect(
+            FlutterCommandRunner.findCommandName(<String>['--no-version-check', 'help', '-v']),
+            'help',
+          );
+          expect(
+            FlutterCommandRunner.findCommandName(<String>[
+              '--suppress-analytics',
+              '--no-color',
+              'doctor',
+              '-v',
+            ]),
+            'doctor',
+          );
+        });
+
+        test('does not mistake the value of a global option for the command', () {
+          expect(
+            FlutterCommandRunner.findCommandName(<String>[
+              '--local-engine',
+              'host_debug',
+              'doctor',
+            ]),
+            'doctor',
+          );
+          expect(
+            FlutterCommandRunner.findCommandName(<String>['--local-engine=host_debug', 'doctor']),
+            'doctor',
+          );
+          expect(
+            FlutterCommandRunner.findCommandName(<String>['--wrap-column', '100', 'doctor']),
+            'doctor',
+          );
+          expect(
+            FlutterCommandRunner.findCommandName(<String>['-d', 'emulator-5554', 'doctor']),
+            'doctor',
+          );
+        });
+
+        test('does not mistake an argument of the command for the command', () {
+          expect(FlutterCommandRunner.findCommandName(<String>['create', 'doctor']), 'create');
+          expect(FlutterCommandRunner.findCommandName(<String>['create', 'daemon']), 'create');
+          expect(
+            FlutterCommandRunner.findCommandName(<String>['create', 'widget-preview']),
+            'create',
+          );
+          expect(FlutterCommandRunner.findCommandName(<String>['help', 'doctor']), 'help');
+        });
+
+        test('returns null when no command is given', () {
+          expect(FlutterCommandRunner.findCommandName(<String>[]), isNull);
+          expect(FlutterCommandRunner.findCommandName(<String>['-v']), isNull);
+          expect(FlutterCommandRunner.findCommandName(<String>['-h']), isNull);
+          expect(FlutterCommandRunner.findCommandName(<String>['--version', '-v']), isNull);
+        });
+
+        test('returns null when the global options cannot be parsed', () {
+          expect(
+            FlutterCommandRunner.findCommandName(<String>['--not-a-real-flag', 'doctor']),
+            isNull,
+          );
+        });
+      });
+
+      group('dynamic options initialization', () {
+        FakeToolContext createDynamicOptionsToolContext() => FakeToolContext(
+          fs: fileSystem,
+          platform: platform,
+          processManager: FakeProcessManager.any(),
+        );
+
+        test('initializes dynamic options when command is invoked directly', () async {
+          final FakeToolContext toolContext = createDynamicOptionsToolContext();
+          final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+          final runner = TestFlutterCommandRunner(
+            featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+            toolContext: toolContext,
+          )..addCommand(dynamicCommand);
+
+          await runner.run(<String>['dynamic-cmd']);
+
+          expect(dynamicCommand.didInitializeDynamicOptions, isTrue);
+        });
+
+        test('initializes dynamic options when global flags precede command', () async {
+          final FakeToolContext toolContext = createDynamicOptionsToolContext();
+          final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+          final runner = TestFlutterCommandRunner(
+            featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+            toolContext: toolContext,
+          )..addCommand(dynamicCommand);
+
+          await runner.run(<String>['--verbose', 'dynamic-cmd']);
+
+          expect(dynamicCommand.didInitializeDynamicOptions, isTrue);
+        });
+
+        test(
+          'initializes dynamic options when options with separate values precede command',
+          () async {
+            final FakeToolContext toolContext = createDynamicOptionsToolContext();
+            final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+            final runner = TestFlutterCommandRunner(
+              featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+              toolContext: toolContext,
+            )..addCommand(dynamicCommand);
+
+            await runner.run(<String>['-d', 'dummy-device', 'dynamic-cmd']);
+
+            expect(dynamicCommand.didInitializeDynamicOptions, isTrue);
+          },
+        );
+
+        test('initializes dynamic options when help command precedes dynamic command', () async {
+          final FakeToolContext toolContext = createDynamicOptionsToolContext();
+          final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+          final runner = TestFlutterCommandRunner(
+            featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+            toolContext: toolContext,
+          )..addCommand(dynamicCommand);
+
+          await runner.run(<String>['help', '--verbose', 'dynamic-cmd']);
+
+          expect(dynamicCommand.didInitializeDynamicOptions, isTrue);
+        });
+
+        test('initializes dynamic options on subcommands', () async {
+          final FakeToolContext toolContext = createDynamicOptionsToolContext();
+          final dynamicSubcommand = _FakeDynamicFlutterCommand(
+            commandName: 'dynamic-sub',
+            toolContext: toolContext,
+          );
+          final parentCommand = _FakeParentFlutterCommand(
+            subcommand: dynamicSubcommand,
+            toolContext: toolContext,
+          );
+          final runner = TestFlutterCommandRunner(
+            featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+            toolContext: toolContext,
+          )..addCommand(parentCommand);
+
+          await runner.run(<String>['parent-cmd', 'dynamic-sub']);
+
+          expect(dynamicSubcommand.didInitializeDynamicOptions, isTrue);
+        });
+
+        test(
+          'initializes dynamic options on subcommands with preceding options and flags',
+          () async {
+            final FakeToolContext toolContext = createDynamicOptionsToolContext();
+            final dynamicSubcommand = _FakeDynamicFlutterCommand(
+              commandName: 'dynamic-sub',
+              toolContext: toolContext,
+            );
+            final parentCommand = _FakeParentFlutterCommand(
+              subcommand: dynamicSubcommand,
+              toolContext: toolContext,
+            );
+            final runner = TestFlutterCommandRunner(
+              featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+              toolContext: toolContext,
+            )..addCommand(parentCommand);
+
+            await runner.run(<String>[
+              '--verbose',
+              'parent-cmd',
+              '-d',
+              'dummy-device',
+              'dynamic-sub',
+            ]);
+
+            expect(dynamicSubcommand.didInitializeDynamicOptions, isTrue);
+          },
+        );
+
+        test(
+          'initializes dynamic options when both parent command and subcommand are dynamic',
+          () async {
+            final FakeToolContext toolContext = createDynamicOptionsToolContext();
+            final dynamicSubcommand = _FakeDynamicFlutterCommand(
+              commandName: 'dynamic-sub',
+              toolContext: toolContext,
+            );
+            final dynamicParent = _FakeDynamicFlutterCommand(
+              commandName: 'dynamic-parent',
+              subcommand: dynamicSubcommand,
+              toolContext: toolContext,
+            );
+            final runner = TestFlutterCommandRunner(
+              featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+              toolContext: toolContext,
+            )..addCommand(dynamicParent);
+
+            await runner.run(<String>['dynamic-parent', 'dynamic-sub']);
+
+            expect(dynamicParent.didInitializeDynamicOptions, isTrue);
+            expect(dynamicSubcommand.didInitializeDynamicOptions, isTrue);
+          },
+        );
+
+        test(
+          'initializes dynamic options when option contains inline value with spaces or quotes',
+          () async {
+            final FakeToolContext toolContext = createDynamicOptionsToolContext();
+            final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+            final runner = TestFlutterCommandRunner(
+              featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+              toolContext: toolContext,
+            )..addCommand(dynamicCommand);
+
+            await runner.run(<String>['--device-id="Hello world"', 'dynamic-cmd']);
+
+            expect(dynamicCommand.didInitializeDynamicOptions, isTrue);
+          },
+        );
+
+        test('initializes dynamic options when option contains empty inline value', () async {
+          final FakeToolContext toolContext = createDynamicOptionsToolContext();
+          final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+          final runner = TestFlutterCommandRunner(
+            featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+            toolContext: toolContext,
+          )..addCommand(dynamicCommand);
+
+          await runner.run(<String>['--device-id=', '-d', 'test', 'dynamic-cmd']);
+
+          expect(dynamicCommand.didInitializeDynamicOptions, isTrue);
+        });
+
+        test('initializes dynamic options when unknown flags precede command', () async {
+          final FakeToolContext toolContext = createDynamicOptionsToolContext();
+          final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+          final runner = TestFlutterCommandRunner(
+            featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+            toolContext: toolContext,
+          )..addCommand(dynamicCommand);
+
+          await expectLater(
+            () => runner.run(<String>['--unknown-flag', 'dynamic-cmd']),
+            throwsA(isA<UsageException>()),
+          );
+
+          expect(dynamicCommand.didInitializeDynamicOptions, isTrue);
+        });
+
+        test('initializes dynamic options when negated flags precede command', () async {
+          final FakeToolContext toolContext = createDynamicOptionsToolContext();
+          final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+          final runner = TestFlutterCommandRunner(
+            featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+            toolContext: toolContext,
+          )..addCommand(dynamicCommand);
+
+          await runner.run(<String>['--no-version-check', 'dynamic-cmd']);
+
+          expect(dynamicCommand.didInitializeDynamicOptions, isTrue);
+        });
+
+        test('initializes dynamic options when help command targets a subcommand', () async {
+          final FakeToolContext toolContext = createDynamicOptionsToolContext();
+          final dynamicSubcommand = _FakeDynamicFlutterCommand(
+            commandName: 'dynamic-sub',
+            toolContext: toolContext,
+          );
+          final parentCommand = _FakeParentFlutterCommand(
+            subcommand: dynamicSubcommand,
+            toolContext: toolContext,
+          );
+          final runner = TestFlutterCommandRunner(
+            featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+            toolContext: toolContext,
+          )..addCommand(parentCommand);
+
+          await runner.run(<String>['help', '--verbose', 'parent-cmd', 'dynamic-sub']);
+
+          expect(dynamicSubcommand.didInitializeDynamicOptions, isTrue);
+        });
+
+        test(
+          'does not initialize dynamic options when tool extensions feature flag is disabled',
+          () async {
+            final FakeToolContext toolContext = createDynamicOptionsToolContext();
+            final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+            final runner = TestFlutterCommandRunner(
+              featureFlags: TestFeatureFlags(),
+              toolContext: toolContext,
+            )..addCommand(dynamicCommand);
+
+            await runner.run(<String>['dynamic-cmd']);
+
+            expect(dynamicCommand.didInitializeDynamicOptions, isFalse);
+          },
+        );
+
+        test('does not initialize dynamic options when --no-extensions precedes command', () async {
+          final toolContext = FakeToolContext();
+          final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+          final runner = TestFlutterCommandRunner(
+            toolContext: toolContext,
+            featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+          )..addCommand(dynamicCommand);
+
+          await runner.run(<String>['--wrap-column', '80', '--no-extensions', 'dynamic-cmd']);
+
+          expect(dynamicCommand.didInitializeDynamicOptions, isFalse);
+        });
+
+        test('does not initialize dynamic options when --no-extensions follows command', () async {
+          final toolContext = FakeToolContext();
+          final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+          final runner = TestFlutterCommandRunner(
+            toolContext: toolContext,
+            featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+          )..addCommand(dynamicCommand);
+
+          await runner.run(<String>['dynamic-cmd', '--no-extensions']);
+
+          expect(dynamicCommand.didInitializeDynamicOptions, isFalse);
+        });
+
+        test('resolves global options with arguments after a subcommand during dynamic option initialization', () async {
+          final toolContext = FakeToolContext();
+          final dynamicSubcommand = _FakeDynamicFlutterCommand(
+            commandName: 'dynamic-sub',
+            toolContext: toolContext,
+          );
+          final parentCommand = _FakeParentFlutterCommand(
+            subcommand: dynamicSubcommand,
+            toolContext: toolContext,
+          );
+          final runner = TestFlutterCommandRunner(
+            toolContext: toolContext,
+            featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+          )..addCommand(parentCommand);
+
+          // Pass global option '--wrap-column' with value '80' between parent command and subcommand.
+          await runner.run(<String>['parent-cmd', '--wrap-column', '80', 'dynamic-sub']);
+
+          expect(dynamicSubcommand.didInitializeDynamicOptions, isTrue);
+        });
+
+        test(
+          'initializes dynamic options when --extensions overrides preceding --no-extensions',
+          () async {
+            final toolContext = FakeToolContext();
+            final dynamicCommand = _FakeDynamicFlutterCommand(toolContext: toolContext);
+            final runner = TestFlutterCommandRunner(
+              toolContext: toolContext,
+              featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+            )..addCommand(dynamicCommand);
+
+            await runner.run(<String>['--no-extensions', '--extensions', 'dynamic-cmd']);
+
+            expect(dynamicCommand.didInitializeDynamicOptions, isTrue);
+          },
+        );
+
+        test(
+          'stops scanning subcommands at -- separator during dynamic option initialization',
+          () async {
+            final toolContext = FakeToolContext();
+            final dynamicSubcommand = _FakeDynamicFlutterCommand(
+              commandName: 'dynamic-sub',
+              toolContext: toolContext,
+            );
+            final parentCommand = _FakeParentFlutterCommand(
+              subcommand: dynamicSubcommand,
+              toolContext: toolContext,
+            );
+            final runner = TestFlutterCommandRunner(
+              toolContext: toolContext,
+              featureFlags: TestFeatureFlags(isToolExtensionsEnabled: true),
+            )..addCommand(parentCommand);
+
+            await expectLater(
+              () => runner.run(<String>['parent-cmd', '--', 'dynamic-sub']),
+              throwsA(isA<UsageException>()),
+            );
+
+            expect(dynamicSubcommand.didInitializeDynamicOptions, isFalse);
+          },
+        );
+
+        test(
+          'propagates local engine options to DeferredArtifacts and context Artifacts',
+          () async {
+            fileSystem
+                .directory('engine')
+                .childDirectory('src')
+                .childDirectory('out')
+                .childDirectory('host_debug')
+                .createSync(recursive: true);
+            final deferredArtifacts = DeferredArtifacts(Artifacts.test());
+            final localToolContext = FakeToolContext(
+              artifacts: deferredArtifacts,
+              fs: fileSystem,
+              logger: BufferLogger.test(),
+              platform: platform,
+              processManager: FakeProcessManager.any(),
+            );
+            final fakeCommand = FakeFlutterCommand(toolContext: localToolContext);
+            final runner = createTestCommandRunner(
+              fakeCommand,
+              null,
+              localToolContext,
+            ) as FlutterCommandRunner;
+
+            Artifacts? artifactsInsideCommand;
+            fakeCommand.onRun = () {
+              artifactsInsideCommand = fakeCommand.toolContext.artifacts;
+            };
+
+            await runner.run(<String>[
+              '--local-engine=host_debug',
+              '--local-engine-host=host_debug',
+              '--local-engine-src-path=./engine/src',
+              'fake',
+            ]);
+
+            expect(deferredArtifacts.usesLocalArtifacts, isTrue);
+            expect(deferredArtifacts.localEngineInfo?.localTargetName, 'host_debug');
+            expect(deferredArtifacts.localEngineInfo?.localHostName, 'host_debug');
+            expect(artifactsInsideCommand, isNotNull);
+            expect(artifactsInsideCommand!.usesLocalArtifacts, isTrue);
+            expect(artifactsInsideCommand!.localEngineInfo?.localTargetName, 'host_debug');
+            expect(artifactsInsideCommand!.localEngineInfo?.localHostName, 'host_debug');
+          },
+        );
+      });
     });
-
-    group('getRepoPackages', () {
-      late String? oldFlutterRoot;
-
-      setUp(() {
-        oldFlutterRoot = Cache.flutterRoot;
-        Cache.flutterRoot = _kFlutterRoot;
-        fileSystem.directory(fileSystem.path.join(_kFlutterRoot, 'examples'))
-            .createSync(recursive: true);
-        fileSystem.directory(fileSystem.path.join(_kFlutterRoot, 'packages'))
-            .createSync(recursive: true);
-        fileSystem.directory(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools', 'aatool'))
-            .createSync(recursive: true);
-
-        fileSystem.file(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools', 'pubspec.yaml'))
-            .createSync();
-        fileSystem.file(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools', 'aatool', 'pubspec.yaml'))
-            .createSync();
-      });
-
-      tearDown(() {
-        Cache.flutterRoot = oldFlutterRoot;
-      });
-
-      testUsingContext('', () {
-        final FlutterCommandRunner runner = createTestCommandRunner(DummyFlutterCommand()) as FlutterCommandRunner;
-        final List<String> packagePaths = runner.getRepoPackages()
-          .map((Directory d) => d.path).toList();
-        expect(packagePaths, <String>[
-          fileSystem.directory(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools', 'aatool')).path,
-          fileSystem.directory(fileSystem.path.join(_kFlutterRoot, 'dev', 'tools')).path,
-        ]);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Platform: () => platform,
-        FlutterVersion: () => FakeFlutterVersion(),
-        OutputPreferences: () => OutputPreferences.test(),
-      });
-    });
-
-    group('wrapping', () {
-      testUsingContext('checks that output wrapping is turned on when writing to a terminal', () async {
-        final FlutterCommandRunner runner = createTestCommandRunner(DummyFlutterCommand()) as FlutterCommandRunner;
-        final FakeFlutterCommand fakeCommand = FakeFlutterCommand();
-        runner.addCommand(fakeCommand);
-        await runner.run(<String>['fake']);
-        expect(fakeCommand.preferences.wrapText, isTrue);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Stdio: () => FakeStdio(hasFakeTerminal: true),
-        OutputPreferences: () => OutputPreferences.test(),
-      }, initializeFlutterRoot: false);
-
-      testUsingContext('checks that output wrapping is turned off when not writing to a terminal', () async {
-        final FlutterCommandRunner runner = createTestCommandRunner(DummyFlutterCommand()) as FlutterCommandRunner;
-        final FakeFlutterCommand fakeCommand = FakeFlutterCommand();
-        runner.addCommand(fakeCommand);
-        await runner.run(<String>['fake']);
-        expect(fakeCommand.preferences.wrapText, isFalse);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Stdio: () => FakeStdio(hasFakeTerminal: false),
-        OutputPreferences: () => OutputPreferences.test(),
-      }, initializeFlutterRoot: false);
-
-      testUsingContext('checks that output wrapping is turned off when set on the command line and writing to a terminal', () async {
-        final FlutterCommandRunner runner = createTestCommandRunner(DummyFlutterCommand()) as FlutterCommandRunner;
-        final FakeFlutterCommand fakeCommand = FakeFlutterCommand();
-        runner.addCommand(fakeCommand);
-        await runner.run(<String>['--no-wrap', 'fake']);
-        expect(fakeCommand.preferences.wrapText, isFalse);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Stdio: () => FakeStdio(hasFakeTerminal: true),
-        OutputPreferences: () => OutputPreferences.test(),
-      }, initializeFlutterRoot: false);
-
-      testUsingContext('checks that output wrapping is turned on when set on the command line, but not writing to a terminal', () async {
-        final FlutterCommandRunner runner = createTestCommandRunner(DummyFlutterCommand()) as FlutterCommandRunner;
-        final FakeFlutterCommand fakeCommand = FakeFlutterCommand();
-        runner.addCommand(fakeCommand);
-        await runner.run(<String>['--wrap', 'fake']);
-        expect(fakeCommand.preferences.wrapText, isTrue);
-      }, overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Stdio: () => FakeStdio(hasFakeTerminal: false),
-        OutputPreferences: () => OutputPreferences.test(),
-      }, initializeFlutterRoot: false);
-    });
-  });
   });
 }
 
 class FakeFlutterCommand extends FlutterCommand {
+  FakeFlutterCommand({required super.toolContext});
+
+  bool ran = false;
   late OutputPreferences preferences;
+  void Function()? onRun;
 
   @override
   Future<FlutterCommandResult> runCommand() {
-    preferences = globals.outputPreferences;
+    ran = true;
+    preferences = toolContext.outputPreferences;
+    onRun?.call();
     return Future<FlutterCommandResult>.value(const FlutterCommandResult(ExitStatus.success));
   }
 
@@ -298,4 +956,77 @@ class FakeStdio extends Stdio {
   int? get terminalLines => hasFakeTerminal ? 24 : null;
   @override
   bool get supportsAnsiEscapes => hasFakeTerminal;
+}
+
+final class _FlutterCommandWithItsOwnMachineFlag extends FlutterCommand {
+  _FlutterCommandWithItsOwnMachineFlag({required bool verboseHelp, required super.toolContext}) {
+    CommonOptions.machine.addTo(argParser, verboseHelp: verboseHelp);
+  }
+
+  @override
+  String get name => 'dummy-with-machine';
+
+  @override
+  Future<FlutterCommandResult> runCommand() async {
+    return FlutterCommandResult.success();
+  }
+
+  @override
+  String get description => 'does nothing, this time with --machine';
+}
+
+final class _FakeParentFlutterCommand extends FlutterCommand {
+  _FakeParentFlutterCommand({required FlutterCommand subcommand, required super.toolContext}) {
+    addSubcommand(subcommand);
+  }
+
+  @override
+  String get name => 'parent-cmd';
+
+  @override
+  String get description => 'A fake parent command';
+
+  @override
+  Future<FlutterCommandResult> runCommand() async {
+    return FlutterCommandResult.success();
+  }
+}
+
+final class _FakeDynamicFlutterCommand extends FlutterCommand with ExtensionArgParserMixin {
+  _FakeDynamicFlutterCommand({
+    required super.toolContext,
+    this.commandName = 'dynamic-cmd',
+    FlutterCommand? subcommand,
+  }) {
+    if (subcommand != null) {
+      addSubcommand(subcommand);
+    }
+  }
+
+  final String commandName;
+
+  @override
+  String get name => commandName;
+
+  @override
+  String get description => 'A fake command with dynamic extension options';
+
+  bool didInitializeDynamicOptions = false;
+
+  @override
+  Future<void> initializeDynamicOptions() async {
+    didInitializeDynamicOptions = true;
+    rebuildDynamicArgParser();
+  }
+
+  @override
+  ArgParser buildDynamicArgParser(ArgParser dynamicParser) {
+    dynamicParser.addFlag('dynamic-flag', help: 'A dynamically added flag');
+    return dynamicParser;
+  }
+
+  @override
+  Future<FlutterCommandResult> runCommand() async {
+    return FlutterCommandResult.success();
+  }
 }

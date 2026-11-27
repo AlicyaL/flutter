@@ -5,9 +5,13 @@
 import 'dart:async';
 
 import 'package:meta/meta.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import 'async_guard.dart';
+import 'exit.dart';
 import 'io.dart';
+import 'logger.dart';
+import 'process.dart';
 
 typedef SignalHandler = FutureOr<void> Function(ProcessSignal signal);
 
@@ -17,14 +21,21 @@ typedef SignalHandler = FutureOr<void> Function(ProcessSignal signal);
 abstract class Signals {
   @visibleForTesting
   factory Signals.test({
+    Analytics? analytics,
     List<ProcessSignal> exitSignals = defaultExitSignals,
-  }) => LocalSignals._(exitSignals);
+    Logger? logger,
+    ShutdownHooks? shutdownHooks,
+  }) {
+    assert((analytics == null) == (logger == null), 'Pass both analytics and logger, or neither.');
+    final signals = LocalSignals._(exitSignals, shutdownHooks: shutdownHooks);
+    if (analytics != null && logger != null) {
+      signals.configureExit(analytics: analytics, logger: logger);
+    }
+    return signals;
+  }
 
   // The default list of signals that should cause the process to exit.
-  static const List<ProcessSignal> defaultExitSignals = <ProcessSignal>[
-    ProcessSignal.sigterm,
-    ProcessSignal.sigint,
-  ];
+  static const defaultExitSignals = <ProcessSignal>[ProcessSignal.sigterm, ProcessSignal.sigint];
 
   /// Adds a signal handler to run on receipt of signal.
   ///
@@ -50,36 +61,44 @@ abstract class Signals {
 /// We use a singleton instance of this class to ensure that all handlers for
 /// fatal signals run before this class calls exit().
 class LocalSignals implements Signals {
-  LocalSignals._(this.exitSignals);
+  LocalSignals._(this.exitSignals, {ShutdownHooks? shutdownHooks})
+    : shutdownHooks = shutdownHooks ?? ShutdownHooks();
 
-  static LocalSignals instance = LocalSignals._(
-    Signals.defaultExitSignals,
-  );
+  static LocalSignals instance = LocalSignals._(Signals.defaultExitSignals);
 
   final List<ProcessSignal> exitSignals;
+  final ShutdownHooks shutdownHooks;
+
+  // Plain exit until configured. Honors setExitFunctionForTests.
+  Future<void> Function(int code) _exit = (int code) async {
+    exit(code);
+  };
+
+  /// Routes exits caused by fatal signals through [exitWithHooks].
+  void configureExit({required Analytics analytics, required Logger logger}) {
+    _exit = (int code) =>
+        exitWithHooks(code, analytics: analytics, logger: logger, shutdownHooks: shutdownHooks);
+  }
 
   // A table mapping (signal, token) -> signal handler.
-  final Map<ProcessSignal, Map<Object, SignalHandler>> _handlersTable =
-      <ProcessSignal, Map<Object, SignalHandler>>{};
+  final _handlersTable = <ProcessSignal, Map<Object, SignalHandler>>{};
 
   // A table mapping (signal) -> signal handler list. The list is in the order
   // that the signal handlers should be run.
-  final Map<ProcessSignal, List<SignalHandler>> _handlersList =
-      <ProcessSignal, List<SignalHandler>>{};
+  final _handlersList = <ProcessSignal, List<SignalHandler>>{};
 
   // A table mapping (signal) -> low-level signal event stream.
-  final Map<ProcessSignal, StreamSubscription<ProcessSignal>> _streamSubscriptions =
-    <ProcessSignal, StreamSubscription<ProcessSignal>>{};
+  final _streamSubscriptions = <ProcessSignal, StreamSubscription<ProcessSignal>>{};
 
   // The stream controller for errors coming from signal handlers.
-  final StreamController<Object> _errorStreamController = StreamController<Object>.broadcast();
+  final _errorStreamController = StreamController<Object>.broadcast();
 
   @override
   Stream<Object> get errors => _errorStreamController.stream;
 
   @override
   Object addHandler(ProcessSignal signal, SignalHandler handler) {
-    final Object token = Object();
+    final token = Object();
     _handlersTable.putIfAbsent(signal, () => <Object, SignalHandler>{});
     _handlersTable[signal]![token] = handler;
 
@@ -121,7 +140,7 @@ class LocalSignals implements Signals {
 
     // If _handlersList[signal] is empty, then lookup the cached stream
     // controller and unsubscribe from the stream.
-    if (_handlersList.isEmpty) {
+    if (_handlersList[signal]!.isEmpty) {
       await _streamSubscriptions[signal]?.cancel();
     }
     return true;
@@ -131,7 +150,7 @@ class LocalSignals implements Signals {
     final List<SignalHandler>? handlers = _handlersList[s];
     if (handlers != null) {
       final List<SignalHandler> handlersCopy = handlers.toList();
-      for (final SignalHandler handler in handlersCopy) {
+      for (final handler in handlersCopy) {
         try {
           await asyncGuard<void>(() async => handler(s));
         } on Exception catch (e) {
@@ -144,7 +163,7 @@ class LocalSignals implements Signals {
     // If this was a signal that should cause the process to go down, then
     // call exit();
     if (_shouldExitFor(s)) {
-      exit(0);
+      await _exit(0);
     }
   }
 

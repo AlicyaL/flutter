@@ -21,12 +21,13 @@ class CustomDevicesConfig {
   /// when it's not valid JSON (which other configurations do) and will not
   /// be implicitly created when it doesn't exist.
   CustomDevicesConfig({
-    required Platform platform,
     required FileSystem fileSystem,
     required Logger logger,
-  }) : _platform = platform,
-       _fileSystem = fileSystem,
+    required Platform platform,
+    required this.cache,
+  }) : _fileSystem = fileSystem,
        _logger = logger,
+       _platform = platform,
        _configLoader = (() => Config.managed(
          _kCustomDevicesConfigName,
          fileSystem: fileSystem,
@@ -36,28 +37,29 @@ class CustomDevicesConfig {
 
   @visibleForTesting
   CustomDevicesConfig.test({
-    required FileSystem fileSystem,
+    required this._fileSystem,
     required Logger logger,
+    required this.cache,
     Directory? directory,
     Platform? platform,
   }) : _platform = platform ?? FakePlatform(),
-       _fileSystem = fileSystem,
        _logger = logger,
        _configLoader = (() => Config.test(
          name: _kCustomDevicesConfigName,
          directory: directory,
          logger: logger,
-         managed: true
+         managed: true,
        ));
 
-  static const String _kCustomDevicesConfigName = 'custom_devices.json';
-  static const String _kCustomDevicesConfigKey = 'custom-devices';
-  static const String _kSchema = r'$schema';
-  static const String _kCustomDevices = 'custom-devices';
+  static const _kCustomDevicesConfigName = 'custom_devices.json';
+  static const _kCustomDevicesConfigKey = 'custom-devices';
+  static const _kSchema = r'$schema';
+  static const _kCustomDevices = 'custom-devices';
 
   final Platform _platform;
   final FileSystem _fileSystem;
   final Logger _logger;
+  final Cache cache;
   final Config Function() _configLoader;
 
   // When the custom devices feature is disabled, CustomDevicesConfig is
@@ -80,12 +82,12 @@ class CustomDevicesConfig {
 
   String get _defaultSchema {
     final Uri uri = _fileSystem
-      .directory(Cache.flutterRoot)
-      .childDirectory('packages')
-      .childDirectory('flutter_tools')
-      .childDirectory('static')
-      .childFile('custom-devices.schema.json')
-      .uri;
+        .directory(cache.flutterRoot)
+        .childDirectory('packages')
+        .childDirectory('flutter_tools')
+        .childDirectory('static')
+        .childFile('custom-devices.schema.json')
+        .uri;
 
     // otherwise it won't contain the Uri schema, so the file:// at the start
     // will be missing
@@ -114,7 +116,8 @@ class CustomDevicesConfig {
     if (json == null) {
       return null;
     } else if (json is! List) {
-      const String msg = "Could not load custom devices config. config['$_kCustomDevicesConfigKey'] is not a JSON array.";
+      const msg =
+          "Could not load custom devices config. config['$_kCustomDevicesConfigKey'] is not a JSON array.";
       _logger.printError(msg);
       throw const CustomDeviceRevivalException(msg);
     }
@@ -134,12 +137,12 @@ class CustomDevicesConfig {
     }
 
     final List<dynamic> typedList = typedListNullable;
-    final List<CustomDeviceConfig> revived = <CustomDeviceConfig>[];
+    final revived = <CustomDeviceConfig>[];
     for (final MapEntry<int, dynamic> entry in typedList.asMap().entries) {
       try {
         revived.add(CustomDeviceConfig.fromJson(entry.value));
       } on CustomDeviceRevivalException catch (e) {
-        final String msg = 'Could not load custom device from config index ${entry.key}: $e';
+        final msg = 'Could not load custom device from config index ${entry.key}: $e';
         _logger.printError(msg);
         throw CustomDeviceRevivalException(msg);
       }
@@ -170,7 +173,7 @@ class CustomDevicesConfig {
   set devices(List<CustomDeviceConfig> configs) {
     _config.setValue(
       _kCustomDevicesConfigKey,
-      configs.map<dynamic>((CustomDeviceConfig c) => c.toJson()).toList()
+      configs.map<dynamic>((CustomDeviceConfig c) => c.toJson()).toList(),
     );
   }
 
@@ -182,13 +185,10 @@ class CustomDevicesConfig {
   /// May throw a [CustomDeviceRevivalException] if `config['custom-devices']`
   /// is not a list.
   void add(CustomDeviceConfig config) {
-    _config.setValue(
-      _kCustomDevicesConfigKey,
-      <dynamic>[
-        ...?_getDevicesJsonValue(),
-        config.toJson(),
-      ]
-    );
+    _config.setValue(_kCustomDevicesConfigKey, <dynamic>[
+      ...?_getDevicesJsonValue(),
+      config.toJson(),
+    ]);
   }
 
   /// Returns true if the config file contains a device with id [deviceId].
@@ -205,10 +205,9 @@ class CustomDevicesConfig {
 
     // we use this instead of filtering so we can detect if we actually removed
     // anything.
-    final CustomDeviceConfig? device = modifiedDevices
-      .cast<CustomDeviceConfig?>()
-      .firstWhere((CustomDeviceConfig? d) => d!.id == deviceId,
-      orElse: () => null
+    final CustomDeviceConfig? device = modifiedDevices.cast<CustomDeviceConfig?>().firstWhere(
+      (CustomDeviceConfig? d) => d!.id == deviceId,
+      orElse: () => null,
     );
 
     if (device == null) {

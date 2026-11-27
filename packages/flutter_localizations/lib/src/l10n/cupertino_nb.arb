@@ -22,5 +22,18 @@
   "selectAllButtonLabel": "Velg alle",
   "modalBarrierDismissLabel": "Avvis",
   "searchTextFieldPlaceholderLabel": "Søk",
-  "noSpellCheckReplacementsLabel": "No Replacements Found"
+  "noSpellCheckReplacementsLabel": "Fant ingen erstatninger",
+  "menuDismissLabel": "Lukk menyen",
+  "lookUpButtonLabel": "Slå opp",
+  "searchWebButtonLabel": "Søk på nettet",
+  "shareButtonLabel": "Del…",
+  "clearButtonLabel": "Slett",
+  "cancelButtonLabel": "Avbryt",
+  "backButtonLabel": "Tilbake",
+  "expansionTileExpandedHint": "dobbelttrykk for å skjule",
+  "expansionTileCollapsedHint": "dobbelttrykk for å vise",
+  "expansionTileExpandedTapHint": "Skjul",
+  "expansionTileCollapsedTapHint": "Vis for å se mer informasjon",
+  "expandedHint": "Skjules",
+  "collapsedHint": "Vises"
 }

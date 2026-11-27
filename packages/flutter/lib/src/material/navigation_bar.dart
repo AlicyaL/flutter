@@ -2,12 +2,21 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/foundation.dart' show clampDouble;
+/// @docImport 'package:flutter/services.dart';
+/// @docImport 'bottom_navigation_bar.dart';
+/// @docImport 'navigation_rail.dart';
+/// @docImport 'scaffold.dart';
+library;
+
+import 'dart:ui';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'color_scheme.dart';
 import 'colors.dart';
 import 'elevation_overlay.dart';
+import 'ink_decoration.dart';
 import 'ink_well.dart';
 import 'material.dart';
 import 'material_localizations.dart';
@@ -19,6 +28,7 @@ import 'tooltip.dart';
 
 const double _kIndicatorHeight = 32;
 const double _kIndicatorWidth = 64;
+const double _kMaxLabelTextScaleFactor = 1.3;
 
 // Examples can assume:
 // late BuildContext context;
@@ -33,7 +43,7 @@ const double _kIndicatorWidth = 64;
 ///
 /// This widget does not adjust its size with the [ThemeData.visualDensity].
 ///
-/// The [MediaQueryData.textScaleFactor] does not adjust the size of this widget but
+/// The [MediaQueryData.textScaler] does not adjust the size of this widget but
 /// rather the size of the [Tooltip]s displayed on long presses of the
 /// destinations.
 ///
@@ -63,12 +73,18 @@ const double _kIndicatorWidth = 64;
 /// {@end-tool}
 ///
 /// {@tool dartpad}
-/// This example shows a [NavigationBar] as it is used within a [Scaffold]
-/// widget when there are nested navigators that provide local navigation. The
-/// [NavigationBar] has four [NavigationDestination] widgets with different
-/// color schemes. The [onDestinationSelected] callback changes the selected
-/// item's index and displays a corresponding page with its own local navigator
-/// in the body of a [Scaffold].
+/// This example shows a [NavigationBar] within a main [Scaffold]
+/// widget that's used to control the visibility of destination pages.
+/// Each destination has its own scaffold and a nested navigator that
+/// provides local navigation. The example's [NavigationBar] has four
+/// [NavigationDestination] widgets with different color schemes. Its
+/// [onDestinationSelected] callback changes the selected
+/// destination's index and displays a corresponding page with its own
+/// local navigator and scaffold - all within the body of the main
+/// scaffold. The destination pages are organized in a [Stack] and
+/// switching destinations fades out the current page and
+/// fades in the new one. Destinations that aren't visible or animating
+/// are kept [Offstage].
 ///
 /// ** See code in examples/api/lib/material/navigation_bar/navigation_bar.2.dart **
 /// {@end-tool}
@@ -99,8 +115,12 @@ class NavigationBar extends StatelessWidget {
     this.indicatorShape,
     this.height,
     this.labelBehavior,
-  }) :  assert(destinations.length >= 2),
-        assert(0 <= selectedIndex && selectedIndex < destinations.length);
+    this.overlayColor,
+    this.labelTextStyle,
+    this.labelPadding,
+    this.maintainBottomViewPadding = false,
+  }) : assert(destinations.length >= 2),
+       assert(0 <= selectedIndex && selectedIndex < destinations.length);
 
   /// Determines the transition time for each destination as it goes between
   /// selected and unselected.
@@ -133,7 +153,7 @@ class NavigationBar extends StatelessWidget {
   ///
   /// If null, [NavigationBarThemeData.backgroundColor] is used. If that
   /// is also null, then if [ThemeData.useMaterial3] is true, the value is
-  /// [ColorScheme.surface]. If that is false, the default blends [ColorScheme.surface]
+  /// [ColorScheme.surfaceContainer]. If that is false, the default blends [ColorScheme.surface]
   /// and [ColorScheme.onSurface] using an [ElevationOverlay].
   final Color? backgroundColor;
 
@@ -155,8 +175,13 @@ class NavigationBar extends StatelessWidget {
 
   /// The color used as an overlay on [backgroundColor] to indicate elevation.
   ///
+  /// This is not recommended for use. [Material 3 spec](https://m3.material.io/styles/color/the-color-system/color-roles)
+  /// introduced a set of tone-based surfaces and surface containers in its [ColorScheme],
+  /// which provide more flexibility. The intention is to eventually remove surface tint color from
+  /// the framework.
+  ///
   /// If null, [NavigationBarThemeData.surfaceTintColor] is used. If that
-  /// is also null, the default value is [ColorScheme.surfaceTint].
+  /// is also null, the default value is [Colors.transparent].
   ///
   /// See [Material.surfaceTintColor] for more details on how this
   /// overlay is applied.
@@ -183,7 +208,7 @@ class NavigationBar extends StatelessWidget {
   /// automatically.
   ///
   /// The height does not adjust with [ThemeData.visualDensity] or
-  /// [MediaQueryData.textScaleFactor] as this component loses usability at
+  /// [MediaQueryData.textScaler] as this component loses usability at
   /// larger and smaller sizes due to the truncating of labels or smaller tap
   /// targets.
   ///
@@ -202,10 +227,50 @@ class NavigationBar extends StatelessWidget {
   /// [NavigationDestinationLabelBehavior.alwaysShow].
   final NavigationDestinationLabelBehavior? labelBehavior;
 
+  /// The highlight color that's typically used to indicate that
+  /// the [NavigationDestination] is focused, hovered, or pressed.
+  final WidgetStateProperty<Color?>? overlayColor;
+
+  //// The text style of the label.
+  ///
+  /// If null, [NavigationBarThemeData.labelTextStyle] is used. If that
+  /// is also null, the default text style is [TextTheme.labelMedium] with
+  /// [ColorScheme.onSurface] when the destination is selected, and
+  /// [ColorScheme.onSurfaceVariant] when the destination is unselected, and
+  /// [ColorScheme.onSurfaceVariant] with an opacity of 0.38 when the
+  /// destination is disabled.
+  ///
+  /// If [ThemeData.useMaterial3] is false, then the default text style is
+  /// [TextTheme.labelSmall] with [ColorScheme.onSurface].
+  final WidgetStateProperty<TextStyle?>? labelTextStyle;
+
+  /// The padding around the [NavigationDestination.label] widget.
+  ///
+  /// When [labelPadding] is null, [NavigationBarThemeData.labelPadding]
+  /// is used. If that is also null, the default padding is 4 pixels on
+  /// the top.
+  final EdgeInsetsGeometry? labelPadding;
+
+  /// Specifies whether the underlying [SafeArea] should maintain the bottom
+  /// [MediaQueryData.viewPadding] instead of the bottom [MediaQueryData.padding].
+  ///
+  /// When true, this will prevent the [NavigationBar] from shifting when opening a
+  /// software keyboard due to the change in the padding value, especially when the
+  /// app uses [SystemUiMode.edgeToEdge], which renders the system bars over the
+  /// application instead of outside it.
+  ///
+  /// Defaults to false.
+  ///
+  /// See also:
+  ///
+  ///  * [SafeArea.maintainBottomViewPadding], which specifies whether the [SafeArea]
+  ///    should maintain the bottom [MediaQueryData.viewPadding].
+  ///  * [SystemUiMode.edgeToEdge], which sets a fullscreen display with status and
+  ///    navigation elements rendered over the application.
+  final bool maintainBottomViewPadding;
+
   VoidCallback _handleTap(int index) {
-    return onDestinationSelected != null
-      ? () => onDestinationSelected!(index)
-      : () {};
+    return onDestinationSelected != null ? () => onDestinationSelected!(index) : () {};
   }
 
   @override
@@ -214,43 +279,56 @@ class NavigationBar extends StatelessWidget {
 
     final NavigationBarThemeData navigationBarTheme = NavigationBarTheme.of(context);
     final double effectiveHeight = height ?? navigationBarTheme.height ?? defaults.height!;
-    final NavigationDestinationLabelBehavior effectiveLabelBehavior = labelBehavior
-      ?? navigationBarTheme.labelBehavior
-      ?? defaults.labelBehavior!;
+    final NavigationDestinationLabelBehavior effectiveLabelBehavior =
+        labelBehavior ?? navigationBarTheme.labelBehavior ?? defaults.labelBehavior!;
 
     return Material(
-      color: backgroundColor
-        ?? navigationBarTheme.backgroundColor
-        ?? defaults.backgroundColor!,
+      color: backgroundColor ?? navigationBarTheme.backgroundColor ?? defaults.backgroundColor!,
       elevation: elevation ?? navigationBarTheme.elevation ?? defaults.elevation!,
       shadowColor: shadowColor ?? navigationBarTheme.shadowColor ?? defaults.shadowColor,
-      surfaceTintColor: surfaceTintColor ?? navigationBarTheme.surfaceTintColor ?? defaults.surfaceTintColor,
+      surfaceTintColor:
+          surfaceTintColor ?? navigationBarTheme.surfaceTintColor ?? defaults.surfaceTintColor,
       child: SafeArea(
-        child: SizedBox(
-          height: effectiveHeight,
-          child: Row(
-            children: <Widget>[
-              for (int i = 0; i < destinations.length; i++)
-                Expanded(
-                  child: _SelectableAnimatedBuilder(
-                    duration: animationDuration ?? const Duration(milliseconds: 500),
-                    isSelected: i == selectedIndex,
-                    builder: (BuildContext context, Animation<double> animation) {
-                      return _NavigationDestinationInfo(
-                        index: i,
-                        selectedIndex: selectedIndex,
-                        totalNumberOfDestinations: destinations.length,
-                        selectedAnimation: animation,
-                        labelBehavior: effectiveLabelBehavior,
-                        indicatorColor: indicatorColor,
-                        indicatorShape: indicatorShape,
-                        onTap: _handleTap(i),
-                        child: destinations[i],
-                      );
-                    },
+        maintainBottomViewPadding: maintainBottomViewPadding,
+        child: Semantics(
+          role: SemanticsRole.tabBar,
+          explicitChildNodes: true,
+          container: true,
+          child: SizedBox(
+            height: effectiveHeight,
+            child: Row(
+              children: <Widget>[
+                for (int i = 0; i < destinations.length; i++)
+                  Expanded(
+                    child: MergeSemantics(
+                      child: Semantics(
+                        role: SemanticsRole.tab,
+                        selected: i == selectedIndex,
+                        child: _SelectableAnimatedBuilder(
+                          duration: animationDuration ?? const Duration(milliseconds: 500),
+                          isSelected: i == selectedIndex,
+                          builder: (BuildContext context, Animation<double> animation) {
+                            return _NavigationDestinationInfo(
+                              index: i,
+                              selectedIndex: selectedIndex,
+                              totalNumberOfDestinations: destinations.length,
+                              selectedAnimation: animation,
+                              labelBehavior: effectiveLabelBehavior,
+                              indicatorColor: indicatorColor,
+                              indicatorShape: indicatorShape,
+                              overlayColor: overlayColor,
+                              onTap: _handleTap(i),
+                              labelTextStyle: labelTextStyle,
+                              labelPadding: labelPadding,
+                              child: destinations[i],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -296,6 +374,7 @@ class NavigationDestination extends StatelessWidget {
     this.selectedIcon,
     required this.label,
     this.tooltip,
+    this.enabled = true,
   });
 
   /// The [Widget] (usually an [Icon]) that's displayed for this
@@ -314,16 +393,19 @@ class NavigationDestination extends StatelessWidget {
   /// selected.
   ///
   /// The icon will use [NavigationBarThemeData.iconTheme] with
-  /// [MaterialState.selected]. If this is null, the default [IconThemeData]
+  /// [WidgetState.selected]. If this is null, the default [IconThemeData]
   /// would use a size of 24.0 and [ColorScheme.onSurface].
   final Widget? selectedIcon;
 
   /// The text label that appears below the icon of this
   /// [NavigationDestination].
   ///
-  /// The accompanying [Text] widget will use
-  /// [NavigationBarThemeData.labelTextStyle]. If this are null, the default
-  /// text style would use [TextTheme.labelSmall] with [ColorScheme.onSurface].
+  /// The accompanying [Text] widget will use [NavigationBarThemeData.labelTextStyle].
+  /// If this is null, the default text style will use [TextTheme.labelMedium] with
+  /// [ColorScheme.onSurface] when the destination is selected and
+  /// [ColorScheme.onSurfaceVariant] when the destination is unselected. If
+  /// [ThemeData.useMaterial3] is false, then the default text style will use
+  /// [TextTheme.labelSmall] with [ColorScheme.onSurface].
   final String label;
 
   /// The text to display in the tooltip for this [NavigationDestination], when
@@ -334,11 +416,17 @@ class NavigationDestination extends StatelessWidget {
   /// Defaults to null, in which case the [label] text will be used.
   final String? tooltip;
 
+  /// Indicates that this destination is selectable.
+  ///
+  /// Defaults to true.
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) {
     final _NavigationDestinationInfo info = _NavigationDestinationInfo.of(context);
-    const Set<MaterialState> selectedState = <MaterialState>{MaterialState.selected};
-    const Set<MaterialState> unselectedState = <MaterialState>{};
+    const selectedState = <WidgetState>{WidgetState.selected};
+    const unselectedState = <WidgetState>{};
+    const disabledState = <WidgetState>{WidgetState.disabled};
 
     final NavigationBarThemeData navigationBarTheme = NavigationBarTheme.of(context);
     final NavigationBarThemeData defaults = _defaultsFor(context);
@@ -347,15 +435,24 @@ class NavigationDestination extends StatelessWidget {
     return _NavigationDestinationBuilder(
       label: label,
       tooltip: tooltip,
+      enabled: enabled,
       buildIcon: (BuildContext context) {
+        final IconThemeData selectedIconTheme =
+            navigationBarTheme.iconTheme?.resolve(selectedState) ??
+            defaults.iconTheme!.resolve(selectedState)!;
+        final IconThemeData unselectedIconTheme =
+            navigationBarTheme.iconTheme?.resolve(unselectedState) ??
+            defaults.iconTheme!.resolve(unselectedState)!;
+        final IconThemeData disabledIconTheme =
+            navigationBarTheme.iconTheme?.resolve(disabledState) ??
+            defaults.iconTheme!.resolve(disabledState)!;
+
         final Widget selectedIconWidget = IconTheme.merge(
-          data: navigationBarTheme.iconTheme?.resolve(selectedState)
-            ?? defaults.iconTheme!.resolve(selectedState)!,
+          data: enabled ? selectedIconTheme : disabledIconTheme,
           child: selectedIcon ?? icon,
         );
         final Widget unselectedIconWidget = IconTheme.merge(
-          data: navigationBarTheme.iconTheme?.resolve(unselectedState)
-            ?? defaults.iconTheme!.resolve(unselectedState)!,
+          data: enabled ? unselectedIconTheme : disabledIconTheme,
           child: icon,
         );
 
@@ -364,37 +461,55 @@ class NavigationDestination extends StatelessWidget {
           children: <Widget>[
             NavigationIndicator(
               animation: animation,
-              color: info.indicatorColor ?? navigationBarTheme.indicatorColor ?? defaults.indicatorColor!,
-              shape: info.indicatorShape ?? navigationBarTheme.indicatorShape ?? defaults.indicatorShape!
+              color:
+                  info.indicatorColor ??
+                  navigationBarTheme.indicatorColor ??
+                  defaults.indicatorColor!,
+              shape:
+                  info.indicatorShape ??
+                  navigationBarTheme.indicatorShape ??
+                  defaults.indicatorShape!,
             ),
             _StatusTransitionWidgetBuilder(
               animation: animation,
               builder: (BuildContext context, Widget? child) {
-                return _isForwardOrCompleted(animation)
-                  ? selectedIconWidget
-                  : unselectedIconWidget;
+                return animation.isForwardOrCompleted ? selectedIconWidget : unselectedIconWidget;
               },
             ),
           ],
         );
       },
       buildLabel: (BuildContext context) {
-        final TextStyle? effectiveSelectedLabelTextStyle = navigationBarTheme.labelTextStyle?.resolve(selectedState)
-          ?? defaults.labelTextStyle!.resolve(selectedState);
-        final TextStyle? effectiveUnselectedLabelTextStyle = navigationBarTheme.labelTextStyle?.resolve(unselectedState)
-          ?? defaults.labelTextStyle!.resolve(unselectedState);
-        return Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: _ClampTextScaleFactor(
-            // Don't scale labels of destinations, instead, tooltip text will
-            // upscale.
-            upperLimit: 1,
-            child: Text(
-              label,
-              style: _isForwardOrCompleted(animation)
+        final TextStyle? effectiveSelectedLabelTextStyle =
+            info.labelTextStyle?.resolve(selectedState) ??
+            navigationBarTheme.labelTextStyle?.resolve(selectedState) ??
+            defaults.labelTextStyle!.resolve(selectedState);
+        final TextStyle? effectiveUnselectedLabelTextStyle =
+            info.labelTextStyle?.resolve(unselectedState) ??
+            navigationBarTheme.labelTextStyle?.resolve(unselectedState) ??
+            defaults.labelTextStyle!.resolve(unselectedState);
+        final TextStyle? effectiveDisabledLabelTextStyle =
+            info.labelTextStyle?.resolve(disabledState) ??
+            navigationBarTheme.labelTextStyle?.resolve(disabledState) ??
+            defaults.labelTextStyle!.resolve(disabledState);
+        final EdgeInsetsGeometry labelPadding =
+            info.labelPadding ?? navigationBarTheme.labelPadding ?? defaults.labelPadding!;
+
+        final textStyle = enabled
+            ? animation.isForwardOrCompleted
                   ? effectiveSelectedLabelTextStyle
-                  : effectiveUnselectedLabelTextStyle,
-            ),
+                  : effectiveUnselectedLabelTextStyle
+            : effectiveDisabledLabelTextStyle;
+
+        return Padding(
+          padding: labelPadding,
+          child: MediaQuery.withClampedTextScaling(
+            // Set maximum text scale factor to _kMaxLabelTextScaleFactor for the
+            // label to keep the visual hierarchy the same even with larger font
+            // sizes. To opt out, wrap the [label] widget in a [MediaQuery] widget
+            // with a different `TextScaler`.
+            maxScaleFactor: _kMaxLabelTextScaleFactor,
+            child: Text(label, style: textStyle),
           ),
         );
       },
@@ -421,6 +536,7 @@ class _NavigationDestinationBuilder extends StatefulWidget {
     required this.buildLabel,
     required this.label,
     this.tooltip,
+    this.enabled = true,
   });
 
   /// Builds the icon for a destination in a [NavigationBar].
@@ -459,6 +575,11 @@ class _NavigationDestinationBuilder extends StatefulWidget {
   /// Defaults to null, in which case the [label] text will be used.
   final String? tooltip;
 
+  /// Indicates that this destination is selectable.
+  ///
+  /// Defaults to true.
+  final bool enabled;
+
   @override
   State<_NavigationDestinationBuilder> createState() => _NavigationDestinationBuilderState();
 }
@@ -473,13 +594,16 @@ class _NavigationDestinationBuilderState extends State<_NavigationDestinationBui
     final NavigationBarThemeData defaults = _defaultsFor(context);
 
     return _NavigationBarDestinationSemantics(
+      enabled: widget.enabled,
       child: _NavigationBarDestinationTooltip(
         message: widget.tooltip ?? widget.label,
         child: _IndicatorInkWell(
           iconKey: iconKey,
           labelBehavior: info.labelBehavior,
-          customBorder: navigationBarTheme.indicatorShape ?? defaults.indicatorShape,
-          onTap: info.onTap,
+          customBorder:
+              info.indicatorShape ?? navigationBarTheme.indicatorShape ?? defaults.indicatorShape,
+          overlayColor: info.overlayColor ?? navigationBarTheme.overlayColor,
+          onTap: widget.enabled ? info.onTap : null,
           child: Row(
             children: <Widget>[
               Expanded(
@@ -501,13 +625,11 @@ class _IndicatorInkWell extends InkResponse {
   const _IndicatorInkWell({
     required this.iconKey,
     required this.labelBehavior,
+    super.overlayColor,
     super.customBorder,
     super.onTap,
     super.child,
-  }) : super(
-    containedInkWell: true,
-    highlightColor: Colors.transparent,
-  );
+  }) : super(containedInkWell: true, highlightColor: Colors.transparent);
 
   final GlobalKey iconKey;
   final NavigationDestinationLabelBehavior labelBehavior;
@@ -515,7 +637,7 @@ class _IndicatorInkWell extends InkResponse {
   @override
   RectCallback? getRectCallback(RenderBox referenceBox) {
     return () {
-      final RenderBox iconBox = iconKey.currentContext!.findRenderObject()! as RenderBox;
+      final iconBox = iconKey.currentContext!.findRenderObject()! as RenderBox;
       final Rect iconRect = iconBox.localToGlobal(Offset.zero) & iconBox.size;
       return referenceBox.globalToLocal(iconRect.topLeft) & iconBox.size;
     };
@@ -538,7 +660,10 @@ class _NavigationDestinationInfo extends InheritedWidget {
     required this.labelBehavior,
     required this.indicatorColor,
     required this.indicatorShape,
+    required this.overlayColor,
     required this.onTap,
+    this.labelTextStyle,
+    this.labelPadding,
     required super.child,
   });
 
@@ -604,11 +729,25 @@ class _NavigationDestinationInfo extends InheritedWidget {
   /// This is used by destinations to override the indicator shape.
   final ShapeBorder? indicatorShape;
 
+  /// The highlight color that's typically used to indicate that
+  /// the [NavigationDestination] is focused, hovered, or pressed.
+  ///
+  /// This is used by destinations to override the overlay color.
+  final WidgetStateProperty<Color?>? overlayColor;
+
   /// The callback that should be called when this destination is tapped.
   ///
   /// This is computed by calling [NavigationBar.onDestinationSelected]
   /// with [index] passed in.
   final VoidCallback onTap;
+
+  /// The text style of the label.
+  final WidgetStateProperty<TextStyle?>? labelTextStyle;
+
+  /// The padding around the label.
+  ///
+  /// Defaults to a padding of 4 pixels on the top.
+  final EdgeInsetsGeometry? labelPadding;
 
   /// Returns a non null [_NavigationDestinationInfo].
   ///
@@ -618,7 +757,8 @@ class _NavigationDestinationInfo extends InheritedWidget {
   /// Used by widgets that are implementing a navigation destination info to
   /// get information like the selected animation and destination number.
   static _NavigationDestinationInfo of(BuildContext context) {
-    final _NavigationDestinationInfo? result = context.dependOnInheritedWidgetOfExactType<_NavigationDestinationInfo>();
+    final _NavigationDestinationInfo? result = context
+        .dependOnInheritedWidgetOfExactType<_NavigationDestinationInfo>();
     assert(
       result != null,
       'Navigation destinations need a _NavigationDestinationInfo parent, '
@@ -629,11 +769,11 @@ class _NavigationDestinationInfo extends InheritedWidget {
 
   @override
   bool updateShouldNotify(_NavigationDestinationInfo oldWidget) {
-    return index != oldWidget.index
-        || totalNumberOfDestinations != oldWidget.totalNumberOfDestinations
-        || selectedAnimation != oldWidget.selectedAnimation
-        || labelBehavior != oldWidget.labelBehavior
-        || onTap != oldWidget.onTap;
+    return index != oldWidget.index ||
+        totalNumberOfDestinations != oldWidget.totalNumberOfDestinations ||
+        selectedAnimation != oldWidget.selectedAnimation ||
+        labelBehavior != oldWidget.labelBehavior ||
+        onTap != oldWidget.onTap;
   }
 }
 
@@ -705,16 +845,13 @@ class NavigationIndicator extends StatelessWidget {
         final double scale = animation.isDismissed
             ? 0.0
             : Tween<double>(begin: .4, end: 1.0).transform(
-            CurveTween(curve: Curves.easeInOutCubicEmphasized).transform(animation.value));
+                CurveTween(curve: Curves.easeInOutCubicEmphasized).transform(animation.value),
+              );
 
         return Transform(
           alignment: Alignment.center,
           // Scale in the X direction only.
-          transform: Matrix4.diagonal3Values(
-            scale,
-            1.0,
-            1.0,
-          ),
+          transform: Matrix4.diagonal3Values(scale, 1.0, 1.0),
           child: child,
         );
       },
@@ -724,13 +861,13 @@ class NavigationIndicator extends StatelessWidget {
         animation: animation,
         builder: (BuildContext context, Widget? child) {
           return _SelectableAnimatedBuilder(
-            isSelected: _isForwardOrCompleted(animation),
+            isSelected: animation.isForwardOrCompleted,
             duration: const Duration(milliseconds: 100),
             alwaysDoFullAnimation: true,
             builder: (BuildContext context, Animation<double> fadeAnimation) {
               return FadeTransition(
                 opacity: fadeAnimation,
-                child: Container(
+                child: Ink(
                   width: width,
                   height: height,
                   decoration: ShapeDecoration(
@@ -780,34 +917,21 @@ class _NavigationBarDestinationLayout extends StatelessWidget {
   /// See [NavigationDestination.label].
   final Widget label;
 
-  static final Key _labelKey = UniqueKey();
-
   @override
   Widget build(BuildContext context) {
     return _DestinationLayoutAnimationBuilder(
       builder: (BuildContext context, Animation<double> animation) {
         return CustomMultiChildLayout(
-          delegate: _NavigationDestinationLayoutDelegate(
-            animation: animation,
-          ),
+          delegate: _NavigationDestinationLayoutDelegate(animation: animation),
           children: <Widget>[
             LayoutId(
               id: _NavigationDestinationLayoutDelegate.iconId,
-              child: RepaintBoundary(
-                key: iconKey,
-                child: icon,
-              ),
+              // The key is used by the _IndicatorInkWell to query the icon position.
+              child: KeyedSubtree(key: iconKey, child: icon),
             ),
             LayoutId(
               id: _NavigationDestinationLayoutDelegate.labelId,
-              child: FadeTransition(
-                alwaysIncludeSemantics: true,
-                opacity: animation,
-                child: RepaintBoundary(
-                  key: _labelKey,
-                  child: label,
-                ),
-              ),
+              child: FadeTransition(alwaysIncludeSemantics: true, opacity: animation, child: label),
             ),
           ],
         );
@@ -849,9 +973,7 @@ class _DestinationLayoutAnimationBuilder extends StatelessWidget {
           animation: info.selectedAnimation,
           curve: Curves.easeInOutCubicEmphasized,
           reverseCurve: Curves.easeInOutCubicEmphasized.flipped,
-          builder: (BuildContext context, Animation<double> curvedAnimation) {
-            return builder(context, curvedAnimation);
-          },
+          builder: builder,
         );
     }
   }
@@ -869,9 +991,10 @@ class _DestinationLayoutAnimationBuilder extends StatelessWidget {
 class _NavigationBarDestinationSemantics extends StatelessWidget {
   /// Adds the appropriate semantics for navigation bar destinations to the
   /// [child].
-  const _NavigationBarDestinationSemantics({
-    required this.child,
-  });
+  const _NavigationBarDestinationSemantics({required this.enabled, required this.child});
+
+  /// Whether this widget is enabled.
+  final bool enabled;
 
   /// The widget that should receive the destination semantics.
   final Widget child;
@@ -885,24 +1008,22 @@ class _NavigationBarDestinationSemantics extends StatelessWidget {
     return _StatusTransitionWidgetBuilder(
       animation: destinationInfo.selectedAnimation,
       builder: (BuildContext context, Widget? child) {
-        return Semantics(
-          selected: _isForwardOrCompleted(destinationInfo.selectedAnimation),
-          container: true,
-          child: child,
-        );
+        return Semantics(enabled: enabled, button: true, child: child);
       },
-      child: Stack(
-        alignment: Alignment.center,
-        children: <Widget>[
-          child,
-          Semantics(
-            label: localizations.tabLabel(
-              tabIndex: destinationInfo.index + 1,
-              tabCount: destinationInfo.totalNumberOfDestinations,
+      child: kIsWeb
+          ? child
+          : Stack(
+              alignment: Alignment.center,
+              children: <Widget>[
+                child,
+                Semantics(
+                  label: localizations.tabLabel(
+                    tabIndex: destinationInfo.index + 1,
+                    tabCount: destinationInfo.totalNumberOfDestinations,
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -913,10 +1034,7 @@ class _NavigationBarDestinationSemantics extends StatelessWidget {
 /// long pressed.
 class _NavigationBarDestinationTooltip extends StatelessWidget {
   /// Adds a tooltip to the [child] widget.
-  const _NavigationBarDestinationTooltip({
-    required this.message,
-    required this.child,
-  });
+  const _NavigationBarDestinationTooltip({required this.message, required this.child});
 
   /// The text that is rendered in the tooltip when it appears.
   final String message;
@@ -1015,53 +1133,6 @@ class _NavigationDestinationLayoutDelegate extends MultiChildLayoutDelegate {
   @override
   bool shouldRelayout(_NavigationDestinationLayoutDelegate oldDelegate) {
     return oldDelegate.animation != animation;
-  }
-}
-
-/// Utility Widgets
-
-// Clamps [MediaQueryData.textScaleFactor] so that if it is greater than
-// [upperLimit] or less than [lowerLimit], [upperLimit] or [lowerLimit] will be
-// used instead for the [child] widget.
-//
-// Example:
-//
-// ```dart
-// _ClampTextScaleFactor(
-//   upperLimit: 2.0,
-//   child: const Text('Foo'), // If textScaleFactor is 3.0, this will only scale 2x.
-// )
-// ```
-class _ClampTextScaleFactor extends StatelessWidget {
-  /// Clamps the text scale factor of descendants by modifying the [MediaQuery]
-  /// surrounding [child].
-  const _ClampTextScaleFactor({
-    this.upperLimit = double.infinity,
-    required this.child,
-  });
-
-  /// The maximum amount that the text scale factor should be for the [child]
-  /// widget.
-  ///
-  /// If this is `1.5`, the textScaleFactor for child widgets will never be
-  /// greater than `1.5`.
-  final double upperLimit;
-
-  /// The [Widget] that should have its (and its descendants) text scale factor
-  /// clamped.
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return MediaQuery(
-      data: MediaQuery.of(context).copyWith(
-        textScaleFactor: clampDouble(MediaQuery.textScaleFactorOf(context),
-          0.0,
-          upperLimit,
-        ),
-      ),
-      child: child,
-    );
   }
 }
 
@@ -1168,8 +1239,7 @@ class _SelectableAnimatedBuilder extends StatefulWidget {
   final Widget Function(BuildContext, Animation<double>) builder;
 
   @override
-  _SelectableAnimatedBuilderState createState() =>
-      _SelectableAnimatedBuilderState();
+  _SelectableAnimatedBuilderState createState() => _SelectableAnimatedBuilderState();
 }
 
 /// State that manages the [AnimationController] that is passed to
@@ -1209,18 +1279,15 @@ class _SelectableAnimatedBuilderState extends State<_SelectableAnimatedBuilder>
 
   @override
   Widget build(BuildContext context) {
-    return widget.builder(
-      context,
-      _controller,
-    );
+    return widget.builder(context, _controller);
   }
 }
 
 /// Watches [animation] and calls [builder] with the appropriate [Curve]
 /// depending on the direction of the [animation] status.
 ///
-/// If [animation.status] is forward or complete, [curve] is used. If
-/// [animation.status] is reverse or dismissed, [reverseCurve] is used.
+/// If [Animation.status] is forward or complete, [curve] is used. If
+/// [Animation.status] is reverse or dismissed, [reverseCurve] is used.
 ///
 /// If the [animation] changes direction while it is already running, the curve
 /// used will not change, this will keep the animations smooth until it
@@ -1274,23 +1341,24 @@ class _CurvedAnimationBuilderState extends State<_CurvedAnimationBuilder> {
         _animationDirection = status;
       });
     }
-
-    if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
-      setState(() {
-        _preservedDirection = null;
-      });
-    }
-
-    if (_preservedDirection == null && (status == AnimationStatus.forward || status == AnimationStatus.reverse)) {
-      setState(() {
-        _preservedDirection = status;
-      });
+    switch (status) {
+      case AnimationStatus.forward || AnimationStatus.reverse when _preservedDirection != null:
+        break;
+      case AnimationStatus.forward || AnimationStatus.reverse:
+        setState(() {
+          _preservedDirection = status;
+        });
+      case AnimationStatus.completed || AnimationStatus.dismissed:
+        setState(() {
+          _preservedDirection = null;
+        });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool shouldUseForwardCurve = (_preservedDirection ?? _animationDirection) != AnimationStatus.reverse;
+    final shouldUseForwardCurve =
+        (_preservedDirection ?? _animationDirection) != AnimationStatus.reverse;
 
     final Animation<double> curvedAnimation = CurveTween(
       curve: shouldUseForwardCurve ? widget.curve : widget.reverseCurve,
@@ -1300,46 +1368,52 @@ class _CurvedAnimationBuilderState extends State<_CurvedAnimationBuilder> {
   }
 }
 
-/// Returns `true` if this animation is ticking forward, or has completed,
-/// based on [status].
-bool _isForwardOrCompleted(Animation<double> animation) {
-  return animation.status == AnimationStatus.forward
-      || animation.status == AnimationStatus.completed;
-}
-
 NavigationBarThemeData _defaultsFor(BuildContext context) {
-  return Theme.of(context).useMaterial3 ? _NavigationBarDefaultsM3(context) : _NavigationBarDefaultsM2(context);
+  return Theme.of(context).useMaterial3
+      ? _NavigationBarDefaultsM3(context)
+      : _NavigationBarDefaultsM2(context);
 }
 
 // Hand coded defaults based on Material Design 2.
 class _NavigationBarDefaultsM2 extends NavigationBarThemeData {
   _NavigationBarDefaultsM2(BuildContext context)
-      : _theme = Theme.of(context),
-        _colors = Theme.of(context).colorScheme,
-        super(
-          height: 80.0,
-          elevation: 0.0,
-          indicatorShape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        );
+    : _theme = Theme.of(context),
+      _colors = Theme.of(context).colorScheme,
+      super(
+        height: 80.0,
+        elevation: 0.0,
+        indicatorShape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      );
 
   final ThemeData _theme;
   final ColorScheme _colors;
 
   // With Material 2, the NavigationBar uses an overlay blend for the
   // default color regardless of light/dark mode.
-  @override Color? get backgroundColor => ElevationOverlay.colorWithOverlay(_colors.surface, _colors.onSurface, 3.0);
+  @override
+  Color? get backgroundColor =>
+      ElevationOverlay.colorWithOverlay(_colors.surface, _colors.onSurface, 3.0);
 
-  @override MaterialStateProperty<IconThemeData?>? get iconTheme {
-    return MaterialStatePropertyAll<IconThemeData>(IconThemeData(
-      size: 24,
-      color: _colors.onSurface,
-    ));
+  @override
+  WidgetStateProperty<IconThemeData?>? get iconTheme {
+    return MaterialStatePropertyAll<IconThemeData>(
+      IconThemeData(size: 24, color: _colors.onSurface),
+    );
   }
 
-  @override Color? get indicatorColor => _colors.secondary.withOpacity(0.24);
+  @override
+  Color? get indicatorColor => _colors.secondary.withOpacity(0.24);
 
-  @override MaterialStateProperty<TextStyle?>? get labelTextStyle => MaterialStatePropertyAll<TextStyle?>(_theme.textTheme.labelSmall!.copyWith(color: _colors.onSurface));
+  @override
+  WidgetStateProperty<TextStyle?>? get labelTextStyle => MaterialStatePropertyAll<TextStyle?>(
+    _theme.textTheme.labelSmall!.copyWith(color: _colors.onSurface),
+  );
+
+  @override
+  EdgeInsetsGeometry? get labelPadding => const EdgeInsets.only(top: 4);
 }
 
 // BEGIN GENERATED TOKEN PROPERTIES - NavigationBar
@@ -1349,47 +1423,65 @@ class _NavigationBarDefaultsM2 extends NavigationBarThemeData {
 // Design token database by the script:
 //   dev/tools/gen_defaults/bin/gen_defaults.dart.
 
+// dart format off
 class _NavigationBarDefaultsM3 extends NavigationBarThemeData {
   _NavigationBarDefaultsM3(this.context)
-      : super(
-          height: 80.0,
-          elevation: 3.0,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        );
+    : super(
+        height: 80.0,
+        elevation: 3.0,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      );
 
   final BuildContext context;
   late final ColorScheme _colors = Theme.of(context).colorScheme;
   late final TextTheme _textTheme = Theme.of(context).textTheme;
 
-  @override Color? get backgroundColor => _colors.surface;
+  @override
+  Color? get backgroundColor => _colors.surfaceContainer;
 
-  @override Color? get shadowColor => Colors.transparent;
+  @override
+  Color? get shadowColor => Colors.transparent;
 
-  @override Color? get surfaceTintColor => _colors.surfaceTint;
+  @override
+  Color? get surfaceTintColor => Colors.transparent;
 
-  @override MaterialStateProperty<IconThemeData?>? get iconTheme {
-    return MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+  @override
+  WidgetStateProperty<IconThemeData?>? get iconTheme {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
       return IconThemeData(
         size: 24.0,
-        color: states.contains(MaterialState.selected)
-          ? _colors.onSecondaryContainer
-          : _colors.onSurfaceVariant,
+        color: states.contains(WidgetState.disabled)
+          ? _colors.onSurfaceVariant.withOpacity(0.38)
+          : states.contains(WidgetState.selected)
+            ? _colors.onSecondaryContainer
+            : _colors.onSurfaceVariant,
       );
     });
   }
 
-  @override Color? get indicatorColor => _colors.secondaryContainer;
-  @override ShapeBorder? get indicatorShape => const StadiumBorder();
+  @override
+  Color? get indicatorColor => _colors.secondaryContainer;
 
-  @override MaterialStateProperty<TextStyle?>? get labelTextStyle {
-    return MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+  @override
+  ShapeBorder? get indicatorShape => const StadiumBorder();
+
+  @override
+  WidgetStateProperty<TextStyle?>? get labelTextStyle {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
     final TextStyle style = _textTheme.labelMedium!;
-      return style.apply(color: states.contains(MaterialState.selected)
-        ? _colors.onSurface
-        : _colors.onSurfaceVariant
+      return style.apply(
+        color: states.contains(WidgetState.disabled)
+          ? _colors.onSurfaceVariant.withOpacity(0.38)
+          : states.contains(WidgetState.selected)
+            ? _colors.onSurface
+            : _colors.onSurfaceVariant
       );
     });
   }
+
+  @override
+  EdgeInsetsGeometry? get labelPadding => const EdgeInsets.only(top: 4);
 }
+// dart format on
 
 // END GENERATED TOKEN PROPERTIES - NavigationBar

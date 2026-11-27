@@ -1,0 +1,553 @@
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// ignore_for_file: public_member_api_docs
+
+part of flutter_gpu;
+
+/// A handle to a graphics context. Used to create and manage GPU resources.
+///
+/// To obtain the default graphics context, use [getContext].
+base class GpuContext extends NativeFieldWrapperClass1 {
+  /// Creates a new graphics context that corresponds to the default Impeller
+  /// context.
+  GpuContext._createDefault() {
+    final String? error = _initializeDefault();
+    if (error != null) {
+      throw Exception(error);
+    }
+  }
+
+  /// A supported [PixelFormat] for textures that store 4-channel colors
+  /// (red/green/blue/alpha).
+  PixelFormat get defaultColorFormat {
+    return PixelFormat.values[_getDefaultColorFormat()];
+  }
+
+  /// A supported [PixelFormat] for textures that store stencil information.
+  /// May include a depth channel if a stencil-only format is not available.
+  PixelFormat get defaultStencilFormat {
+    return PixelFormat.values[_getDefaultStencilFormat()];
+  }
+
+  /// A supported `PixelFormat` for textures that store both a stencil and depth
+  /// component. This will never return a depth-only or stencil-only texture.
+  ///
+  /// May be [PixelFormat.unknown] if no suitable depth+stencil format was
+  /// found.
+  PixelFormat get defaultDepthStencilFormat {
+    return PixelFormat.values[_getDefaultDepthStencilFormat()];
+  }
+
+  /// The minimum alignment required when referencing uniform blocks stored in a
+  /// `DeviceBuffer`.
+  int get minimumUniformByteAlignment {
+    return _getMinimumUniformByteAlignment();
+  }
+
+  /// The minimum alignment of a [BufferView]'s offset when it is bound as a
+  /// storage buffer (see [ComputePass.bindStorageBuffer]).
+  ///
+  /// [HostBuffer.emplace] aligns every emplacement to both this and
+  /// [minimumUniformByteAlignment].
+  int get minimumStorageBufferByteAlignment {
+    return _getMinimumStorageBufferAlignment();
+  }
+
+  /// Whether the backend supports multisample anti-aliasing for offscreen
+  /// color and stencil attachments. A subset of OpenGLES-only devices do not
+  /// support this functionality.
+  ///
+  /// Any texture created via [createTexture] is an offscreen texture.
+  /// There is currently no way to render directly against the "onscreen"
+  /// texture that the framework renders to, so all Flutter GPU textures are
+  /// "offscreen".
+  bool get doesSupportOffscreenMSAA {
+    return _getSupportsOffscreenMSAA();
+  }
+
+  /// Whether the backend can attach a non-zero mip level of a texture as a
+  /// render target (see [ColorAttachment.mipLevel]). Rendering into a cube map
+  /// face or array layer is always supported; only non-zero mip levels are
+  /// gated. True on Metal and Vulkan; currently false on the GLES backend,
+  /// where rendering into non-zero mip levels is not yet implemented.
+  bool get doesSupportFramebufferRenderMipmap {
+    return _getSupportsFramebufferRenderMipmap();
+  }
+
+  /// Whether a texture whose mip levels were uploaded by hand with
+  /// [Texture.overwrite] (rather than generated with
+  /// [CommandBuffer.generateMipmap]) samples with correct per-level selection.
+  /// True on Metal and Vulkan; on OpenGL ES 2.0 devices without the
+  /// GL_APPLE_texture_max_level extension this is false, and sampling such a
+  /// texture reads as black. Check this before relying on hand-built mip
+  /// chains (for example, prefiltered environment maps).
+  bool get doesSupportManuallyMippedTextures {
+    return _getSupportsManuallyMippedTextures();
+  }
+
+  /// Whether 2D array textures ([TextureType.texture2DArray]) can be created,
+  /// uploaded, and sampled by shaders. True on Metal and Vulkan. Currently
+  /// false on the GLES backend, where shader bundles do not yet carry a
+  /// shader variant that can sample array textures.
+  bool get doesSupportTextureArrays {
+    return _getSupportsTextureArrays();
+  }
+
+  /// The maximum anisotropy clamp supported by device samplers (see
+  /// [SamplerOptions.maxAnisotropy]).
+  ///
+  /// A value of 1 means anisotropic filtering is not supported. Most devices
+  /// that support anisotropic filtering report a maximum of 16.
+  int get maxSamplerAnisotropy {
+    return _getMaxSamplerAnisotropy();
+  }
+
+  /// The widest texture, in pixels, that can be created and attached to a
+  /// render pass (see [ColorAttachment.texture] and
+  /// [DepthStencilAttachment.texture]).
+  ///
+  /// It's the device's own limit: on Vulkan, the smaller of
+  /// `maxFramebufferWidth` and `maxImageDimension2D`, on OpenGL ES,
+  /// `GL_MAX_TEXTURE_SIZE`, and on Metal, the device's maximum texture size.
+  /// OpenGL ES 3.0 guarantees 2048 (OpenGL ES 2.0 only 64), and many devices
+  /// allow more, so check this before creating a large render target rather
+  /// than assuming a size.
+  int get maxRenderTargetWidth {
+    return _getMaximumRenderTargetSize(0);
+  }
+
+  /// The tallest texture, in pixels, that a render pass can attach.
+  ///
+  /// See [maxRenderTargetWidth].
+  int get maxRenderTargetHeight {
+    return _getMaximumRenderTargetSize(1);
+  }
+
+  /// Whether this device supports the given family of block-compressed
+  /// texture formats. Hardware support is granted on a per-family basis.
+  ///
+  /// Compressed textures are always sample-only (no render target, no shader
+  /// write, no multisampling, and dimensions must be a multiple of the format
+  /// block size). [supportsTextureFormat] can be used for a per-format check.
+  bool supportsTextureCompression(TextureCompressionFamily family) {
+    return _supportsTextureCompression(family.index);
+  }
+
+  /// Whether this device can allocate a texture of the given [format] with
+  /// the requested usage flags.
+  ///
+  /// For block-compressed formats this returns false if either [renderTarget]
+  /// or [shaderWrite] is true, since compressed formats are sample-only.
+  /// For uncompressed formats this currently returns true: today the
+  /// underlying capability surface does not vary by per-format usage.
+  bool supportsTextureFormat(
+    PixelFormat format, {
+    bool renderTarget = false,
+    bool shaderRead = true,
+    bool shaderWrite = false,
+  }) {
+    return _supportsTextureFormat(
+      format.index,
+      renderTarget,
+      shaderRead,
+      shaderWrite,
+    );
+  }
+
+  /// Allocates a new region of GPU-resident memory.
+  ///
+  /// The [storageMode] must be either [StorageMode.hostVisible] or
+  /// [StorageMode.devicePrivate], otherwise an exception will be thrown.
+  ///
+  /// Throws an exception if the [DeviceBuffer] creation failed.
+  DeviceBuffer createDeviceBuffer(StorageMode storageMode, int sizeInBytes) {
+    if (storageMode == StorageMode.deviceTransient) {
+      throw Exception(
+        'DeviceBuffers cannot be set to StorageMode.deviceTransient',
+      );
+    }
+    DeviceBuffer result = DeviceBuffer._initialize(
+      this,
+      storageMode,
+      sizeInBytes,
+    );
+    if (!result.isValid) {
+      throw Exception('DeviceBuffer creation failed');
+    }
+    return result;
+  }
+
+  /// Allocates a new region of host-visible GPU-resident memory, initialized
+  /// with the given [data].
+  ///
+  /// Given that the buffer will be immediately populated with [data] uploaded
+  /// from the host, the [StorageMode] of the new [DeviceBuffer] is
+  /// automatically set to [StorageMode.hostVisible].
+  ///
+  /// Throws an exception if the [DeviceBuffer] creation failed.
+  DeviceBuffer createDeviceBufferWithCopy(ByteData data) {
+    DeviceBuffer result = DeviceBuffer._initializeWithHostData(this, data);
+    if (!result.isValid) {
+      throw Exception('DeviceBuffer creation failed');
+    }
+    return result;
+  }
+
+  /// Creates a bump allocator that managed a [DeviceBuffer] block list.
+  ///
+  /// See also [HostBuffer].
+  HostBuffer createHostBuffer({
+    int blockLengthInBytes = HostBuffer.kDefaultBlockLengthInBytes,
+  }) {
+    return HostBuffer._initialize(this, blockLengthInBytes: blockLengthInBytes);
+  }
+
+  /// Allocates a new texture in GPU-resident memory.
+  ///
+  /// [mipLevelCount] specifies the number of mip levels to allocate for the
+  /// texture. The default is 1 (no mip chain). Use [Texture.fullMipCount] to
+  /// allocate a full chain. Must be in the range
+  /// `[1, Texture.fullMipCount(width, height)]`.
+  ///
+  /// Throws an exception if the [Texture] creation failed.
+  Texture createTexture(
+    StorageMode storageMode,
+    int width,
+    int height, {
+    PixelFormat format = PixelFormat.r8g8b8a8UNormInt,
+    sampleCount = 1,
+
+    /// The type of texture to create.
+    ///
+    /// If not specified, this will be inferred from the `sampleCount`.
+    TextureType? textureType,
+    bool enableRenderTargetUsage = true,
+    bool enableShaderReadUsage = true,
+    bool enableShaderWriteUsage = false,
+    int mipLevelCount = 1,
+
+    /// The number of layers to allocate for a [TextureType.texture2DArray]
+    /// texture. Must be 1 (the default) for all other texture types.
+    int layerCount = 1,
+  }) {
+    final resolvedTextureType =
+        textureType ??
+        ((sampleCount == 1)
+            ? TextureType.texture2D
+            : TextureType.texture2DMultisample);
+    final int maxMipLevels = Texture.fullMipCount(width, height);
+    if (mipLevelCount < 1 || mipLevelCount > maxMipLevels) {
+      throw Exception(
+        'mipLevelCount ($mipLevelCount) must be in the range [1, $maxMipLevels] '
+        'for a ${width}x$height texture',
+      );
+    }
+    if (layerCount < 1) {
+      throw ArgumentError('layerCount ($layerCount) must be at least 1');
+    }
+    if (layerCount > 1 && resolvedTextureType != TextureType.texture2DArray) {
+      throw ArgumentError(
+        'layerCount ($layerCount) must be 1 for textures of type '
+        '$resolvedTextureType',
+      );
+    }
+    if (resolvedTextureType == TextureType.texture2DArray && sampleCount != 1) {
+      throw ArgumentError('2D array textures do not support multisampling');
+    }
+    if (resolvedTextureType == TextureType.texture2DArray &&
+        !doesSupportTextureArrays) {
+      throw ArgumentError(
+        '2D array textures are not supported by this GpuContext. Check '
+        'GpuContext.doesSupportTextureArrays before creating one.',
+      );
+    }
+    if (format.isCompressed) {
+      if (enableRenderTargetUsage ||
+          enableShaderWriteUsage ||
+          !enableShaderReadUsage ||
+          sampleCount != 1 ||
+          storageMode == StorageMode.deviceTransient) {
+        throw ArgumentError(
+          'Compressed pixel format $format can only be used as a sample-only '
+          'texture (sampleCount=1, enableShaderReadUsage=true, no render '
+          'target, no shader write, and storageMode != deviceTransient)',
+        );
+      }
+      final int bw = format.blockWidth;
+      final int bh = format.blockHeight;
+      if (width % bw != 0 || height % bh != 0) {
+        throw ArgumentError(
+          'Compressed pixel format $format requires width and height to be a '
+          'multiple of the block size (${bw}x$bh), got ${width}x$height',
+        );
+      }
+    }
+    Texture result = Texture._initialize(
+      this,
+      storageMode,
+      format,
+      width,
+      height,
+      sampleCount,
+      resolvedTextureType,
+      enableRenderTargetUsage,
+      enableShaderReadUsage,
+      enableShaderWriteUsage,
+      mipLevelCount,
+      layerCount,
+    );
+    // `Texture._initialize` throws on failure, so `result` is always valid here.
+    return result;
+  }
+
+  /// Creates an image surface for rendering content that Flutter draws as a
+  /// [ui.Image].
+  ///
+  /// A [GpuImageSurface] owns the final color textures that are converted into
+  /// [ui.Image] handles and drawn by Flutter. Use it for animated or frequently
+  /// updated render targets where the app should not have to guess how many
+  /// textures are needed to avoid overwriting a frame Flutter may still be
+  /// sampling.
+  ///
+  /// The surface manages only the final presentable color texture. Renderers
+  /// should continue to create ordinary [Texture] objects for depth, stencil,
+  /// multisample, and intermediate color attachments.
+  GpuImageSurface createImageSurface(
+    int width,
+    int height, {
+    PixelFormat? format,
+  }) {
+    return GpuImageSurface._(this, width, height, format ?? defaultColorFormat);
+  }
+
+  /// Create a new command buffer that can be used to submit GPU commands.
+  CommandBuffer createCommandBuffer() {
+    return CommandBuffer._(this);
+  }
+
+  /// Creates a reusable group of uniform, texture and storage buffer
+  /// bindings.
+  ///
+  /// Every entry is resolved against its shader's reflection data here, so
+  /// binding the set later costs one slot assignment instead of per-resource
+  /// work on every draw. See [RenderPass.bindSet] and [ComputePass.bindSet].
+  ///
+  /// The keys come from [Shader.getUniformSlot] and
+  /// [Shader.getStorageBufferSlot], so a single set may span the vertex,
+  /// fragment and compute stages. Only compute shaders take
+  /// [storageBuffers]. Throws if a slot names a binding the shader does not
+  /// declare, if a [BufferView] runs past the end of its buffer, if a
+  /// [SamplerOptions] is invalid, or if a storage buffer view fails the
+  /// checks described on [StorageBufferSlot].
+  ///
+  /// ```dart
+  /// final gpu.BindingSet material = gpu.gpuContext.createBindingSet(
+  ///   uniforms: {vertex.getUniformSlot('FrameInfo'): frameInfo},
+  ///   textures: {
+  ///     fragment.getUniformSlot('base_color_texture'): gpu.TextureBinding(albedo),
+  ///   },
+  /// );
+  /// ```
+  BindingSet createBindingSet({
+    Map<UniformSlot, BufferView> uniforms = const <UniformSlot, BufferView>{},
+    Map<UniformSlot, TextureBinding> textures =
+        const <UniformSlot, TextureBinding>{},
+    Map<StorageBufferSlot, BufferView> storageBuffers =
+        const <StorageBufferSlot, BufferView>{},
+  }) {
+    return BindingSet._(this, uniforms, textures, storageBuffers);
+  }
+
+  /// Whether this context supports compute: [ComputePipeline],
+  /// [ComputePass] and storage buffers.
+  ///
+  /// True on Metal and Vulkan. False on OpenGL ES, where
+  /// [createComputePipeline] and [CommandBuffer.createComputePass] throw. An
+  /// app that uses compute checks this and takes its own non-compute path
+  /// where it is false.
+  bool get supportsCompute {
+    return _getSupportsCompute();
+  }
+
+  /// The most invocations (threads) one compute workgroup can run, across all
+  /// three dimensions of the shader's `local_size`.
+  ///
+  /// Every device that supports compute allows at least 128. Zero where
+  /// [supportsCompute] is false. A pipeline can allow fewer than this on
+  /// Metal, for example when its shader uses many registers, in which case
+  /// [createComputePipeline] throws.
+  int get maxComputeWorkgroupInvocations {
+    return _getMaximumComputeWorkgroupInvocations();
+  }
+
+  /// The largest `local_size` a compute shader can declare along each
+  /// dimension. The product of the three must also be at most
+  /// [maxComputeWorkgroupInvocations].
+  ///
+  /// Every device that supports compute allows at least 128 x 128 x 64.
+  /// Zero in every dimension where [supportsCompute] is false.
+  ComputeExtent get maxComputeWorkgroupSize {
+    return ComputeExtent(
+      _getMaximumComputeWorkgroupSize(0),
+      _getMaximumComputeWorkgroupSize(1),
+      _getMaximumComputeWorkgroupSize(2),
+    );
+  }
+
+  /// The most workgroups one [ComputePass.dispatch] can launch along each
+  /// dimension.
+  ///
+  /// Zero in every dimension where [supportsCompute] is false.
+  ComputeExtent get maxComputeWorkgroupCount {
+    return ComputeExtent(
+      _getMaximumComputeWorkgroupCount(0),
+      _getMaximumComputeWorkgroupCount(1),
+      _getMaximumComputeWorkgroupCount(2),
+    );
+  }
+
+  /// The most shared (workgroup) memory, in bytes, that a compute shader can
+  /// declare.
+  ///
+  /// Every device that supports compute allows at least 16384 bytes. Zero
+  /// where [supportsCompute] is false.
+  int get maxComputeSharedMemorySizeInBytes {
+    return _getMaximumComputeSharedMemorySize();
+  }
+
+  /// Creates a [ComputePipeline] that runs [computeShader].
+  ///
+  /// The shader is registered with the backend and its pipeline is built
+  /// here, so a shader the device cannot run fails now rather than at the
+  /// first dispatch. Throws an [UnsupportedError] if [supportsCompute] is
+  /// false. Throws if [computeShader] is not a compute shader, or if its
+  /// workgroup size exceeds the device limits, with the limit it exceeds.
+  ComputePipeline createComputePipeline(Shader computeShader) {
+    if (!supportsCompute) {
+      throw UnsupportedError(
+        'Compute is not supported by this GpuContext. Check '
+        'GpuContext.supportsCompute before creating a ComputePipeline.',
+      );
+    }
+    return ComputePipeline._(this, computeShader);
+  }
+
+  RenderPipeline createRenderPipeline(
+    Shader vertexShader,
+    Shader fragmentShader, {
+    VertexLayout? vertexLayout,
+  }) {
+    return RenderPipeline._(
+      this,
+      vertexShader,
+      fragmentShader,
+      vertexLayout: vertexLayout,
+    );
+  }
+
+  /// Associates the default Impeller context with this Context.
+  @Native<Handle Function(Handle)>(
+    symbol: 'InternalFlutterGpu_Context_InitializeDefault',
+  )
+  external String? _initializeDefault();
+
+  @Native<Int Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetDefaultColorFormat',
+  )
+  external int _getDefaultColorFormat();
+
+  @Native<Int Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetDefaultStencilFormat',
+  )
+  external int _getDefaultStencilFormat();
+
+  @Native<Int Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetDefaultDepthStencilFormat',
+  )
+  external int _getDefaultDepthStencilFormat();
+
+  @Native<Int Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetMinimumUniformByteAlignment',
+  )
+  external int _getMinimumUniformByteAlignment();
+
+  @Native<Int Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetMinimumStorageBufferAlignment',
+  )
+  external int _getMinimumStorageBufferAlignment();
+
+  @Native<Bool Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetSupportsCompute',
+  )
+  external bool _getSupportsCompute();
+
+  @Native<Uint32 Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetMaximumComputeWorkgroupInvocations',
+  )
+  external int _getMaximumComputeWorkgroupInvocations();
+
+  @Native<Uint32 Function(Pointer<Void>, Int)>(
+    symbol: 'InternalFlutterGpu_Context_GetMaximumComputeWorkgroupSize',
+  )
+  external int _getMaximumComputeWorkgroupSize(int dimension);
+
+  @Native<Uint32 Function(Pointer<Void>, Int)>(
+    symbol: 'InternalFlutterGpu_Context_GetMaximumComputeWorkgroupCount',
+  )
+  external int _getMaximumComputeWorkgroupCount(int dimension);
+
+  @Native<Int64 Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetMaximumComputeSharedMemorySize',
+  )
+  external int _getMaximumComputeSharedMemorySize();
+
+  @Native<Bool Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetSupportsOffscreenMSAA',
+  )
+  external bool _getSupportsOffscreenMSAA();
+
+  @Native<Bool Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetSupportsFramebufferRenderMipmap',
+  )
+  external bool _getSupportsFramebufferRenderMipmap();
+
+  @Native<Bool Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetSupportsManuallyMippedTextures',
+  )
+  external bool _getSupportsManuallyMippedTextures();
+
+  @Native<Bool Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetSupportsTextureArrays',
+  )
+  external bool _getSupportsTextureArrays();
+
+  @Native<Int Function(Pointer<Void>)>(
+    symbol: 'InternalFlutterGpu_Context_GetMaxSamplerAnisotropy',
+  )
+  external int _getMaxSamplerAnisotropy();
+
+  @Native<Uint32 Function(Pointer<Void>, Int)>(
+    symbol: 'InternalFlutterGpu_Context_GetMaximumRenderTargetSize',
+  )
+  external int _getMaximumRenderTargetSize(int dimension);
+
+  @Native<Bool Function(Pointer<Void>, Int)>(
+    symbol: 'InternalFlutterGpu_Context_SupportsTextureCompression',
+  )
+  external bool _supportsTextureCompression(int family);
+
+  @Native<Bool Function(Pointer<Void>, Int, Bool, Bool, Bool)>(
+    symbol: 'InternalFlutterGpu_Context_SupportsTextureFormat',
+  )
+  external bool _supportsTextureFormat(
+    int format,
+    bool renderTarget,
+    bool shaderRead,
+    bool shaderWrite,
+  );
+}
+
+/// The default graphics context.
+final GpuContext gpuContext = GpuContext._createDefault();

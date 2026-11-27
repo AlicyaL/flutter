@@ -81,26 +81,56 @@ class RenderAnimatedSize extends RenderAligningShiftedBox {
     super.alignment,
     super.textDirection,
     super.child,
-    Clip clipBehavior = Clip.hardEdge,
-  }) : _vsync = vsync,
-       _clipBehavior = clipBehavior {
-    _controller = AnimationController(
-      vsync: vsync,
-      duration: duration,
-      reverseDuration: reverseDuration,
-    )..addListener(() {
-      if (_controller.value != _lastValue) {
-        markNeedsLayout();
-      }
-    });
-    _animation = CurvedAnimation(
-      parent: _controller,
-      curve: curve,
-    );
+    this._clipBehavior = Clip.hardEdge,
+    VoidCallback? onEnd,
+  }) : _vsync = vsync {
+    _controller =
+        AnimationController(vsync: vsync, duration: duration, reverseDuration: reverseDuration)
+          ..addListener(() {
+            if (_controller.value != _lastValue) {
+              markNeedsLayout();
+            }
+          });
+    _animation = CurvedAnimation(parent: _controller, curve: curve);
+    _onEnd = onEnd;
+  }
+
+  /// When asserts are enabled, returns the animation controller that is used
+  /// to drive the resizing.
+  ///
+  /// Otherwise, returns null.
+  ///
+  /// This getter is intended for use in framework unit tests. Applications must
+  /// not depend on its value.
+  @visibleForTesting
+  AnimationController? get debugController {
+    AnimationController? controller;
+    assert(() {
+      controller = _controller;
+      return true;
+    }());
+    return controller;
+  }
+
+  /// When asserts are enabled, returns the animation that drives the resizing.
+  ///
+  /// Otherwise, returns null.
+  ///
+  /// This getter is intended for use in framework unit tests. Applications must
+  /// not depend on its value.
+  @visibleForTesting
+  CurvedAnimation? get debugAnimation {
+    CurvedAnimation? animation;
+    assert(() {
+      animation = _animation;
+      return true;
+    }());
+    return animation;
   }
 
   late final AnimationController _controller;
   late final CurvedAnimation _animation;
+
   final SizeTween _sizeTween = SizeTween();
   late bool _hasVisualOverflow;
   double? _lastValue;
@@ -141,7 +171,7 @@ class RenderAnimatedSize extends RenderAligningShiftedBox {
 
   /// {@macro flutter.material.Material.clipBehavior}
   ///
-  /// Defaults to [Clip.hardEdge], and must not be null.
+  /// Defaults to [Clip.hardEdge].
   Clip get clipBehavior => _clipBehavior;
   Clip _clipBehavior = Clip.hardEdge;
   set clipBehavior(Clip value) {
@@ -169,6 +199,19 @@ class RenderAnimatedSize extends RenderAligningShiftedBox {
     _controller.resync(vsync);
   }
 
+  /// Called every time an animation completes.
+  ///
+  /// This can be useful to trigger additional actions (e.g. another animation)
+  /// at the end of the current animation.
+  VoidCallback? get onEnd => _onEnd;
+  VoidCallback? _onEnd;
+  set onEnd(VoidCallback? value) {
+    if (value == _onEnd) {
+      return;
+    }
+    _onEnd = value;
+  }
+
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
@@ -182,17 +225,21 @@ class RenderAnimatedSize extends RenderAligningShiftedBox {
         // already, to resume interrupted resizing animation.
         markNeedsLayout();
     }
+    _controller.addStatusListener(_animationStatusListener);
   }
 
   @override
   void detach() {
     _controller.stop();
+    _controller.removeStatusListener(_animationStatusListener);
     super.detach();
   }
 
   Size? get _animatedSize {
     return _sizeTween.evaluate(_animation);
   }
+
+  late Size _currentSize;
 
   @override
   void performLayout() {
@@ -201,7 +248,7 @@ class RenderAnimatedSize extends RenderAligningShiftedBox {
     final BoxConstraints constraints = this.constraints;
     if (child == null || constraints.isTight) {
       _controller.stop();
-      size = _sizeTween.begin = _sizeTween.end = constraints.smallest;
+      size = _currentSize = _sizeTween.begin = _sizeTween.end = constraints.smallest;
       _state = RenderAnimatedSizeState.start;
       child?.layout(constraints);
       return;
@@ -220,17 +267,17 @@ class RenderAnimatedSize extends RenderAligningShiftedBox {
         _layoutUnstable();
     }
 
-    size = constraints.constrain(_animatedSize!);
+    size = _currentSize = constraints.constrain(_animatedSize!);
     alignChild();
 
-    if (size.width < _sizeTween.end!.width ||
-        size.height < _sizeTween.end!.height) {
+    if (size.width < _sizeTween.end!.width || size.height < _sizeTween.end!.height) {
       _hasVisualOverflow = true;
     }
   }
 
   @override
-  Size computeDryLayout(BoxConstraints constraints) {
+  @protected
+  Size computeDryLayout(covariant BoxConstraints constraints) {
     if (child == null || constraints.isTight) {
       return constraints.smallest;
     }
@@ -244,7 +291,7 @@ class RenderAnimatedSize extends RenderAligningShiftedBox {
         return constraints.constrain(childSize);
       case RenderAnimatedSizeState.stable:
         if (_sizeTween.end != childSize) {
-          return constraints.constrain(size);
+          return constraints.constrain(_currentSize);
         } else if (_controller.value == _controller.upperBound) {
           return constraints.constrain(childSize);
         }
@@ -328,6 +375,12 @@ class RenderAnimatedSize extends RenderAligningShiftedBox {
     }
   }
 
+  void _animationStatusListener(AnimationStatus status) {
+    if (status.isCompleted) {
+      _onEnd?.call();
+    }
+  }
+
   @override
   void paint(PaintingContext context, Offset offset) {
     if (child != null && _hasVisualOverflow && clipBehavior != Clip.none) {
@@ -346,11 +399,31 @@ class RenderAnimatedSize extends RenderAligningShiftedBox {
     }
   }
 
+  @override
+  double? computeDryBaseline(covariant BoxConstraints constraints, TextBaseline baseline) {
+    final RenderBox? child = this.child;
+    if (child == null) {
+      return null;
+    }
+    final double? result = child.getDryBaseline(constraints, baseline);
+    if (result == null) {
+      return null;
+    }
+    // For RenderAnimatedSize, we need to account for the animated size,
+    // not just the child size, to match the offset calculation in alignChild().
+    final Size childSize = child.getDryLayout(constraints);
+    final Size mySize = getDryLayout(constraints);
+    final Offset offset = resolvedAlignment.alongOffset((mySize - childSize) as Offset);
+    return result + offset.dy;
+  }
+
   final LayerHandle<ClipRectLayer> _clipRectLayer = LayerHandle<ClipRectLayer>();
 
   @override
   void dispose() {
     _clipRectLayer.layer = null;
+    _controller.dispose();
+    _animation.dispose();
     super.dispose();
   }
 }

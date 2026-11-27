@@ -22,5 +22,18 @@
   "tabSemanticsLabel": "第 $tabIndex 个标签，共 $tabCount 个",
   "modalBarrierDismissLabel": "关闭",
   "searchTextFieldPlaceholderLabel": "搜索",
-  "noSpellCheckReplacementsLabel": "No Replacements Found"
+  "noSpellCheckReplacementsLabel": "找不到替换文字",
+  "menuDismissLabel": "关闭菜单",
+  "lookUpButtonLabel": "查询",
+  "searchWebButtonLabel": "搜索",
+  "shareButtonLabel": "共享…",
+  "clearButtonLabel": "清除",
+  "cancelButtonLabel": "取消",
+  "backButtonLabel": "返回",
+  "expansionTileExpandedHint": "点按两次即可收起",
+  "expansionTileCollapsedHint": "点按两次即可展开",
+  "expansionTileExpandedTapHint": "收起",
+  "expansionTileCollapsedTapHint": "展开查看更多详情",
+  "expandedHint": "已收起",
+  "collapsedHint": "已展开"
 }

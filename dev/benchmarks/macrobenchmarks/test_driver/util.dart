@@ -23,12 +23,16 @@ Future<void> runDriverTestForRoute(String routeName, DriverTestCallBack body) as
   expect(scrollable, isNotNull);
   final SerializableFinder button = find.byValueKey(routeName);
   expect(button, isNotNull);
-  await driver.scrollUntilVisible(scrollable, button, dyScroll: -100.0);
+  // -320 comes from the logical pixels for a full screen scroll for the
+  // smallest reference device, iPhone 4, whose physical screen dimensions are
+  // 960px × 640px.
+  const dyScroll = -320.0;
+  await driver.scrollUntilVisible(scrollable, button, dyScroll: dyScroll);
   await driver.tap(button);
 
   await body(driver);
 
-  driver.close();
+  await driver.close();
 }
 
 void macroPerfTest(
@@ -52,7 +56,7 @@ void macroPerfTest(
       }
 
       timeline = await driver.traceAction(() async {
-        final Future<void> durationFuture = Future<void>.delayed(duration);
+        final durationFuture = Future<void>.delayed(duration);
         if (driverOps != null) {
           await driverOps(driver);
         }
@@ -62,7 +66,7 @@ void macroPerfTest(
 
     expect(timeline, isNotNull);
 
-    final TimelineSummary summary = TimelineSummary.summarize(timeline);
+    final summary = TimelineSummary.summarize(timeline);
     await summary.writeTimelineToFile(testName, pretty: true);
   }, timeout: Timeout.none);
 }

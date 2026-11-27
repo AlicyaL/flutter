@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter_driver/flutter_driver.dart';
+library;
+
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -20,7 +23,7 @@ import '../common/error.dart';
 import '../common/find.dart';
 import '../common/handler_factory.dart';
 import '../common/message.dart';
-import '_extension_io.dart' if (dart.library.html) '_extension_web.dart';
+import '_extension_io.dart' if (dart.library.js_interop) '_extension_web.dart';
 
 const String _extensionMethodName = 'driver';
 
@@ -30,8 +33,23 @@ const String _extensionMethodName = 'driver';
 /// eventually completes to a string response.
 typedef DataHandler = Future<String> Function(String? message);
 
-class _DriverBinding extends BindingBase with SchedulerBinding, ServicesBinding, GestureBinding, PaintingBinding, SemanticsBinding, RendererBinding, WidgetsBinding, TestDefaultBinaryMessengerBinding {
-  _DriverBinding(this._handler, this._silenceErrors, this._enableTextEntryEmulation, this.finders, this.commands);
+class _DriverBinding extends BindingBase
+    with
+        SchedulerBinding,
+        ServicesBinding,
+        GestureBinding,
+        PaintingBinding,
+        SemanticsBinding,
+        RendererBinding,
+        WidgetsBinding,
+        TestDefaultBinaryMessengerBinding {
+  _DriverBinding(
+    this._handler,
+    this._silenceErrors,
+    this._enableTextEntryEmulation,
+    this.finders,
+    this.commands,
+  );
 
   final DataHandler? _handler;
   final bool _silenceErrors;
@@ -42,21 +60,39 @@ class _DriverBinding extends BindingBase with SchedulerBinding, ServicesBinding,
   // Because you can't really control which zone a driver test uses,
   // we override the test for zones here.
   @override
-  bool debugCheckZone(String entryPoint) { return true; }
+  bool debugCheckZone(String entryPoint) {
+    return true;
+  }
 
   @override
   void initServiceExtensions() {
     super.initServiceExtensions();
-    final FlutterDriverExtension extension = FlutterDriverExtension(_handler, _silenceErrors, _enableTextEntryEmulation, finders: finders ?? const <FinderExtension>[], commands: commands ?? const <CommandExtension>[]);
-    registerServiceExtension(
-      name: _extensionMethodName,
-      callback: extension.call,
+    final extension = FlutterDriverExtension(
+      _handler,
+      _silenceErrors,
+      _enableTextEntryEmulation,
+      finders: finders ?? const <FinderExtension>[],
+      commands: commands ?? const <CommandExtension>[],
     );
+    registerServiceExtension(name: _extensionMethodName, callback: extension.call);
     if (kIsWeb) {
       registerWebServiceExtension(extension.call);
     }
   }
 }
+
+// Examples can assume:
+// import 'package:flutter_driver/flutter_driver.dart';
+// import 'package:flutter/widgets.dart';
+// import 'package:flutter_driver/driver_extension.dart';
+// import 'package:flutter_test/flutter_test.dart' hide find;
+// import 'package:flutter_test/flutter_test.dart' as flutter_test;
+// typedef MyHomeWidget = Placeholder;
+// abstract class SomeWidget extends StatelessWidget { const SomeWidget({super.key, required this.title}); final String title; }
+// late FlutterDriver driver;
+// abstract class StubNestedCommand { int get times; SerializableFinder get finder; }
+// class StubCommandResult extends Result { const StubCommandResult(this.arg); final String arg; @override Map<String, dynamic> toJson() => <String, dynamic>{}; }
+// abstract class StubProberCommand { int get times; SerializableFinder get finder; }
 
 /// Enables Flutter Driver VM service extension.
 ///
@@ -87,26 +123,40 @@ class _DriverBinding extends BindingBase with SchedulerBinding, ServicesBinding,
 /// The `finders` and `commands` parameters are optional and used to add custom
 /// finders or commands, as in the following example.
 ///
-/// ```dart main
+/// ```dart
 /// void main() {
 ///   enableFlutterDriverExtension(
 ///     finders: <FinderExtension>[ SomeFinderExtension() ],
 ///     commands: <CommandExtension>[ SomeCommandExtension() ],
 ///   );
 ///
-///   app.main();
+///   runApp(const MyHomeWidget());
 /// }
-/// ```
 ///
-/// ```dart
-/// driver.sendCommand(SomeCommand(ByValueKey('Button'), 7));
-/// ```
+/// class SomeFinderExtension extends FinderExtension {
+///   @override
+///   String get finderType => 'SomeFinder';
 ///
-/// `SomeFinder` and `SomeFinderExtension` must be placed in different files
-/// to avoid `dart:ui` import issue. Imports relative to `dart:ui` can't be
-/// accessed from host runner, where flutter runtime is not accessible.
+///   @override
+///   SerializableFinder deserialize(Map<String, String> params, DeserializeFinderFactory finderFactory, {String? path}) {
+///     return SomeFinder(params['title']!);
+///   }
 ///
-/// ```dart
+///   @override
+///   Finder createFinder(SerializableFinder finder, CreateFinderFactory finderFactory) {
+///     final SomeFinder someFinder = finder as SomeFinder;
+///
+///     return flutter_test.find.byElementPredicate((Element element) {
+///       final Widget widget = element.widget;
+///       if (widget is SomeWidget) {
+///         return widget.title == someFinder.title;
+///       }
+///       return false;
+///     });
+///   }
+/// }
+///
+/// // Use this class in a test anywhere where a SerializableFinder is expected.
 /// class SomeFinder extends SerializableFinder {
 ///   const SomeFinder(this.title);
 ///
@@ -120,43 +170,51 @@ class _DriverBinding extends BindingBase with SchedulerBinding, ServicesBinding,
 ///     'title': title,
 ///   });
 /// }
-/// ```
 ///
-/// ```dart
-/// class SomeFinderExtension extends FinderExtension {
+/// class SomeCommandExtension extends CommandExtension {
+///   @override
+///   String get commandKind => 'SomeCommand';
 ///
-///  String get finderType => 'SomeFinder';
+///   @override
+///   Future<Result> call(Command command, WidgetController prober, CreateFinderFactory finderFactory, CommandHandlerFactory handlerFactory) async {
+///     final SomeCommand someCommand = command as SomeCommand;
 ///
-///  SerializableFinder deserialize(Map<String, String> params, DeserializeFinderFactory finderFactory) {
-///    return SomeFinder(json['title']);
-///  }
+///     // Deserialize [Finder]:
+///     final Finder finder = finderFactory.createFinder(someCommand.finder);
 ///
-///  Finder createFinder(SerializableFinder finder, CreateFinderFactory finderFactory) {
-///    Some someFinder = finder as SomeFinder;
+///     // Wait for [Element]:
+///     handlerFactory.waitForElement(finder);
 ///
-///    return find.byElementPredicate((Element element) {
-///      final Widget widget = element.widget;
-///      if (element.widget is SomeWidget) {
-///        return element.widget.title == someFinder.title;
-///      }
-///      return false;
-///    });
-///  }
+///     // Alternatively, wait for [Element] absence:
+///     handlerFactory.waitForAbsentElement(finder);
+///
+///     // Submit known [Command]s:
+///     for (int i = 0; i < someCommand.times; i++) {
+///       await handlerFactory.handleCommand(Tap(someCommand.finder), prober, finderFactory);
+///     }
+///
+///     // Alternatively, use [WidgetController]:
+///     for (int i = 0; i < someCommand.times; i++) {
+///       await prober.tap(finder);
+///     }
+///
+///     return const SomeCommandResult('foo bar');
+///   }
+///
+///   @override
+///   Command deserialize(Map<String, String> params, DeserializeFinderFactory finderFactory, DeserializeCommandFactory commandFactory) {
+///     return SomeCommand.deserialize(params, finderFactory);
+///   }
 /// }
-/// ```
 ///
-/// `SomeCommand`, `SomeResult` and `SomeCommandExtension` must be placed in
-/// different files to avoid `dart:ui` import issue. Imports relative to `dart:ui`
-/// can't be accessed from host runner, where flutter runtime is not accessible.
-///
-/// ```dart
+/// // Pass an instance of this class to `FlutterDriver.sendCommand` to invoke
+/// // the custom command during a test.
 /// class SomeCommand extends CommandWithTarget {
-///   SomeCommand(SerializableFinder finder, this.times, {Duration? timeout})
-///       : super(finder, timeout: timeout);
+///   SomeCommand(super.finder, this.times, {super.timeout});
 ///
-///   SomeCommand.deserialize(Map<String, String> json, DeserializeFinderFactory finderFactory)
+///   SomeCommand.deserialize(super.json, super.finderFactory)
 ///       : times = int.parse(json['times']!),
-///         super.deserialize(json, finderFactory);
+///         super.deserialize();
 ///
 ///   @override
 ///   Map<String, String> serialize() {
@@ -168,9 +226,7 @@ class _DriverBinding extends BindingBase with SchedulerBinding, ServicesBinding,
 ///
 ///   final int times;
 /// }
-/// ```
 ///
-/// ```dart
 /// class SomeCommandResult extends Result {
 ///   const SomeCommandResult(this.resultParam);
 ///
@@ -184,47 +240,20 @@ class _DriverBinding extends BindingBase with SchedulerBinding, ServicesBinding,
 ///   }
 /// }
 /// ```
-///
-/// ```dart
-/// class SomeCommandExtension extends CommandExtension {
-///   @override
-///   String get commandKind => 'SomeCommand';
-///
-///   @override
-///   Future<Result> call(Command command, WidgetController prober, CreateFinderFactory finderFactory, CommandHandlerFactory handlerFactory) async {
-///     final SomeCommand someCommand = command as SomeCommand;
-///
-///     // Deserialize [Finder]:
-///     final Finder finder = finderFactory.createFinder(stubCommand.finder);
-///
-///     // Wait for [Element]:
-///     handlerFactory.waitForElement(finder);
-///
-///     // Alternatively, wait for [Element] absence:
-///     handlerFactory.waitForAbsentElement(finder);
-///
-///     // Submit known [Command]s:
-///     for (int index = 0; i < someCommand.times; index++) {
-///       await handlerFactory.handleCommand(Tap(someCommand.finder), prober, finderFactory);
-///     }
-///
-///     // Alternatively, use [WidgetController]:
-///     for (int index = 0; i < stubCommand.times; index++) {
-///       await prober.tap(finder);
-///     }
-///
-///     return const SomeCommandResult('foo bar');
-///   }
-///
-///   @override
-///   Command deserialize(Map<String, String> params, DeserializeFinderFactory finderFactory, DeserializeCommandFactory commandFactory) {
-///     return SomeCommand.deserialize(params, finderFactory);
-///   }
-/// }
-/// ```
-///
-void enableFlutterDriverExtension({ DataHandler? handler, bool silenceErrors = false, bool enableTextEntryEmulation = true, List<FinderExtension>? finders, List<CommandExtension>? commands}) {
-  _DriverBinding(handler, silenceErrors, enableTextEntryEmulation, finders ?? <FinderExtension>[], commands ?? <CommandExtension>[]);
+void enableFlutterDriverExtension({
+  DataHandler? handler,
+  bool silenceErrors = false,
+  bool enableTextEntryEmulation = true,
+  List<FinderExtension>? finders,
+  List<CommandExtension>? commands,
+}) {
+  _DriverBinding(
+    handler,
+    silenceErrors,
+    enableTextEntryEmulation,
+    finders ?? <FinderExtension>[],
+    commands ?? <CommandExtension>[],
+  );
   assert(WidgetsBinding.instance is _DriverBinding);
 }
 
@@ -236,7 +265,6 @@ typedef CommandDeserializerCallback = Command Function(Map<String, String> param
 
 /// Used to expand the new [Finder].
 abstract class FinderExtension {
-
   /// Identifies the type of finder to be used by the driver extension.
   String get finderType;
 
@@ -246,7 +274,10 @@ abstract class FinderExtension {
   ///
   /// See also:
   ///   * [Ancestor], a finder that uses other [Finder]s as parameters.
-  SerializableFinder deserialize(Map<String, String> params, DeserializeFinderFactory finderFactory);
+  SerializableFinder deserialize(
+    Map<String, String> params,
+    DeserializeFinderFactory finderFactory,
+  );
 
   /// Signature for functions that run the given finder and return the [Element]
   /// found, if any, or null otherwise.
@@ -273,7 +304,11 @@ abstract class CommandExtension {
   /// See also:
   ///   * [CommandWithTarget], a base class for commands with target finders.
   ///   * [Tap], a command that uses [Finder]s as parameter.
-  Command deserialize(Map<String, String> params, DeserializeFinderFactory finderFactory, DeserializeCommandFactory commandFactory);
+  Command deserialize(
+    Map<String, String> params,
+    DeserializeFinderFactory finderFactory,
+    DeserializeCommandFactory commandFactory,
+  );
 
   /// Calls action for given [command].
   /// Returns action [Result].
@@ -287,7 +322,7 @@ abstract class CommandExtension {
   /// @override
   /// Future<Result> call(Command command, WidgetController prober, CreateFinderFactory finderFactory, CommandHandlerFactory handlerFactory) async {
   ///   final StubNestedCommand stubCommand = command as StubNestedCommand;
-  ///   for (int index = 0; i < stubCommand.times; index++) {
+  ///   for (int i = 0; i < stubCommand.times; i++) {
   ///     await handlerFactory.handleCommand(Tap(stubCommand.finder), prober, finderFactory);
   ///   }
   ///   return const StubCommandResult('stub response');
@@ -300,13 +335,18 @@ abstract class CommandExtension {
   ///   @override
   /// Future<Result> call(Command command, WidgetController prober, CreateFinderFactory finderFactory, CommandHandlerFactory handlerFactory) async {
   ///   final StubProberCommand stubCommand = command as StubProberCommand;
-  ///   for (int index = 0; i < stubCommand.times; index++) {
+  ///   for (int i = 0; i < stubCommand.times; i++) {
   ///     await prober.tap(finderFactory.createFinder(stubCommand.finder));
   ///   }
   ///   return const StubCommandResult('stub response');
   /// }
   /// ```
-  Future<Result> call(Command command, WidgetController prober, CreateFinderFactory finderFactory, CommandHandlerFactory handlerFactory);
+  Future<Result> call(
+    Command command,
+    WidgetController prober,
+    CreateFinderFactory finderFactory,
+    CommandHandlerFactory handlerFactory,
+  );
 }
 
 /// The class that manages communication between a Flutter Driver test and the
@@ -315,7 +355,12 @@ abstract class CommandExtension {
 /// This is not normally used directly. It is instantiated automatically when
 /// calling [enableFlutterDriverExtension].
 @visibleForTesting
-class FlutterDriverExtension with DeserializeFinderFactory, CreateFinderFactory, DeserializeCommandFactory, CommandHandlerFactory {
+class FlutterDriverExtension
+    with
+        DeserializeFinderFactory,
+        CreateFinderFactory,
+        DeserializeCommandFactory,
+        CommandHandlerFactory {
   /// Creates an object to manage a Flutter Driver connection.
   FlutterDriverExtension(
     this._requestDataHandler,
@@ -328,11 +373,11 @@ class FlutterDriverExtension with DeserializeFinderFactory, CreateFinderFactory,
       registerTextInput();
     }
 
-    for (final FinderExtension finder in finders) {
+    for (final finder in finders) {
       _finderExtensions[finder.finderType] = finder;
     }
 
-    for (final CommandExtension command in commands) {
+    for (final command in commands) {
       _commandExtensions[command.commandKind] = command;
     }
   }
@@ -367,8 +412,10 @@ class FlutterDriverExtension with DeserializeFinderFactory, CreateFinderFactory,
     final String commandKind = params['command']!;
     try {
       final Command command = deserializeCommand(params, this);
-      assert(WidgetsBinding.instance.isRootWidgetAttached || !command.requiresRootWidgetAttached,
-          'No root widget is attached; have you remembered to call runApp()?');
+      assert(
+        WidgetsBinding.instance.isRootWidgetAttached || !command.requiresRootWidgetAttached,
+        'No root widget is attached; have you remembered to call runApp()?',
+      );
       Future<Result> responseFuture = handleCommand(command, _prober, this);
       if (command.timeout != null) {
         responseFuture = responseFuture.timeout(command.timeout!);
@@ -376,11 +423,11 @@ class FlutterDriverExtension with DeserializeFinderFactory, CreateFinderFactory,
       final Result response = await responseFuture;
       return _makeResponse(response.toJson());
     } on TimeoutException catch (error, stackTrace) {
-      final String message = 'Timeout while executing $commandKind: $error\n$stackTrace';
+      final message = 'Timeout while executing $commandKind: $error\n$stackTrace';
       _log(message);
       return _makeResponse(message, isError: true);
     } catch (error, stackTrace) {
-      final String message = 'Uncaught extension error while executing $commandKind: $error\n$stackTrace';
+      final message = 'Uncaught extension error while executing $commandKind: $error\n$stackTrace';
       if (!_silenceErrors) {
         _log(message);
       }
@@ -388,21 +435,18 @@ class FlutterDriverExtension with DeserializeFinderFactory, CreateFinderFactory,
     }
   }
 
-  Map<String, dynamic> _makeResponse(dynamic response, { bool isError = false }) {
-    return <String, dynamic>{
-      'isError': isError,
-      'response': response,
-    };
+  Map<String, dynamic> _makeResponse(dynamic response, {bool isError = false}) {
+    return <String, dynamic>{'isError': isError, 'response': response};
   }
 
   @override
-  SerializableFinder deserializeFinder(Map<String, String> json) {
+  SerializableFinder deserializeFinder(Map<String, String> json, {String? path}) {
     final String? finderType = json['finderType'];
     if (_finderExtensions.containsKey(finderType)) {
       return _finderExtensions[finderType]!.deserialize(json, this);
     }
 
-    return super.deserializeFinder(json);
+    return super.deserializeFinder(json, path: path);
   }
 
   @override
@@ -416,13 +460,17 @@ class FlutterDriverExtension with DeserializeFinderFactory, CreateFinderFactory,
   }
 
   @override
-  Command deserializeCommand(Map<String, String> params, DeserializeFinderFactory finderFactory) {
+  Command deserializeCommand(
+    Map<String, String> params,
+    DeserializeFinderFactory finderFactory, {
+    String? path,
+  }) {
     final String? kind = params['command'];
     if (_commandExtensions.containsKey(kind)) {
       return _commandExtensions[kind]!.deserialize(params, finderFactory, this);
     }
 
-    return super.deserializeCommand(params, finderFactory);
+    return super.deserializeCommand(params, finderFactory, path: path);
   }
 
   @override
@@ -432,7 +480,11 @@ class FlutterDriverExtension with DeserializeFinderFactory, CreateFinderFactory,
   }
 
   @override
-  Future<Result> handleCommand(Command command, WidgetController prober, CreateFinderFactory finderFactory) {
+  Future<Result> handleCommand(
+    Command command,
+    WidgetController prober,
+    CreateFinderFactory finderFactory,
+  ) {
     final String kind = command.kind;
     if (_commandExtensions.containsKey(kind)) {
       return _commandExtensions[kind]!.call(command, prober, finderFactory, this);

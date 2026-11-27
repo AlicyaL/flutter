@@ -2,6 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter/material.dart';
+///
+/// @docImport 'sliver.dart';
+/// @docImport 'sliver_persistent_header.dart';
+/// @docImport 'viewport.dart';
+library;
+
 import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 
@@ -69,14 +76,11 @@ enum ScrollDirection {
 /// (and vice versa) and returns [ScrollDirection.idle] for
 /// [ScrollDirection.idle].
 ScrollDirection flipScrollDirection(ScrollDirection direction) {
-  switch (direction) {
-    case ScrollDirection.idle:
-      return ScrollDirection.idle;
-    case ScrollDirection.forward:
-      return ScrollDirection.reverse;
-    case ScrollDirection.reverse:
-      return ScrollDirection.forward;
-  }
+  return switch (direction) {
+    ScrollDirection.idle => ScrollDirection.idle,
+    ScrollDirection.forward => ScrollDirection.reverse,
+    ScrollDirection.reverse => ScrollDirection.forward,
+  };
 }
 
 /// Which part of the content inside the viewport should be visible.
@@ -97,7 +101,11 @@ abstract class ViewportOffset extends ChangeNotifier {
   /// Default constructor.
   ///
   /// Allows subclasses to construct this object directly.
-  ViewportOffset();
+  ViewportOffset() {
+    if (kFlutterMemoryAllocationsEnabled) {
+      ChangeNotifier.maybeDispatchObjectCreation(this);
+    }
+  }
 
   /// Creates a viewport offset with the given [pixels] value.
   ///
@@ -207,11 +215,8 @@ abstract class ViewportOffset extends ChangeNotifier {
   ///
   /// The duration must not be zero. To jump to a particular value without an
   /// animation, use [jumpTo].
-  Future<void> animateTo(
-    double to, {
-    required Duration duration,
-    required Curve curve,
-  });
+  @awaitNotRequired
+  Future<void> animateTo(double to, {required Duration duration, required Curve curve});
 
   /// Calls [jumpTo] if duration is null or [Duration.zero], otherwise
   /// [animateTo] is called.
@@ -220,12 +225,8 @@ abstract class ViewportOffset extends ChangeNotifier {
   /// [clamp] parameter is ignored by this stub implementation but subclasses
   /// like [ScrollPosition] handle it by adjusting [to] to prevent over or
   /// underscroll.
-  Future<void> moveTo(
-    double to, {
-    Duration? duration,
-    Curve? curve,
-    bool? clamp,
-  }) {
+  @awaitNotRequired
+  Future<void> moveTo(double to, {Duration? duration, Curve? curve, bool? clamp}) {
     if (duration == null || duration == Duration.zero) {
       jumpTo(to);
       return Future<void>.value();
@@ -253,7 +254,7 @@ abstract class ViewportOffset extends ChangeNotifier {
   /// Whether a viewport is allowed to change [pixels] implicitly to respond to
   /// a call to [RenderObject.showOnScreen].
   ///
-  /// [RenderObject.showOnScreen] is for example used to bring a text field
+  /// [RenderObject.showOnScreen] is, for example, used to bring a text field
   /// fully on screen after it has received focus. This property controls
   /// whether the viewport associated with this offset is allowed to change the
   /// offset's [pixels] value to fulfill such a request.
@@ -261,7 +262,7 @@ abstract class ViewportOffset extends ChangeNotifier {
 
   @override
   String toString() {
-    final List<String> description = <String>[];
+    final description = <String>[];
     debugFillDescription(description);
     return '${describeIdentity(this)}(${description.join(", ")})';
   }
@@ -312,11 +313,7 @@ class _FixedViewportOffset extends ViewportOffset {
   }
 
   @override
-  Future<void> animateTo(
-    double to, {
-    required Duration duration,
-    required Curve curve,
-  }) async { }
+  Future<void> animateTo(double to, {required Duration duration, required Curve curve}) async {}
 
   @override
   ScrollDirection get userScrollDirection => ScrollDirection.idle;

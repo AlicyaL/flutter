@@ -5,12 +5,16 @@
 import 'template.dart';
 
 class MenuTemplate extends TokenTemplate {
-  const MenuTemplate(super.blockName, super.fileName, super.tokens, {
+  const MenuTemplate(
+    super.blockName,
+    super.fileName,
+    super.tokens, {
     super.colorSchemePrefix = '_colors.',
   });
 
   @override
-  String generate() => '''
+  String generate() =>
+      '''
 class _MenuBarDefaultsM3 extends MenuStyle {
   _MenuBarDefaultsM3(this.context)
     : super(
@@ -27,22 +31,22 @@ class _MenuBarDefaultsM3 extends MenuStyle {
   late final ColorScheme _colors = Theme.of(context).colorScheme;
 
   @override
-  MaterialStateProperty<Color?> get backgroundColor {
+  WidgetStateProperty<Color?> get backgroundColor {
     return MaterialStatePropertyAll<Color?>(${componentColor('md.comp.menu.container')});
   }
 
   @override
-  MaterialStateProperty<Color?>? get shadowColor {
+  WidgetStateProperty<Color?>? get shadowColor {
     return MaterialStatePropertyAll<Color?>(${color('md.comp.menu.container.shadow-color')});
   }
 
   @override
-  MaterialStateProperty<Color?>? get surfaceTintColor {
-    return MaterialStatePropertyAll<Color?>(${componentColor('md.comp.menu.container.surface-tint-layer')});
+  WidgetStateProperty<Color?>? get surfaceTintColor {
+    return const MaterialStatePropertyAll<Color?>(${colorOrTransparent('md.comp.menu.container.surface-tint-layer')});
   }
 
   @override
-  MaterialStateProperty<EdgeInsetsGeometry?>? get padding {
+  WidgetStateProperty<EdgeInsetsGeometry?>? get padding {
     return const MaterialStatePropertyAll<EdgeInsetsGeometry>(
       EdgeInsetsDirectional.symmetric(
         horizontal: _kTopLevelMenuHorizontalMinPadding
@@ -65,9 +69,10 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   final BuildContext context;
 
   late final ColorScheme _colors = Theme.of(context).colorScheme;
+  late final TextTheme _textTheme = Theme.of(context).textTheme;
 
   @override
-  MaterialStateProperty<Color?>? get backgroundColor {
+  WidgetStateProperty<Color?>? get backgroundColor {
     return ButtonStyleButton.allOrNull<Color>(Colors.transparent);
   }
 
@@ -76,23 +81,23 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   // No default surface tint color
 
   @override
-  MaterialStateProperty<double>? get elevation {
+  WidgetStateProperty<double>? get elevation {
     return ButtonStyleButton.allOrNull<double>(0.0);
   }
 
   @override
-  MaterialStateProperty<Color?>? get foregroundColor {
-    return MaterialStateProperty.resolveWith((Set<MaterialState> states) {
-      if (states.contains(MaterialState.disabled)) {
+  WidgetStateProperty<Color?>? get foregroundColor {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.disabled)) {
         return ${componentColor('md.comp.list.list-item.disabled.label-text')};
       }
-      if (states.contains(MaterialState.pressed)) {
+      if (states.contains(WidgetState.pressed)) {
         return ${componentColor('md.comp.list.list-item.pressed.label-text')};
       }
-      if (states.contains(MaterialState.hovered)) {
+      if (states.contains(WidgetState.hovered)) {
         return ${componentColor('md.comp.list.list-item.hover.label-text')};
       }
-      if (states.contains(MaterialState.focused)) {
+      if (states.contains(WidgetState.focused)) {
         return ${componentColor('md.comp.list.list-item.focus.label-text')};
       }
       return ${componentColor('md.comp.list.list-item.label-text')};
@@ -100,18 +105,18 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   }
 
   @override
-  MaterialStateProperty<Color?>? get iconColor {
-    return MaterialStateProperty.resolveWith((Set<MaterialState> states) {
-      if (states.contains(MaterialState.disabled)) {
+  WidgetStateProperty<Color?>? get iconColor {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.disabled)) {
         return ${componentColor('md.comp.list.list-item.disabled.leading-icon')};
       }
-      if (states.contains(MaterialState.pressed)) {
+      if (states.contains(WidgetState.pressed)) {
         return ${componentColor('md.comp.list.list-item.pressed.leading-icon.icon')};
       }
-      if (states.contains(MaterialState.hovered)) {
+      if (states.contains(WidgetState.hovered)) {
         return ${componentColor('md.comp.list.list-item.hover.leading-icon.icon')};
       }
-      if (states.contains(MaterialState.focused)) {
+      if (states.contains(WidgetState.focused)) {
         return ${componentColor('md.comp.list.list-item.focus.leading-icon.icon')};
       }
       return ${componentColor('md.comp.list.list-item.leading-icon')};
@@ -121,38 +126,34 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   // No default fixedSize
 
   @override
-  MaterialStateProperty<Size>? get maximumSize {
+  WidgetStateProperty<double>? get iconSize {
+    return const MaterialStatePropertyAll<double>(${getToken("md.comp.list.list-item.leading-icon.size")});
+  }
+
+  @override
+  WidgetStateProperty<Size>? get maximumSize {
     return ButtonStyleButton.allOrNull<Size>(Size.infinite);
   }
 
   @override
-  MaterialStateProperty<Size>? get minimumSize {
+  WidgetStateProperty<Size>? get minimumSize {
     return ButtonStyleButton.allOrNull<Size>(const Size(64.0, 48.0));
   }
 
   @override
-  MaterialStateProperty<MouseCursor?>? get mouseCursor {
-    return MaterialStateProperty.resolveWith(
-      (Set<MaterialState> states) {
-        if (states.contains(MaterialState.disabled)) {
-          return SystemMouseCursors.basic;
-        }
-        return SystemMouseCursors.click;
-      },
-    );
-  }
+  WidgetStateProperty<MouseCursor?>? get mouseCursor => WidgetStateMouseCursor.adaptiveClickable;
 
   @override
-  MaterialStateProperty<Color?>? get overlayColor {
-    return MaterialStateProperty.resolveWith(
-      (Set<MaterialState> states) {
-        if (states.contains(MaterialState.pressed)) {
+  WidgetStateProperty<Color?>? get overlayColor {
+    return WidgetStateProperty.resolveWith(
+      (Set<WidgetState> states) {
+        if (states.contains(WidgetState.pressed)) {
           return ${componentColor('md.comp.list.list-item.pressed.state-layer')};
         }
-        if (states.contains(MaterialState.hovered)) {
+        if (states.contains(WidgetState.hovered)) {
           return ${componentColor('md.comp.list.list-item.hover.state-layer')};
         }
-        if (states.contains(MaterialState.focused)) {
+        if (states.contains(WidgetState.focused)) {
           return ${componentColor('md.comp.list.list-item.focus.state-layer')};
         }
         return Colors.transparent;
@@ -161,14 +162,14 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   }
 
   @override
-  MaterialStateProperty<EdgeInsetsGeometry>? get padding {
+  WidgetStateProperty<EdgeInsetsGeometry>? get padding {
     return ButtonStyleButton.allOrNull<EdgeInsetsGeometry>(_scaledPadding(context));
   }
 
   // No default side
 
   @override
-  MaterialStateProperty<OutlinedBorder>? get shape {
+  WidgetStateProperty<OutlinedBorder>? get shape {
     return ButtonStyleButton.allOrNull<OutlinedBorder>(const RoundedRectangleBorder());
   }
 
@@ -179,8 +180,10 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   MaterialTapTargetSize? get tapTargetSize => Theme.of(context).materialTapTargetSize;
 
   @override
-  MaterialStateProperty<TextStyle?> get textStyle {
-    return MaterialStatePropertyAll<TextStyle?>(${textStyle('md.comp.list.list-item.label-text')});
+  WidgetStateProperty<TextStyle?> get textStyle {
+    // TODO(tahatesser): This is taken from https://m3.material.io/components/menus/specs
+    // Update this when the token is available.
+    return MaterialStatePropertyAll<TextStyle?>(_textTheme.labelLarge);
   }
 
   @override
@@ -197,6 +200,11 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
     if (visualDensity.horizontal > 0) {
       visualDensity = VisualDensity(vertical: visualDensity.vertical);
     }
+    // Since the threshold paddings used below are empirical values determined
+    // at a font size of 14.0, 14.0 is used as the base value for scaling the
+    // padding.
+    final double fontSize = Theme.of(context).textTheme.labelLarge?.fontSize ?? 14.0;
+    final double fontSizeRatio = MediaQuery.textScalerOf(context).scale(fontSize) / 14.0;
     return ButtonStyleButton.scaledPadding(
       EdgeInsets.symmetric(horizontal: math.max(
         _kMenuViewPadding,
@@ -207,7 +215,7 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
         8 + visualDensity.baseSizeAdjustment.dx,
       )),
       const EdgeInsets.symmetric(horizontal: _kMenuViewPadding),
-      MediaQuery.maybeTextScaleFactorOf(context) ?? 1,
+      fontSizeRatio,
     );
   }
 }
@@ -228,22 +236,22 @@ class _MenuDefaultsM3 extends MenuStyle {
   late final ColorScheme _colors = Theme.of(context).colorScheme;
 
   @override
-  MaterialStateProperty<Color?> get backgroundColor {
+  WidgetStateProperty<Color?> get backgroundColor {
     return MaterialStatePropertyAll<Color?>(${componentColor('md.comp.menu.container')});
   }
 
   @override
-  MaterialStateProperty<Color?>? get surfaceTintColor {
-    return MaterialStatePropertyAll<Color?>(${componentColor('md.comp.menu.container.surface-tint-layer')});
+  WidgetStateProperty<Color?>? get surfaceTintColor {
+    return ${componentColor('md.comp.menu.container.surface-tint-layer') == 'null' ? 'const MaterialStatePropertyAll<Color?>(Colors.transparent)' : 'MaterialStatePropertyAll<Color?>(${componentColor('md.comp.menu.container.surface-tint-layer')})'};
   }
 
   @override
-  MaterialStateProperty<Color?>? get shadowColor {
+  WidgetStateProperty<Color?>? get shadowColor {
     return MaterialStatePropertyAll<Color?>(${color('md.comp.menu.container.shadow-color')});
   }
 
   @override
-  MaterialStateProperty<EdgeInsetsGeometry?>? get padding {
+  WidgetStateProperty<EdgeInsetsGeometry?>? get padding {
     return const MaterialStatePropertyAll<EdgeInsetsGeometry>(
       EdgeInsetsDirectional.symmetric(vertical: _kMenuVerticalMinPadding),
     );

@@ -4,206 +4,276 @@
 
 import '../base/common.dart';
 import '../base/file_system.dart';
-import '../base/utils.dart';
 import '../build_info.dart';
+import '../build_system/build_system.dart';
 import '../features.dart';
-import '../globals.dart' as globals;
-import '../html_utils.dart';
-import '../project.dart';
-import '../runner/flutter_command.dart'
-    show DevelopmentArtifact, FlutterCommandResult, FlutterOptions;
+import '../isolated/build_targets.dart';
+import '../runner/flutter_command.dart';
 import '../web/compile.dart';
-import '../web/file_generators/flutter_service_worker_js.dart';
+import '../web/content_hash.dart';
 import '../web/web_constants.dart';
+import '../web/web_options.dart';
+import '../web_template.dart';
 import 'build.dart';
 
 class BuildWebCommand extends BuildSubCommand {
   BuildWebCommand({
-    required super.logger,
-    required FileSystem fileSystem,
-    required bool verboseHelp,
-  }) : _fileSystem = fileSystem, super(verboseHelp: verboseHelp) {
-    addTreeShakeIconsFlag();
-    usesTargetOption();
-    usesOutputDir();
-    usesPubOption();
-    usesBuildNumberOption();
-    usesBuildNameOption();
-    addBuildModeFlags(verboseHelp: verboseHelp, excludeDebug: true);
-    usesDartDefineOption();
-    addEnableExperimentation(hide: !verboseHelp);
-    addNullSafetyModeOptions(hide: !verboseHelp);
-    addNativeNullAssertions();
-
-    //
-    // Flutter web-specific options
-    //
-    argParser.addSeparator('Flutter web options');
-    argParser.addOption('base-href',
-      help: 'Overrides the href attribute of the <base> tag in web/index.html. '
-          'No change is done to web/index.html file if this flag is not provided. '
-          'The value has to start and end with a slash "/". '
-          'For more information: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base'
-    );
-    argParser.addOption(
-      'pwa-strategy',
-      defaultsTo: ServiceWorkerStrategy.offlineFirst.cliName,
-      help: 'The caching strategy to be used by the PWA service worker.',
-      allowed: ServiceWorkerStrategy.values.map((ServiceWorkerStrategy e) => e.cliName),
-      allowedHelp: CliEnum.allowedHelp(ServiceWorkerStrategy.values),
-    );
-    usesWebRendererOption();
-    usesWebResourcesCdnFlag();
-
-    //
-    // JavaScript compilation options
-    //
-    argParser.addSeparator('JavaScript compilation options');
-    argParser.addFlag('csp',
-      negatable: false,
-      help: 'Disable dynamic generation of code in the generated output. '
-            'This is necessary to satisfy CSP restrictions (see http://www.w3.org/TR/CSP/).'
-    );
-    argParser.addFlag(
-      'source-maps',
-      help: 'Generate a sourcemap file. These can be used by browsers '
-            'to view and debug the original source code of a compiled and minified Dart '
-            'application.'
-    );
-    argParser.addOption('dart2js-optimization',
-      help: 'Sets the optimization level used for Dart compilation to JavaScript. '
-          'Valid values range from O0 to O4.',
-          defaultsTo: JsCompilerConfig.kDart2jsDefaultOptimizationLevel
-    );
-    argParser.addFlag('dump-info', negatable: false,
-      help: 'Passes "--dump-info" to the Javascript compiler which generates '
-          'information about the generated code is a .js.info.json file.'
-    );
-    argParser.addFlag('no-frequency-based-minification', negatable: false,
-      help: 'Disables the frequency based minifier. '
-          'Useful for comparing the output between builds.'
-    );
-
-    //
-    // Experimental options
-    //
-    if (featureFlags.isFlutterWebWasmEnabled) {
-      argParser.addSeparator('Experimental options');
-    }
-    argParser.addFlag(
-      FlutterOptions.kWebWasmFlag,
-      help: 'Compile to WebAssembly rather than JavaScript.\n$kWasmMoreInfo',
-      negatable: false,
-      hide: !featureFlags.isFlutterWebWasmEnabled,
-    );
-    argParser.addFlag(
-      'omit-type-checks',
-      help: 'Omit type checks in Wasm output.\n'
-          'Reduces code size and improves performance, but may affect runtime correctness. Use with care.',
-      negatable: false,
-      hide: !featureFlags.isFlutterWebWasmEnabled,
-    );
-    argParser.addOption(
-      'wasm-opt',
-      help:
-          'Optimize output wasm using the Binaryen (https://github.com/WebAssembly/binaryen) tool.',
-      defaultsTo: WasmOptLevel.defaultValue.cliName,
-      allowed: WasmOptLevel.values.map<String>((WasmOptLevel e) => e.cliName),
-      allowedHelp: CliEnum.allowedHelp(WasmOptLevel.values),
-      hide: !featureFlags.isFlutterWebWasmEnabled,
-    );
+    required this.buildSystem,
+    required this.featureFlags,
+    required super.toolContext,
+    required super.verboseHelp,
+  }) : super(logger: toolContext.logger, outputPreferences: toolContext.outputPreferences) {
+    registerOptionBundles(const <OptionBundle>[
+      CommonBuildOptionsBundle(),
+      BuildModeOptionsBundle(),
+      DartCompileOptionsBundle(),
+      WebOptionsBundle(),
+    ]);
   }
 
-  final FileSystem _fileSystem;
+  final BuildSystem buildSystem;
+  final FeatureFlags featureFlags;
 
   @override
-  Future<Set<DevelopmentArtifact>> get requiredArtifacts async =>
-      const <DevelopmentArtifact>{
-        DevelopmentArtifact.web,
-      };
+  Future<Set<DevelopmentArtifact>> get requiredArtifacts async => const <DevelopmentArtifact>{
+    DevelopmentArtifact.web,
+  };
 
   @override
-  final String name = 'web';
+  final name = 'web';
 
   @override
   bool get hidden => !featureFlags.isWebEnabled;
 
   @override
-  final String description = 'Build a web application bundle.';
+  final description = 'Build a web application bundle.';
 
   @override
   Future<FlutterCommandResult> runCommand() async {
     if (!featureFlags.isWebEnabled) {
-      throwToolExit('"build web" is not currently supported. To enable, run "flutter config --enable-web".');
-    }
-
-    final WebCompilerConfig compilerConfig;
-    if (boolArg('wasm')) {
-      if (!featureFlags.isFlutterWebWasmEnabled) {
-        throwToolExit('Compiling to WebAssembly (wasm) is only available on the master channel.');
-      }
-      compilerConfig = WasmCompilerConfig(
-        omitTypeChecks: boolArg('omit-type-checks'),
-        wasmOpt: WasmOptLevel.values.byName(stringArg('wasm-opt')!),
-      );
-    } else {
-      compilerConfig = JsCompilerConfig(
-        csp: boolArg('csp'),
-        optimizationLevel: stringArg('dart2js-optimization') ?? JsCompilerConfig.kDart2jsDefaultOptimizationLevel,
-        dumpInfo: boolArg('dump-info'),
-        nativeNullAssertions: boolArg('native-null-assertions'),
-        noFrequencyBasedMinification: boolArg('no-frequency-based-minification'),
-        sourceMaps: boolArg('source-maps'),
-      );
-    }
-
-    final FlutterProject flutterProject = FlutterProject.current();
-    final String target = stringArg('target')!;
-    final BuildInfo buildInfo = await getBuildInfo();
-    if (buildInfo.isDebug) {
-      throwToolExit('debug builds cannot be built directly for the web. Try using "flutter run"');
-    }
-    final String? baseHref = stringArg('base-href');
-    if (baseHref != null && !(baseHref.startsWith('/') && baseHref.endsWith('/'))) {
-      throwToolExit('base-href should start and end with /');
-    }
-    if (!flutterProject.web.existsSync()) {
-      throwToolExit('Missing index.html.');
-    }
-    if (!_fileSystem.currentDirectory
-        .childDirectory('web')
-        .childFile('index.html')
-        .readAsStringSync()
-        .contains(kBaseHrefPlaceholder) &&
-        baseHref != null) {
       throwToolExit(
-        "Couldn't find the placeholder for base href. "
-        'Please add `<base href="$kBaseHrefPlaceholder">` to web/index.html'
+        '"build web" is not currently supported. To enable, run "flutter config --enable-web".',
       );
     }
 
-    // Currently supporting options [output-dir] and [output] as
-    // valid approaches for setting output directory of build artifacts
-    final String? outputDirectoryPath = stringArg('output');
+    if (getValue(WebOptions.pwaStrategy) != null) {
+      throwToolExit(
+        'The "--${WebOptions.pwaStrategy.name}" option has been removed because '
+        'Flutter no longer generates or registers an offline caching service worker.\n'
+        'Remove "--${WebOptions.pwaStrategy.name}" from your build command. '
+        'See https://github.com/flutter/flutter/issues/156910 for more details.',
+      );
+    }
 
-    displayNullSafetyMode(buildInfo);
-    final WebBuilder webBuilder = WebBuilder(
-      logger: globals.logger,
-      processManager: globals.processManager,
-      buildSystem: globals.buildSystem,
-      fileSystem: globals.fs,
-      flutterVersion: globals.flutterVersion,
-      usage: globals.flutterUsage,
+    final String? optimizationLevelArg = getValue(WebOptions.optimizationLevel);
+    final int? optimizationLevel = optimizationLevelArg != null
+        ? int.parse(optimizationLevelArg)
+        : null;
+
+    final String? dart2jsOptimizationLevelValue = getValue(WebOptions.dart2jsOptimization);
+    final int? jsOptimizationLevel = dart2jsOptimizationLevelValue != null
+        ? int.parse(dart2jsOptimizationLevelValue.substring(1))
+        : optimizationLevel;
+
+    final List<String> dartDefines = extractDartDefines(
+      defineConfigJsonMap: extractDartDefineConfigJsonMap(),
+    );
+    final bool useWasm = getValue(WebOptions.wasm);
+    // See also: RunCommandBase.webRenderer and TestCommand.webRenderer.
+    final webRenderer = WebRendererMode.fromDartDefines(dartDefines, useWasm: useWasm);
+
+    final bool sourceMaps = getValue(WebOptions.sourceMaps);
+    final bool webContentHash = getValue(WebOptions.webContentHash);
+    if (webContentHash && getValue(WebOptions.enableWasmDeferredLoading)) {
+      throwToolExit(
+        '"--web-content-hash" does not yet support deferred loading: deferred '
+        'module files keep unhashed names and can be served stale from the '
+        'browser cache alongside a new entrypoint. Build without '
+        '"--enable-wasm-deferred-loading" or without "--web-content-hash".',
+      );
+    }
+    final bool? minifyJs = getValue(WebOptions.minifyJs);
+    final bool? minifyWasm = getValue(WebOptions.minifyWasm);
+    final bool? deprecatedJsInterop = getValue(WebOptions.deprecatedJsInterop);
+
+    final List<WebCompilerConfig> compilerConfigs;
+
+    if (useWasm) {
+      if (webRenderer != WebRendererMode.getDefault(useWasm: true)) {
+        throwToolExit(
+          'Do not attempt to set a web renderer when using "--${FlutterOptions.kWebWasmFlag}"',
+        );
+      }
+      logger.printBox(title: 'New feature', '''
+  WebAssembly compilation is new. Understand the details before deploying to production.
+  $kWasmMoreInfo''');
+
+      compilerConfigs = <WebCompilerConfig>[
+        WasmCompilerConfig(
+          optimizationLevel: optimizationLevel,
+          stripWasm: getValue(WebOptions.stripWasm),
+          sourceMaps: sourceMaps,
+          webContentHash: webContentHash,
+          minify: minifyWasm,
+          enableWasmDeferredLoading: getValue(WebOptions.enableWasmDeferredLoading),
+        ),
+        JsCompilerConfig(
+          csp: getValue(WebOptions.csp),
+          dumpInfo: getValue(WebOptions.dumpInfo),
+          minify: minifyJs,
+          nativeNullAssertions: getValue(CommonOptions.nativeNullAssertions),
+          useFrequencyBasedMinification: !getValue(WebOptions.noFrequencyBasedMinification),
+          optimizationLevel: jsOptimizationLevel,
+          sourceMaps: sourceMaps,
+          webContentHash: webContentHash,
+          deprecatedJsInterop: deprecatedJsInterop,
+        ),
+      ];
+    } else {
+      compilerConfigs = <WebCompilerConfig>[
+        JsCompilerConfig(
+          csp: getValue(WebOptions.csp),
+          dumpInfo: getValue(WebOptions.dumpInfo),
+          minify: minifyJs,
+          nativeNullAssertions: getValue(CommonOptions.nativeNullAssertions),
+          useFrequencyBasedMinification: !getValue(WebOptions.noFrequencyBasedMinification),
+          optimizationLevel: jsOptimizationLevel,
+          sourceMaps: sourceMaps,
+          webContentHash: webContentHash,
+          deprecatedJsInterop: deprecatedJsInterop,
+          renderer: webRenderer,
+        ),
+
+        if (getValue(WebOptions.wasmDryRun))
+          WasmCompilerConfig(
+            optimizationLevel: optimizationLevel,
+            stripWasm: getValue(WebOptions.stripWasm),
+            sourceMaps: sourceMaps,
+            webContentHash: webContentHash,
+            minify: minifyWasm,
+            enableWasmDeferredLoading: getValue(WebOptions.enableWasmDeferredLoading),
+            dryRun: true,
+            // dart2js already reports deprecated JS interop imports as errors.
+            omitDeprecatedJsInteropFindings: deprecatedJsInterop == false,
+          ),
+      ];
+    }
+
+    final BuildInfo buildInfo = await getBuildInfo();
+    final String? baseHref = getValue(WebOptions.baseHref);
+    final String? staticAssetsUrl = getValue(WebOptions.staticAssetsUrl);
+    if (baseHref != null && !(baseHref.startsWith('/') && baseHref.endsWith('/'))) {
+      throwToolExit(
+        'Received a --base-href value of "$baseHref"\n'
+        '--base-href should start and end with /',
+      );
+    }
+    if (staticAssetsUrl != null && !staticAssetsUrl.endsWith('/')) {
+      throwToolExit(
+        'Received a --static-assets-url value of "$staticAssetsUrl"\n'
+        '--static-assets-url should end with /',
+      );
+    }
+    if (!project.web.existsSync()) {
+      throwToolExit(
+        'This project is not configured for the web.\n'
+        'To configure this project for the web, run flutter create . --platforms web',
+      );
+    }
+    final File indexHtmlFile = toolContext.fs.file(project.web.indexFile.path);
+    if (indexHtmlFile.existsSync()) {
+      final String indexHtmlContent = indexHtmlFile.readAsStringSync();
+      if (!indexHtmlContent.contains(kBaseHrefPlaceholder) && baseHref != null) {
+        throwToolExit(
+          "Couldn't find the placeholder for base href. "
+          'Please add `<base href="$kBaseHrefPlaceholder">` to web/index.html',
+        );
+      }
+      if (webContentHash) {
+        final File bootstrapJsFile = project.web.directory.childFile('flutter_bootstrap.js');
+        _validateIndexHtmlForContentHash(
+          indexHtmlFile,
+          bootstrapJsFile: bootstrapJsFile.existsSync() ? bootstrapJsFile : null,
+        );
+      }
+    }
+
+    final String? outputDirectoryPath = getValue(CommonOptions.outputDir);
+
+    final Map<String, String> webDefines = extractWebDefines();
+
+    final webBuilder = WebBuilder(
+      analytics: analytics,
+      buildSystem: buildSystem,
+      buildTargets: const BuildTargetsImpl(),
+      featureFlags: featureFlags,
+      toolContext: toolContext,
     );
     await webBuilder.buildWeb(
-      flutterProject,
-      target,
+      project,
+      targetFile,
       buildInfo,
-      ServiceWorkerStrategy.fromCliName(stringArg('pwa-strategy')),
-      compilerConfig: compilerConfig,
+      compilerConfigs: compilerConfigs,
       baseHref: baseHref,
+      staticAssetsUrl: staticAssetsUrl,
       outputDirectoryPath: outputDirectoryPath,
+      webDefines: webDefines,
     );
+    if (webContentHash) {
+      logger.printStatus(
+        '\nServing tip: Configure your web host to serve "index.html" and "flutter_bootstrap.js"\n'
+        'with "Cache-Control: no-cache" (or revalidation) so browser clients immediately pick up new deployments.\n'
+        'Hashed files ("main.dart.<hash>.*" and everything under "assets/") can be served with long-term immutable caching (e.g. "Cache-Control: max-age=31536000, immutable").\n'
+        'Other files, including everything under "canvaskit/", are not content-hashed and should not be served with "immutable" caching.\n'
+        'See https://docs.flutter.dev/deployment/web#web-content-hashing for caching guidance.',
+      );
+    }
     return FlutterCommandResult.success();
+  }
+
+  void _validateIndexHtmlForContentHash(File indexHtmlFile, {File? bootstrapJsFile}) {
+    final String indexHtmlContent = indexHtmlFile.readAsStringSync();
+    final String uncommentedContent = stripHtmlAndJsComments(indexHtmlContent);
+    if (uncommentedContent.contains('main.dart.js') ||
+        uncommentedContent.contains('loadEntrypoint')) {
+      throwToolExit(
+        'Cannot build with "--web-content-hash" because web/index.html contains '
+        'direct references to "main.dart.js" or the deprecated "FlutterLoader.loadEntrypoint" API.\n'
+        'Modern Flutter Web applications use the templated "flutter_bootstrap.js" loader script '
+        'which automatically resolves content-hashed entrypoints. '
+        'Please update web/index.html or run "flutter create . --platforms web" to migrate.',
+      );
+    }
+    if (!uncommentedContent.contains('flutter_bootstrap.js') &&
+        !uncommentedContent.contains('{{flutter_bootstrap_js}}') &&
+        !uncommentedContent.contains('{{flutter_build_config}}')) {
+      throwToolExit(
+        'Cannot build with "--web-content-hash" because web/index.html does not '
+        'reference "flutter_bootstrap.js", "{{flutter_bootstrap_js}}", or "{{flutter_build_config}}".\n'
+        'Modern Flutter Web applications use the templated "flutter_bootstrap.js" loader script '
+        'which automatically resolves content-hashed entrypoints. '
+        'Please update web/index.html or run "flutter create . --platforms web" to migrate.',
+      );
+    }
+    if (bootstrapJsFile != null) {
+      final String bootstrapContent = bootstrapJsFile.readAsStringSync();
+      final String uncommentedBootstrap = stripHtmlAndJsComments(bootstrapContent);
+      if (uncommentedBootstrap.contains('main.dart.js') ||
+          uncommentedBootstrap.contains('loadEntrypoint')) {
+        throwToolExit(
+          'Cannot build with "--web-content-hash" because web/flutter_bootstrap.js contains '
+          'direct references to "main.dart.js" or the deprecated "FlutterLoader.loadEntrypoint" API.\n'
+          'Please update web/flutter_bootstrap.js to use "{{flutter_build_config}}" and '
+          '"_flutter.loader.load()".',
+        );
+      }
+      if (!uncommentedBootstrap.contains('{{flutter_build_config}}')) {
+        throwToolExit(
+          'Cannot build with "--web-content-hash" because web/flutter_bootstrap.js does not '
+          'contain the "{{flutter_build_config}}" placeholder required to inject content-hashed '
+          'entrypoint and manifest filenames.',
+        );
+      }
+    }
   }
 }

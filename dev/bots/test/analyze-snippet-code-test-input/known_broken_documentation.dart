@@ -23,7 +23,7 @@
 /// 1.0, the blabla is blabla blabla blabla an blabla blabla.
 ///
 /// {@tool snippet}
-/// Bla blabla blabla some [Text] when the `_blabla` blabla blabla is true, and
+/// Bla blabla blabla some `Text` when the `_blabla` blabla blabla is true, and
 /// blabla it when it is blabla:
 ///
 /// ```dart
@@ -35,7 +35,7 @@
 /// {@end-tool}
 ///
 /// {@tool snippet}
-/// Bla blabla blabla some [Text] when the `_blabla` blabla blabla is true, and
+/// Bla blabla blabla some `Text` when the `_blabla` blabla blabla is true, and
 /// blabla it when it is blabla:
 ///
 /// ```dart
@@ -55,7 +55,7 @@
 /// {@end-tool}
 ///
 /// {@tool snippet}
-/// Bla blabla blabla some [Text] when the `_blabla` blabla blabla is true, and
+/// Bla blabla blabla some `Text` when the `_blabla` blabla blabla is true, and
 /// blabla finale blabla:
 ///
 /// ```dart
@@ -131,7 +131,7 @@
 /// Widget build(BuildContext context) {
 ///   final String title;
 ///   return Opacity(
-///     key: globalKey, // error (undefined_identifier, argument_type_not_assignable)
+///     key: globalKey, // error (undefined_identifier)
 ///     opacity: _visible ? 1.0 : 0.0,
 ///     child: Text(title), // error (read_potentially_unassigned_final)
 ///   );
@@ -144,13 +144,14 @@
 /// ```
 ///
 /// ```dart
-/// import 'dart:io'; // error (unused_import)/// final Widget p = Placeholder(); // error (undefined_class, undefined_function)
+/// import 'dart:io'; // error (unused_import)
+/// final Widget p = Placeholder(); // error (undefined_class, undefined_function)
 /// ```
 ///
 /// ```dart
 /// // (e.g. in a stateful widget)
 /// void initState() { // error (must_call_super, annotate_overrides)
-///   widget.toString(); // error (undefined_identifier, return_of_invalid_type)
+///   widget.toString();
 /// }
 /// ```
 ///
@@ -161,7 +162,7 @@
 /// }
 /// ```
 ///
-/// ```
+/// ```none
 /// error (something about backticks)
 /// this must be the last error, since it aborts parsing of this file
 /// ```

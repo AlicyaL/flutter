@@ -22,5 +22,18 @@
   "tabSemanticsLabel": "Картичка $tabIndex од $tabCount",
   "modalBarrierDismissLabel": "Отфрли",
   "searchTextFieldPlaceholderLabel": "Пребарувајте",
-  "noSpellCheckReplacementsLabel": "No Replacements Found"
+  "noSpellCheckReplacementsLabel": "Не се најдени заменски зборови",
+  "menuDismissLabel": "Отфрлете го менито",
+  "lookUpButtonLabel": "Погледнете нагоре",
+  "searchWebButtonLabel": "Пребарајте на интернет",
+  "shareButtonLabel": "Споделете...",
+  "clearButtonLabel": "Избриши",
+  "cancelButtonLabel": "Откажи",
+  "backButtonLabel": "Назад",
+  "expansionTileExpandedHint": "допрете двапати за собирање",
+  "expansionTileCollapsedHint": "допри двапати за проширување",
+  "expansionTileExpandedTapHint": "собирање",
+  "expansionTileCollapsedTapHint": "проширување за повеќе детали",
+  "expandedHint": "Собрано",
+  "collapsedHint": "Проширено"
 }

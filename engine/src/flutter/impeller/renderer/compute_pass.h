@@ -1,0 +1,106 @@
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#ifndef FLUTTER_IMPELLER_RENDERER_COMPUTE_PASS_H_
+#define FLUTTER_IMPELLER_RENDERER_COMPUTE_PASS_H_
+
+#include <array>
+#include <cstdint>
+#include <string>
+
+#include "impeller/core/resource_binder.h"
+#include "impeller/renderer/compute_pipeline_descriptor.h"
+#include "impeller/renderer/pipeline_descriptor.h"
+#include "third_party/abseil-cpp/absl/status/status.h"
+
+namespace impeller {
+
+//------------------------------------------------------------------------------
+/// @brief      Compute passes encode compute shader into the underlying command
+///             buffer.
+///
+/// @see        `CommandBuffer`
+///
+class ComputePass : public ResourceBinder {
+ public:
+  virtual ~ComputePass();
+
+  virtual bool IsValid() const = 0;
+
+  void SetLabel(const std::string& label);
+
+  virtual void SetCommandLabel(std::string_view label) = 0;
+
+  /// @brief Sets the pipeline for later dispatches in the pass. The pipeline
+  ///        must not be null.
+  virtual void SetPipeline(
+      const std::shared_ptr<Pipeline<ComputePipelineDescriptor>>& pipeline) = 0;
+
+  //----------------------------------------------------------------------------
+  /// @brief      Dispatch a grid of compute workgroups.
+  ///
+  ///             The components of `workgroup_count` are workgroup
+  ///             (threadgroup) counts, not invocation counts. The number of
+  ///             invocations per workgroup (the local size) is declared by the
+  ///             shader. The total invocations along an axis is therefore the
+  ///             workgroup count times the shader's local size.
+  ///
+  ///             The pipeline and resource bindings persist across dispatches
+  ///             in the pass. A later dispatch reuses them until they are
+  ///             replaced.
+  ///
+  ///             Writes by earlier dispatches in the pass and by earlier passes
+  ///             are visible to this dispatch, and its writes are visible to
+  ///             later dispatches, passes and host reads, without a manual
+  ///             barrier.
+  ///
+  /// @return     OK without dispatching anything if any dimension is zero. A
+  ///             cancelled status if no pipeline is bound.
+  ///
+  virtual absl::Status Compute(std::array<uint32_t, 3> workgroup_count) = 0;
+
+  /// @brief Ensures all previously encoded compute command's buffer writes are
+  ///        visible to any subsequent compute commands. Dispatches are already
+  ///        synchronized automatically, so this is only a manual override.
+  ///
+  ///        On Vulkan, it does not matter if the compute command is in a
+  ///        different command buffer, only that it is executed later in queue
+  ///        order.
+  virtual void AddBufferMemoryBarrier() = 0;
+
+  /// @brief Ensures all previously encoded compute command's texture writes are
+  ///        visible to any subsequent compute commands. Dispatches are already
+  ///        synchronized automatically, so this is only a manual override.
+  ///
+  ///        On Vulkan, it does not matter if the compute command is in a
+  ///        different command buffer, only that it is executed later in queue
+  ///        order.
+  virtual void AddTextureMemoryBarrier() = 0;
+
+  //----------------------------------------------------------------------------
+  /// @brief      Encode the recorded commands to the underlying command buffer.
+  ///
+  /// @return     If the commands were encoded to the underlying command
+  ///             buffer.
+  ///
+  virtual bool EncodeCommands() const = 0;
+
+  const Context& GetContext() const { return *context_; }
+
+ protected:
+  const std::shared_ptr<const Context> context_;
+
+  explicit ComputePass(std::shared_ptr<const Context> context);
+
+  virtual void OnSetLabel(const std::string& label) = 0;
+
+ private:
+  ComputePass(const ComputePass&) = delete;
+
+  ComputePass& operator=(const ComputePass&) = delete;
+};
+
+}  // namespace impeller
+
+#endif  // FLUTTER_IMPELLER_RENDERER_COMPUTE_PASS_H_

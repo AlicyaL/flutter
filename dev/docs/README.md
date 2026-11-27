@@ -1,4 +1,4 @@
-# Welcome to the Flutter API reference documentation!
+# Flutter API reference documentation
 
 Flutter is Google's SDK for crafting beautiful, fast user experiences for
 mobile, web, and desktop from a single codebase. Flutter works with existing
@@ -13,10 +13,11 @@ SDK.
 This site hosts Flutter's API documentation. Other documentation can be found at
 the following locations:
 
-* [flutter.dev](https://flutter.dev) (main site)
-* [Installation](https://flutter.dev/docs/get-started/install)
-* [Codelabs](https://flutter.dev/docs/codelabs)
-* [Contributing to Flutter](https://github.com/flutter/flutter/blob/master/CONTRIBUTING.md)
+* [Install Flutter](https://docs.flutter.dev/get-started)
+* [Flutter documentation](https://docs.flutter.dev)
+* [Stable channel API reference documentation](https://api.flutter.dev)
+* [Main channel API reference documentation](https://main-api.flutter.dev)
+* [Contributing to Flutter](https://github.com/flutter/flutter/blob/main/CONTRIBUTING.md)
 
 ## Offline Documentation
 
@@ -24,13 +25,13 @@ In addition to the online sites above, Flutter's documentation can be downloaded
 as an HTML documentation ZIP file for use when offline or when you have a poor
 internet connection.
 
-**Warning: the offline documentation files are quite large, approximately 700 MB
-to 900 MB.**
+> [!NOTE]
+> The offline documentation files are quite large, approximately 300MB zipped, 1GB unzipped.
 
 Offline HTML documentation ZIP bundles:
 
  * [Stable channel](https://api.flutter.dev/offline/flutter.docs.zip)
- * [Master channel](https://master-api.flutter.dev/offline/flutter.docs.zip)
+ * [Main channel](https://main-api.flutter.dev/offline/flutter.docs.zip)
 
 Or, you can add Flutter to the open-source [Zeal](https://zealdocs.org/) app
 using the following XML configurations. Follow the instructions in the
@@ -38,8 +39,8 @@ application for adding a feed.
 
  * Stable channel Zeal XML configuration URL:
    <https://api.flutter.dev/offline/flutter.xml>
- * Master channel Zeal XML configuration URL:
-   <https://master-api.flutter.dev/offline/flutter.xml>
+ * Main channel Zeal XML configuration URL:
+   <https://main-api.flutter.dev/offline/flutter.xml>
 
 ## Importing a Library
 

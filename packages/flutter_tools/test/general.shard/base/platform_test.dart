@@ -32,21 +32,18 @@ void main() {
       fake = FakePlatform.fromPlatform(local);
     });
 
-    testWithoutContext('copiesAllProperties', () {
+    test('copiesAllProperties', () {
       _expectPlatformsEqual(fake, local);
     });
 
-    testWithoutContext('convertsPropertiesToMutable', () {
+    test('convertsPropertiesToMutable', () {
       final String key = fake.environment.keys.first;
 
       expect(fake.environment[key], local.environment[key]);
       fake.environment[key] = 'FAKE';
       expect(fake.environment[key], 'FAKE');
 
-      expect(
-        fake.executableArguments.length,
-        local.executableArguments.length,
-      );
+      expect(fake.executableArguments.length, local.executableArguments.length);
       fake.executableArguments.add('ARG');
       expect(fake.executableArguments.last, 'ARG');
     });

@@ -115,10 +115,10 @@ abstract final class KeyEventSimulator {
         case 'fuchsia':
           map = kFuchsiaToLogicalKey;
         case 'macos':
-        // macOS doesn't do key codes, just scan codes.
+          // macOS doesn't do key codes, just scan codes.
           return -1;
         case 'ios':
-        // iOS doesn't do key codes, just scan codes.
+          // iOS doesn't do key codes, just scan codes.
           return -1;
         case 'web':
           // web doesn't have int type code.
@@ -240,10 +240,7 @@ abstract final class KeyEventSimulator {
 
     assert(key.debugName != null);
 
-    final Map<String, dynamic> result = <String, dynamic>{
-      'type': isDown ? 'keydown' : 'keyup',
-      'keymap': platform,
-    };
+    final result = <String, dynamic>{'type': isDown ? 'keydown' : 'keyup', 'keymap': platform};
 
     final String resultCharacter = character ?? _keyLabel(key) ?? '';
     void assignWeb() {
@@ -254,6 +251,7 @@ abstract final class KeyEventSimulator {
       result['location'] = keyLocation.location;
       result['metaState'] = _getWebModifierFlags(key, isDown);
     }
+
     if (kIsWeb) {
       assignWeb();
       return result;
@@ -281,7 +279,9 @@ abstract final class KeyEventSimulator {
         result['keyCode'] = keyCode;
         result['scanCode'] = scanCode;
         result['modifiers'] = _getGlfwModifierFlags(key, isDown);
-        result['unicodeScalarValues'] = resultCharacter.isNotEmpty ? resultCharacter.codeUnitAt(0) : 0;
+        result['unicodeScalarValues'] = resultCharacter.isNotEmpty
+            ? resultCharacter.codeUnitAt(0)
+            : 0;
       case 'macos':
         result['keyCode'] = scanCode;
         if (resultCharacter.isNotEmpty) {
@@ -308,7 +308,7 @@ abstract final class KeyEventSimulator {
   }
 
   static int _getAndroidModifierFlags(LogicalKeyboardKey newKey, bool isDown) {
-    int result = 0;
+    var result = 0;
     final Set<LogicalKeyboardKey> pressed = RawKeyboard.instance.keysPressed;
     if (isDown) {
       pressed.add(newKey);
@@ -331,7 +331,8 @@ abstract final class KeyEventSimulator {
       result |= RawKeyEventDataAndroid.modifierLeftControl | RawKeyEventDataAndroid.modifierControl;
     }
     if (pressed.contains(LogicalKeyboardKey.controlRight)) {
-      result |= RawKeyEventDataAndroid.modifierRightControl | RawKeyEventDataAndroid.modifierControl;
+      result |=
+          RawKeyEventDataAndroid.modifierRightControl | RawKeyEventDataAndroid.modifierControl;
     }
     if (pressed.contains(LogicalKeyboardKey.altLeft)) {
       result |= RawKeyEventDataAndroid.modifierLeftAlt | RawKeyEventDataAndroid.modifierAlt;
@@ -355,23 +356,27 @@ abstract final class KeyEventSimulator {
   }
 
   static int _getGlfwModifierFlags(LogicalKeyboardKey newKey, bool isDown) {
-    int result = 0;
+    var result = 0;
     final Set<LogicalKeyboardKey> pressed = RawKeyboard.instance.keysPressed;
     if (isDown) {
       pressed.add(newKey);
     } else {
       pressed.remove(newKey);
     }
-    if (pressed.contains(LogicalKeyboardKey.shiftLeft) || pressed.contains(LogicalKeyboardKey.shiftRight)) {
+    if (pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+        pressed.contains(LogicalKeyboardKey.shiftRight)) {
       result |= GLFWKeyHelper.modifierShift;
     }
-    if (pressed.contains(LogicalKeyboardKey.metaLeft) || pressed.contains(LogicalKeyboardKey.metaRight)) {
+    if (pressed.contains(LogicalKeyboardKey.metaLeft) ||
+        pressed.contains(LogicalKeyboardKey.metaRight)) {
       result |= GLFWKeyHelper.modifierMeta;
     }
-    if (pressed.contains(LogicalKeyboardKey.controlLeft) || pressed.contains(LogicalKeyboardKey.controlRight)) {
+    if (pressed.contains(LogicalKeyboardKey.controlLeft) ||
+        pressed.contains(LogicalKeyboardKey.controlRight)) {
       result |= GLFWKeyHelper.modifierControl;
     }
-    if (pressed.contains(LogicalKeyboardKey.altLeft) || pressed.contains(LogicalKeyboardKey.altRight)) {
+    if (pressed.contains(LogicalKeyboardKey.altLeft) ||
+        pressed.contains(LogicalKeyboardKey.altRight)) {
       result |= GLFWKeyHelper.modifierAlt;
     }
     if (pressed.contains(LogicalKeyboardKey.capsLock)) {
@@ -381,7 +386,7 @@ abstract final class KeyEventSimulator {
   }
 
   static int _getWindowsModifierFlags(LogicalKeyboardKey newKey, bool isDown) {
-    int result = 0;
+    var result = 0;
     final Set<LogicalKeyboardKey> pressed = RawKeyboard.instance.keysPressed;
     if (isDown) {
       pressed.add(newKey);
@@ -434,7 +439,7 @@ abstract final class KeyEventSimulator {
   }
 
   static int _getFuchsiaModifierFlags(LogicalKeyboardKey newKey, bool isDown) {
-    int result = 0;
+    var result = 0;
     final Set<LogicalKeyboardKey> pressed = RawKeyboard.instance.keysPressed;
     if (isDown) {
       pressed.add(newKey);
@@ -472,7 +477,7 @@ abstract final class KeyEventSimulator {
   }
 
   static int _getWebModifierFlags(LogicalKeyboardKey newKey, bool isDown) {
-    int result = 0;
+    var result = 0;
     final Set<LogicalKeyboardKey> pressed = RawKeyboard.instance.keysPressed;
     if (isDown) {
       pressed.add(newKey);
@@ -516,7 +521,7 @@ abstract final class KeyEventSimulator {
   }
 
   static int _getMacOsModifierFlags(LogicalKeyboardKey newKey, bool isDown) {
-    int result = 0;
+    var result = 0;
     final Set<LogicalKeyboardKey> pressed = RawKeyboard.instance.keysPressed;
     if (isDown) {
       pressed.add(newKey);
@@ -547,7 +552,7 @@ abstract final class KeyEventSimulator {
     if (pressed.contains(LogicalKeyboardKey.altRight)) {
       result |= RawKeyEventDataMacOs.modifierRightOption | RawKeyEventDataMacOs.modifierOption;
     }
-    final Set<LogicalKeyboardKey> functionKeys = <LogicalKeyboardKey>{
+    final functionKeys = <LogicalKeyboardKey>{
       LogicalKeyboardKey.f1,
       LogicalKeyboardKey.f2,
       LogicalKeyboardKey.f3,
@@ -583,7 +588,7 @@ abstract final class KeyEventSimulator {
   }
 
   static int _getIOSModifierFlags(LogicalKeyboardKey newKey, bool isDown) {
-    int result = 0;
+    var result = 0;
     final Set<LogicalKeyboardKey> pressed = RawKeyboard.instance.keysPressed;
     if (isDown) {
       pressed.add(newKey);
@@ -614,7 +619,7 @@ abstract final class KeyEventSimulator {
     if (pressed.contains(LogicalKeyboardKey.altRight)) {
       result |= RawKeyEventDataIos.modifierRightOption | RawKeyEventDataIos.modifierOption;
     }
-    final Set<LogicalKeyboardKey> functionKeys = <LogicalKeyboardKey>{
+    final functionKeys = <LogicalKeyboardKey>{
       LogicalKeyboardKey.f1,
       LogicalKeyboardKey.f2,
       LogicalKeyboardKey.f3,
@@ -649,9 +654,11 @@ abstract final class KeyEventSimulator {
     return result;
   }
 
-  static Future<bool> _simulateKeyEventByRawEvent(ValueGetter<Map<String, dynamic>> buildKeyData) async {
+  static Future<bool> _simulateKeyEventByRawEvent(
+    ValueGetter<Map<String, dynamic>> buildKeyData,
+  ) async {
     return TestAsyncUtils.guard<bool>(() async {
-      final Completer<bool> result = Completer<bool>();
+      final result = Completer<bool>();
       await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
         SystemChannels.keyEvent.name,
         SystemChannels.keyEvent.codec.encodeMessage(buildKeyData()),
@@ -660,16 +667,17 @@ abstract final class KeyEventSimulator {
             result.complete(false);
             return;
           }
-          final Map<String, Object?> decoded = SystemChannels.keyEvent.codec.decodeMessage(data)! as Map<String, dynamic>;
+          final Map<String, Object?> decoded =
+              SystemChannels.keyEvent.codec.decodeMessage(data)! as Map<String, dynamic>;
           result.complete(decoded['handled']! as bool);
-        }
+        },
       );
       return result.future;
     });
   }
 
   static final Map<String, PhysicalKeyboardKey> _debugNameToPhysicalKey = (() {
-    final Map<String, PhysicalKeyboardKey> result = <String, PhysicalKeyboardKey>{};
+    final result = <String, PhysicalKeyboardKey>{};
     for (final PhysicalKeyboardKey key in PhysicalKeyboardKey.knownPhysicalKeys) {
       final String? debugName = key.debugName;
       if (debugName != null) {
@@ -684,7 +692,7 @@ abstract final class KeyEventSimulator {
     return result!;
   }
 
-  static const KeyDataTransitMode _defaultTransitMode = KeyDataTransitMode.rawKeyData;
+  static const KeyDataTransitMode _defaultTransitMode = KeyDataTransitMode.keyDataThenRawKeyData;
 
   // The simulation transit mode for [simulateKeyDownEvent], [simulateKeyUpEvent],
   // and [simulateKeyRepeatEvent].
@@ -693,8 +701,8 @@ abstract final class KeyEventSimulator {
   // and delivered. For detailed introduction, see [KeyDataTransitMode] and
   // its values.
   //
-  // The `_transitMode` defaults to [KeyDataTransitMode.rawKeyEvent], and can be
-  // overridden with [debugKeyEventSimulatorTransitModeOverride]. In widget tests, it
+  // The `_transitMode` defaults to [KeyDataTransitMode.keyDataThenRawKeyData], and can
+  // be overridden with [debugKeyEventSimulatorTransitModeOverride]. In widget tests, it
   // is often set with [KeySimulationModeVariant].
   static KeyDataTransitMode get _transitMode {
     KeyDataTransitMode? result;
@@ -705,7 +713,13 @@ abstract final class KeyEventSimulator {
     return result ?? _defaultTransitMode;
   }
 
-  static String get _defaultPlatform => kIsWeb ? 'web' : Platform.operatingSystem;
+  /// Returns the transit mode that simulated key events are constructed
+  /// and delivered. For detailed introduction, see [KeyDataTransitMode]
+  /// and its values.
+  @visibleForTesting
+  static KeyDataTransitMode get transitMode => _transitMode;
+
+  static String get _defaultPlatform => kIsWeb ? 'web' : defaultTargetPlatform.name.toLowerCase();
 
   /// Simulates sending a hardware key down event.
   ///
@@ -714,7 +728,8 @@ abstract final class KeyEventSimulator {
   ///
   /// Specify `platform` as one of the platforms allowed in
   /// [Platform.operatingSystem] to make the event appear to be from that type of
-  /// system. Defaults to the operating system that the test is running on.
+  /// system. Defaults to "web" on web, and the operating system name based on
+  /// [defaultTargetPlatform] everywhere else.
   ///
   /// Keys that are down when the test completes are cleared after each test.
   ///
@@ -735,6 +750,7 @@ abstract final class KeyEventSimulator {
         return getKeyData(key, platform: platform!, physicalKey: physicalKey, character: character);
       });
     }
+
     switch (_transitMode) {
       case KeyDataTransitMode.rawKeyData:
         return simulateByRawEvent();
@@ -761,7 +777,8 @@ abstract final class KeyEventSimulator {
   ///
   /// Specify `platform` as one of the platforms allowed in
   /// [Platform.operatingSystem] to make the event appear to be from that type of
-  /// system. Defaults to the operating system that the test is running on.
+  /// system. Defaults to "web" on web, and the operating system name based on
+  /// [defaultTargetPlatform] everywhere else.
   ///
   /// Returns true if the key event was handled by the framework.
   ///
@@ -779,6 +796,7 @@ abstract final class KeyEventSimulator {
         return getKeyData(key, platform: platform!, isDown: false, physicalKey: physicalKey);
       });
     }
+
     switch (_transitMode) {
       case KeyDataTransitMode.rawKeyData:
         return simulateByRawEvent();
@@ -805,7 +823,8 @@ abstract final class KeyEventSimulator {
   ///
   /// Specify `platform` as one of the platforms allowed in
   /// [Platform.operatingSystem] to make the event appear to be from that type of
-  /// system. Defaults to the operating system that the test is running on.
+  /// system. Defaults to "web" on web, and the operating system name based on
+  /// [defaultTargetPlatform] everywhere else.
   ///
   /// Returns true if the key event was handled by the framework.
   ///
@@ -824,6 +843,7 @@ abstract final class KeyEventSimulator {
         return getKeyData(key, platform: platform!, physicalKey: physicalKey, character: character);
       });
     }
+
     switch (_transitMode) {
       case KeyDataTransitMode.rawKeyData:
         return simulateByRawEvent();
@@ -854,7 +874,8 @@ abstract final class KeyEventSimulator {
 ///
 /// Specify `platform` as one of the platforms allowed in
 /// [Platform.operatingSystem] to make the event appear to be from that type of
-/// system. Defaults to the operating system that the test is running on.
+/// system. Defaults to "web" on web, and the operating system name based on
+/// [defaultTargetPlatform] everywhere else.
 ///
 /// Keys that are down when the test completes are cleared after each test.
 ///
@@ -870,7 +891,12 @@ Future<bool> simulateKeyDownEvent(
   PhysicalKeyboardKey? physicalKey,
   String? character,
 }) async {
-  final bool handled = await KeyEventSimulator.simulateKeyDownEvent(key, platform: platform, physicalKey: physicalKey, character: character);
+  final bool handled = await KeyEventSimulator.simulateKeyDownEvent(
+    key,
+    platform: platform,
+    physicalKey: physicalKey,
+    character: character,
+  );
   final ServicesBinding binding = ServicesBinding.instance;
   if (!handled && binding is TestWidgetsFlutterBinding) {
     await binding.testTextInput.handleKeyDownEvent(key);
@@ -888,7 +914,8 @@ Future<bool> simulateKeyDownEvent(
 ///
 /// Specify `platform` as one of the platforms allowed in
 /// [Platform.operatingSystem] to make the event appear to be from that type of
-/// system. Defaults to the operating system that the test is running on.
+/// system. Defaults to "web" on web, and the operating system name based on
+/// [defaultTargetPlatform] everywhere else.
 ///
 /// Returns true if the key event was handled by the framework.
 ///
@@ -901,7 +928,11 @@ Future<bool> simulateKeyUpEvent(
   String? platform,
   PhysicalKeyboardKey? physicalKey,
 }) async {
-  final bool handled = await KeyEventSimulator.simulateKeyUpEvent(key, platform: platform, physicalKey: physicalKey);
+  final bool handled = await KeyEventSimulator.simulateKeyUpEvent(
+    key,
+    platform: platform,
+    physicalKey: physicalKey,
+  );
   final ServicesBinding binding = ServicesBinding.instance;
   if (!handled && binding is TestWidgetsFlutterBinding) {
     await binding.testTextInput.handleKeyUpEvent(key);
@@ -916,7 +947,8 @@ Future<bool> simulateKeyUpEvent(
 ///
 /// Specify `platform` as one of the platforms allowed in
 /// [Platform.operatingSystem] to make the event appear to be from that type of
-/// system. Defaults to the operating system that the test is running on.
+/// system. Defaults to "web" on web, and the operating system name based on
+/// [defaultTargetPlatform] everywhere else.
 ///
 /// Returns true if the key event was handled by the framework.
 ///
@@ -930,24 +962,53 @@ Future<bool> simulateKeyRepeatEvent(
   PhysicalKeyboardKey? physicalKey,
   String? character,
 }) {
-  return KeyEventSimulator.simulateKeyRepeatEvent(key, platform: platform, physicalKey: physicalKey, character: character);
+  return KeyEventSimulator.simulateKeyRepeatEvent(
+    key,
+    platform: platform,
+    physicalKey: physicalKey,
+    character: character,
+  );
 }
 
 /// A [TestVariant] that runs tests with transit modes set to different values
 /// of [KeyDataTransitMode].
+@Deprecated(
+  'No longer supported. Transit mode is always key data only. '
+  'This feature was deprecated after v3.18.0-2.0.pre.',
+)
 class KeySimulatorTransitModeVariant extends TestVariant<KeyDataTransitMode> {
   /// Creates a [KeySimulatorTransitModeVariant] that tests the given [values].
+  @Deprecated(
+    'No longer supported. Transit mode is always key data only. '
+    'This feature was deprecated after v3.18.0-2.0.pre.',
+  )
   const KeySimulatorTransitModeVariant(this.values);
 
   /// Creates a [KeySimulatorTransitModeVariant] for each value option of
   /// [KeyDataTransitMode].
-  KeySimulatorTransitModeVariant.all()
-    : this(KeyDataTransitMode.values.toSet());
+  @Deprecated(
+    'No longer supported. Transit mode is always key data only. '
+    'This feature was deprecated after v3.18.0-2.0.pre.',
+  )
+  KeySimulatorTransitModeVariant.all() : this(KeyDataTransitMode.values.toSet());
 
   /// Creates a [KeySimulatorTransitModeVariant] that only contains
   /// [KeyDataTransitMode.keyDataThenRawKeyData].
+  @Deprecated(
+    'No longer supported. Transit mode is always key data only. '
+    'This feature was deprecated after v3.18.0-2.0.pre.',
+  )
   KeySimulatorTransitModeVariant.keyDataThenRawKeyData()
     : this(<KeyDataTransitMode>{KeyDataTransitMode.keyDataThenRawKeyData});
+
+  /// Creates a [KeySimulatorTransitModeVariant] that only contains
+  /// [KeyDataTransitMode.rawKeyData].
+  @Deprecated(
+    'No longer supported. Transit mode is always key data only. '
+    'This feature was deprecated after v3.18.0-2.0.pre.',
+  )
+  KeySimulatorTransitModeVariant.rawKeyData()
+    : this(<KeyDataTransitMode>{KeyDataTransitMode.rawKeyData});
 
   @override
   final Set<KeyDataTransitMode> values;

@@ -1,0 +1,473 @@
+// Copyright 2014 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import 'package:code_assets/code_assets.dart';
+import 'package:file/memory.dart';
+import 'package:flutter_tools/src/base/common.dart';
+import 'package:flutter_tools/src/base/file_system.dart';
+import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/base/process.dart';
+import 'package:flutter_tools/src/isolated/native_assets/ios/native_assets.dart';
+import 'package:flutter_tools/src/isolated/native_assets/macos/native_assets.dart';
+import 'package:flutter_tools/src/isolated/native_assets/macos/native_assets_host.dart';
+import 'package:flutter_tools/src/isolated/native_assets/native_assets.dart';
+import 'package:flutter_tools/src/isolated/native_assets/native_assets_manifest.dart';
+
+import '../../../src/common.dart';
+import '../../../src/fake_process_manager.dart';
+
+void main() {
+  test('framework name', () {
+    expect(frameworkUri('libfoo.dylib', <String>{}), equals(Uri.file('foo.framework/foo')));
+    expect(frameworkUri('foo', <String>{}), equals(Uri.file('foo.framework/foo')));
+    expect(frameworkUri('foo_foo', <String>{}), equals(Uri.file('foo_foo.framework/foo_foo')));
+    expect(frameworkUri('foo-foo', <String>{}), equals(Uri.file('foo-foo.framework/foo-foo')));
+    expect(frameworkUri(r'foo$foo', <String>{}), equals(Uri.file('foofoo.framework/foofoo')));
+    expect(frameworkUri('foo.foo', <String>{}), equals(Uri.file('foo.foo.framework/foo.foo')));
+    expect(
+      frameworkUri('foo.1.2.3', <String>{}),
+      equals(Uri.file('foo.1.2.3.framework/foo.1.2.3')),
+    );
+    expect(
+      frameworkUri('libatoolongfilenameforaframework.dylib', <String>{}),
+      equals(Uri.file('atoolongfilenameforaframework.framework/atoolongfilenameforaframework')),
+    );
+  });
+
+  test('framework name conflicts', () {
+    final alreadyTakenNames = <String>{};
+    expect(frameworkUri('libfoo.dylib', alreadyTakenNames), equals(Uri.file('foo.framework/foo')));
+    expect(
+      frameworkUri('libfoo.dylib', alreadyTakenNames),
+      equals(Uri.file('foo1.framework/foo1')),
+    );
+    expect(
+      frameworkUri('libfoo.dylib', alreadyTakenNames),
+      equals(Uri.file('foo2.framework/foo2')),
+    );
+    expect(
+      frameworkUri('libatoolongfilenameforaframework.dylib', alreadyTakenNames),
+      equals(Uri.file('atoolongfilenameforaframework.framework/atoolongfilenameforaframework')),
+    );
+    expect(
+      frameworkUri('libatoolongfilenameforaframework.dylib', alreadyTakenNames),
+      equals(Uri.file('atoolongfilenameforaframework1.framework/atoolongfilenameforaframework1')),
+    );
+    expect(
+      frameworkUri('libatoolongfilenameforaframework.dylib', alreadyTakenNames),
+      equals(Uri.file('atoolongfilenameforaframework2.framework/atoolongfilenameforaframework2')),
+    );
+  });
+
+  group('parseOtoolArchitectureSections', () {
+    test('single architecture', () {
+      expect(
+        parseOtoolArchitectureSections('''
+/build/native_assets/ios/buz.framework/buz (architecture x86_64):
+@rpath/libfoo.dylib
+'''),
+        <Architecture, List<String>>{
+          Architecture.x64: <String>['@rpath/libfoo.dylib'],
+        },
+      );
+    });
+
+    test('single architecture but not specified', () {
+      expect(
+        parseOtoolArchitectureSections('''
+/build/native_assets/ios/buz.framework/buz:
+@rpath/libfoo.dylib
+'''),
+        <Architecture?, List<String>>{
+          null: <String>['@rpath/libfoo.dylib'],
+        },
+      );
+    });
+
+    test('multiple architectures', () {
+      expect(
+        parseOtoolArchitectureSections('''
+/build/native_assets/ios/buz.framework/buz (architecture x86_64):
+@rpath/libfoo.dylib
+/build/native_assets/ios/buz.framework/buz (architecture arm64):
+@rpath/libbar.dylib
+'''),
+        <Architecture, List<String>>{
+          Architecture.x64: <String>['@rpath/libfoo.dylib'],
+          Architecture.arm64: <String>['@rpath/libbar.dylib'],
+        },
+      );
+    });
+
+    test('multiple lines in section', () {
+      expect(
+        parseOtoolArchitectureSections('''
+/build/native_assets/ios/buz.framework/buz (architecture x86_64):
+@rpath/libfoo.dylib
+@rpath/libbar.dylib
+'''),
+        <Architecture, List<String>>{
+          Architecture.x64: <String>['@rpath/libfoo.dylib', '@rpath/libbar.dylib'],
+        },
+      );
+    });
+
+    test('trim each line in section', () {
+      expect(
+        parseOtoolArchitectureSections('''
+/build/native_assets/ios/buz.framework/buz (architecture x86_64):
+  @rpath/libfoo.dylib
+'''),
+        <Architecture, List<String>>{
+          Architecture.x64: <String>['@rpath/libfoo.dylib'],
+        },
+      );
+    });
+  });
+
+  test('fatAssetTargetLocations ignores cross-architecture conflicts', () {
+    final asset1 = FlutterCodeAsset(
+      codeAsset: CodeAsset(
+        package: 'my_package',
+        name: 'my_asset',
+        linkMode: DynamicLoadingBundled(),
+        file: Uri.file('libmy_asset.dylib'),
+      ),
+      os: OS.macOS,
+      architecture: Architecture.arm64,
+    );
+    final asset2 = FlutterCodeAsset(
+      codeAsset: CodeAsset(
+        package: 'my_package',
+        name: 'my_asset',
+        linkMode: DynamicLoadingBundled(),
+        file: Uri.file('libmy_asset.dylib'),
+      ),
+      os: OS.macOS,
+      architecture: Architecture.x64,
+    );
+
+    final Map<Uri, List<FlutterCodeAsset>> result = fatAssetTargetLocationsMacOS(
+      <FlutterCodeAsset>[asset1, asset2],
+      null,
+      logger: BufferLogger.test(),
+    );
+
+    expect(result.length, equals(1));
+    final Uri path = result.keys.single;
+    expect(path.path, equals('my_asset.framework/my_asset'));
+    expect(result[path]!.length, equals(2));
+  });
+
+  test('fatAssetTargetLocations handles conflicts between different assets', () {
+    final assetA1 = FlutterCodeAsset(
+      codeAsset: CodeAsset(
+        package: 'package_a',
+        name: 'my_asset',
+        linkMode: DynamicLoadingBundled(),
+        file: Uri.file('libfoo.dylib'),
+      ),
+      os: OS.macOS,
+      architecture: Architecture.arm64,
+    );
+    final assetB1 = FlutterCodeAsset(
+      codeAsset: CodeAsset(
+        package: 'package_b',
+        name: 'my_asset',
+        linkMode: DynamicLoadingBundled(),
+        file: Uri.file('libfoo.dylib'),
+      ),
+      os: OS.macOS,
+      architecture: Architecture.arm64,
+    );
+    final assetA2 = FlutterCodeAsset(
+      codeAsset: CodeAsset(
+        package: 'package_a',
+        name: 'my_asset',
+        linkMode: DynamicLoadingBundled(),
+        file: Uri.file('libfoo.dylib'),
+      ),
+      os: OS.macOS,
+      architecture: Architecture.x64,
+    );
+    final assetB2 = FlutterCodeAsset(
+      codeAsset: CodeAsset(
+        package: 'package_b',
+        name: 'my_asset',
+        linkMode: DynamicLoadingBundled(),
+        file: Uri.file('libfoo.dylib'),
+      ),
+      os: OS.macOS,
+      architecture: Architecture.x64,
+    );
+
+    final Map<Uri, List<FlutterCodeAsset>> result = fatAssetTargetLocationsMacOS(
+      <FlutterCodeAsset>[assetA1, assetB1, assetA2, assetB2],
+      null,
+      logger: BufferLogger.test(),
+    );
+
+    expect(result.length, equals(2));
+
+    final Uri pathA = result.keys.firstWhere((Uri k) => k.path == 'foo.framework/foo');
+    final Uri pathB = result.keys.firstWhere((Uri k) => k.path == 'foo1.framework/foo1');
+
+    expect(result[pathA]!.length, equals(2));
+    expect(result[pathA]!.contains(assetA1), isTrue);
+    expect(result[pathA]!.contains(assetA2), isTrue);
+
+    expect(result[pathB]!.length, equals(2));
+    expect(result[pathB]!.contains(assetB1), isTrue);
+    expect(result[pathB]!.contains(assetB2), isTrue);
+  });
+
+  // The manifest entry is the string the Dart VM passes to `dlopen`, and dyld
+  // recognizes a library it has already loaded by the name it is opened with.
+  // If that name is not the framework's install name, dyld has to fall back on
+  // the file's identity on disk, which a rebuild changes underneath a running
+  // debug instance. The asset then gets mapped a second time. See
+  // https://github.com/flutter/flutter/issues/190799.
+  test('macOS manifest entry is the framework install name', () {
+    final asset = FlutterCodeAsset(
+      codeAsset: CodeAsset(
+        package: 'my_package',
+        name: 'my_asset',
+        linkMode: DynamicLoadingBundled(),
+        file: Uri.file('libmy_asset.dylib'),
+      ),
+      os: OS.macOS,
+      architecture: Architecture.arm64,
+    );
+    final assets = <FlutterCodeAsset>[asset];
+
+    final Map<FlutterCodeAsset, FlutterCodeAssetTargetLocation> manifest =
+        assetTargetLocationsMacOS(assets, null, logger: BufferLogger.test());
+    expect(
+      (manifest[asset]!.runtimePath as NativeAssetAbsolutePath).path,
+      equals('@rpath/my_asset.framework/my_asset'),
+    );
+
+    // The framework itself is still bundled without the install name prefix.
+    final Map<Uri, List<FlutterCodeAsset>> bundled = fatAssetTargetLocationsMacOS(
+      assets,
+      null,
+      logger: BufferLogger.test(),
+    );
+    expect(bundled.keys.single.path, equals('my_asset.framework/my_asset'));
+  });
+
+  test('macOS flutter tester manifest entry is the host path', () {
+    final asset = FlutterCodeAsset(
+      codeAsset: CodeAsset(
+        package: 'my_package',
+        name: 'my_asset',
+        linkMode: DynamicLoadingBundled(),
+        file: Uri.file('libmy_asset.dylib'),
+      ),
+      os: OS.macOS,
+      architecture: Architecture.arm64,
+    );
+
+    // The tester loads the dylib from where it was built instead of from a
+    // bundle, and its install name is set to that same absolute path.
+    final Map<FlutterCodeAsset, FlutterCodeAssetTargetLocation> manifest =
+        assetTargetLocationsMacOS(
+          <FlutterCodeAsset>[asset],
+          Uri.parse('file:///build/native_assets/macos/'),
+          logger: BufferLogger.test(),
+        );
+    expect(
+      (manifest[asset]!.runtimePath as NativeAssetAbsolutePath).path,
+      equals(Uri.parse('file:///build/native_assets/macos/libmy_asset.dylib').toFilePath()),
+    );
+  });
+
+  test('iOS manifest entry is the framework install name', () {
+    final asset = FlutterCodeAsset(
+      codeAsset: CodeAsset(
+        package: 'my_package',
+        name: 'my_asset',
+        linkMode: DynamicLoadingBundled(),
+        file: Uri.file('libmy_asset.dylib'),
+      ),
+      os: OS.iOS,
+      architecture: Architecture.arm64,
+    );
+    final assets = <FlutterCodeAsset>[asset];
+
+    final Map<FlutterCodeAsset, FlutterCodeAssetTargetLocation> manifest = assetTargetLocationsIOS(
+      assets,
+      logger: BufferLogger.test(),
+    );
+    expect(
+      (manifest[asset]!.runtimePath as NativeAssetAbsolutePath).path,
+      equals('@rpath/my_asset.framework/my_asset'),
+    );
+
+    final Map<Uri, List<FlutterCodeAsset>> bundled = fatAssetTargetLocationsIOS(
+      assets,
+      logger: BufferLogger.test(),
+    );
+    expect(bundled.keys.single.path, equals('my_asset.framework/my_asset'));
+  });
+
+  group('setInstallNamesDylib', () {
+    // The file is not at its new install name, so the commands show which one
+    // they are given.
+    const dylibPath = '/staging/libfoo.dylib';
+    const newInstallName = '/project/build/native_assets/macos/libfoo.dylib';
+    const oldToNewInstallNames = <String, String>{
+      '@rpath/libfoo.dylib': newInstallName,
+      '@rpath/libbar.dylib': '/project/build/native_assets/macos/libbar.dylib',
+    };
+    const changeDependencies = <String>[
+      '-change',
+      '@rpath/libfoo.dylib',
+      newInstallName,
+      '-change',
+      '@rpath/libbar.dylib',
+      '/project/build/native_assets/macos/libbar.dylib',
+    ];
+    const doesNotFit =
+        "error: install_name_tool: changing install names or rpaths can't be redone for: "
+        '$dylibPath (for architecture arm64) because larger updated load commands do '
+        'not fit (the program must be relinked, and you may need to use -headerpad or '
+        '-headerpad_max_install_names)';
+
+    late FakeProcessManager processManager;
+    late ProcessUtils processUtils;
+    late File dylibFile;
+
+    setUp(() {
+      processManager = FakeProcessManager.empty();
+      processUtils = ProcessUtils(processManager: processManager, logger: BufferLogger.test());
+      dylibFile = MemoryFileSystem.test().file(dylibPath);
+    });
+
+    FakeCommand setId({int exitCode = 0, String stderr = ''}) => FakeCommand(
+      command: const <String>[
+        'xcrun',
+        'install_name_tool',
+        '-id',
+        newInstallName,
+        ...changeDependencies,
+        dylibPath,
+      ],
+      exitCode: exitCode,
+      stderr: stderr,
+    );
+
+    Matcher throwsToolExitWith(Matcher message) =>
+        throwsA(isA<ToolExit>().having((ToolExit e) => e.message, 'message', message));
+
+    FakeCommand changeOnlyDependencies({int exitCode = 0, String stderr = ''}) => FakeCommand(
+      command: const <String>['xcrun', 'install_name_tool', ...changeDependencies, dylibPath],
+      exitCode: exitCode,
+      stderr: stderr,
+    );
+
+    test('sets the install name and changes the dependencies', () async {
+      processManager.addCommand(setId());
+
+      expect(
+        await setInstallNamesDylib(
+          dylibFile,
+          newInstallName,
+          oldToNewInstallNames,
+          processUtils: processUtils,
+        ),
+        isTrue,
+      );
+      expect(processManager, hasNoRemainingExpectations);
+    });
+
+    test('keeps the install name when the new one does not fit, if asked to', () async {
+      processManager.addCommands(<FakeCommand>[
+        setId(exitCode: 1, stderr: doesNotFit),
+        changeOnlyDependencies(),
+      ]);
+
+      expect(
+        await setInstallNamesDylib(
+          dylibFile,
+          newInstallName,
+          oldToNewInstallNames,
+          processUtils: processUtils,
+          keepInstallNameIfItDoesNotFit: true,
+        ),
+        isFalse,
+      );
+      expect(processManager, hasNoRemainingExpectations);
+    });
+
+    test('fails when the new install name does not fit, by default', () async {
+      processManager.addCommand(setId(exitCode: 1, stderr: doesNotFit));
+
+      await expectLater(
+        setInstallNamesDylib(
+          dylibFile,
+          newInstallName,
+          oldToNewInstallNames,
+          processUtils: processUtils,
+        ),
+        throwsToolExitWith(
+          allOf(contains('larger updated load commands do not fit'), isNot(contains('also after'))),
+        ),
+      );
+      expect(processManager, hasNoRemainingExpectations);
+    });
+
+    test(
+      'fails on any other install_name_tool error, even if asked to keep the install name',
+      () async {
+        processManager.addCommand(
+          setId(exitCode: 1, stderr: 'error: install_name_tool: is not a Mach-O file'),
+        );
+
+        await expectLater(
+          setInstallNamesDylib(
+            dylibFile,
+            newInstallName,
+            oldToNewInstallNames,
+            processUtils: processUtils,
+            keepInstallNameIfItDoesNotFit: true,
+          ),
+          throwsToolExitWith(
+            allOf(contains('is not a Mach-O file'), isNot(contains('also after'))),
+          ),
+        );
+        expect(processManager, hasNoRemainingExpectations);
+      },
+    );
+
+    test('fails when the dependencies cannot be changed either', () async {
+      final String doesNotFitEither = doesNotFit.replaceFirst('arm64', 'x86_64');
+      processManager.addCommands(<FakeCommand>[
+        setId(exitCode: 1, stderr: doesNotFit),
+        changeOnlyDependencies(exitCode: 1, stderr: doesNotFitEither),
+      ]);
+
+      await expectLater(
+        setInstallNamesDylib(
+          dylibFile,
+          newInstallName,
+          oldToNewInstallNames,
+          processUtils: processUtils,
+          keepInstallNameIfItDoesNotFit: true,
+        ),
+        throwsToolExitWith(
+          equals(
+            'Failed to change install names in $dylibFile, also after keeping its install name:\n'
+            'id -> $newInstallName\n'
+            'dependencies -> $newInstallName\n'
+            '$doesNotFit\n'
+            'After keeping the install name:\n'
+            '$doesNotFitEither',
+          ),
+        ),
+      );
+      expect(processManager, hasNoRemainingExpectations);
+    });
+  });
+}

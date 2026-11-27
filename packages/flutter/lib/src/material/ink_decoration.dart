@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'ink_well.dart';
+library;
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
@@ -155,7 +158,8 @@ class Ink extends StatefulWidget {
     this.child,
   }) : assert(padding == null || padding.isNonNegative),
        assert(decoration == null || decoration.debugAssertIsValid()),
-       assert(color == null || decoration == null,
+       assert(
+         color == null || decoration == null,
          'Cannot provide both a color and a decoration\n'
          'The color argument is just a shorthand for "decoration: BoxDecoration(color: color)".',
        ),
@@ -169,9 +173,8 @@ class Ink extends StatefulWidget {
   /// properties of the [DecorationImage] of that [BoxDecoration] are set
   /// according to the arguments passed to this method.
   ///
-  /// The `image` argument must not be null. If there is no
-  /// intention to render anything on this image, consider using a
-  /// [Container] with a [BoxDecoration.image] instead. The `onImageError`
+  /// If there is no intention to render anything on this image, consider using
+  /// a [Container] with a [BoxDecoration.image] instead. The `onImageError`
   /// argument may be provided to listen for errors when resolving the image.
   ///
   /// The `alignment`, `repeat`, and `matchTextDirection` arguments must not
@@ -237,14 +240,12 @@ class Ink extends StatefulWidget {
   final double? height;
 
   EdgeInsetsGeometry get _paddingIncludingDecoration {
-    if (decoration == null) {
-      return padding ?? EdgeInsets.zero;
-    }
-    final EdgeInsetsGeometry decorationPadding = decoration!.padding;
-    if (padding == null) {
-      return decorationPadding;
-    }
-    return padding!.add(decorationPadding);
+    return switch ((padding, decoration?.padding)) {
+      (null, null) => EdgeInsets.zero,
+      (null, final EdgeInsetsGeometry padding) => padding,
+      (final EdgeInsetsGeometry padding, null) => padding,
+      _ => padding!.add(decoration!.padding),
+    };
   }
 
   @override
@@ -302,11 +303,7 @@ class _InkState extends State<Ink> {
       child: Builder(builder: _build),
     );
     if (widget.width != null || widget.height != null) {
-      result = SizedBox(
-        width: widget.width,
-        height: widget.height,
-        child: result,
-      );
+      result = SizedBox(width: widget.width, height: widget.height, child: result);
     }
     return result;
   }
@@ -332,11 +329,11 @@ class InkDecoration extends InkFeature {
   InkDecoration({
     required Decoration? decoration,
     bool isVisible = true,
-    required ImageConfiguration configuration,
+    required this._configuration,
     required super.controller,
     required super.referenceBox,
     super.onRemoved,
-  }) : _configuration = configuration {
+  }) {
     this.decoration = decoration;
     this.isVisible = isVisible;
     controller.addInkFeature(this);
@@ -404,9 +401,7 @@ class InkDecoration extends InkFeature {
       return;
     }
     final Offset? originOffset = MatrixUtils.getAsTranslation(transform);
-    final ImageConfiguration sizedConfiguration = configuration.copyWith(
-      size: referenceBox.size,
-    );
+    final ImageConfiguration sizedConfiguration = configuration.copyWith(size: referenceBox.size);
     if (originOffset == null) {
       canvas.save();
       canvas.transform(transform.storage);

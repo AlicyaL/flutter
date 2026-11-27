@@ -4,15 +4,10 @@ Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file. -->
 <html>
     <head>
+        <meta charset="UTF-8">
         <title>Web Integration Tests</title>
-        <script>
-          // Use the local CanvasKit bundle instead of the CDN to reduce test flakiness.
-          window.flutterConfiguration = {
-            canvasKitBaseUrl: "/canvaskit/"
-          };
-        </script>
     </head>
     <body>
-        <script src="main.dart.js"></script>
+      <script src="flutter_bootstrap.js" async></script>
     </body>
 </html>

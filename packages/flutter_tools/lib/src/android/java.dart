@@ -13,25 +13,38 @@ import '../base/process.dart';
 import '../base/version.dart';
 import 'android_studio.dart';
 
-const String _javaExecutable = 'java';
+const _javaExecutable = 'java';
+
+enum JavaSource {
+  /// JDK bundled with latest Android Studio installation.
+  androidStudio,
+
+  /// JDK specified by the system's JAVA_HOME environment variable.
+  javaHome,
+
+  /// JDK available through the system's PATH environment variable.
+  path,
+
+  /// JDK specified in Flutter's configuration.
+  flutterConfig,
+}
+
+typedef _JavaHomePathWithSource = ({String path, JavaSource source});
 
 /// Represents an installation of Java.
 class Java {
-
   Java({
     required this.javaHome,
     required this.binaryPath,
+    required this.javaSource,
     required Logger logger,
-    required FileSystem fileSystem,
-    required OperatingSystemUtils os,
-    required Platform platform,
+    required this._fileSystem,
+    required this._os,
+    required this._platform,
     required ProcessManager processManager,
-  }): _logger = logger,
-      _fileSystem = fileSystem,
-      _os = os,
-      _platform = platform,
-      _processManager = processManager,
-      _processUtils = ProcessUtils(processManager: processManager, logger: logger);
+  }) : _logger = logger,
+       _processManager = processManager,
+       _processUtils = ProcessUtils(processManager: processManager, logger: logger);
 
   /// Within the Java ecosystem, this environment variable is typically set
   /// the install location of a Java Runtime Environment (JRE) or Java
@@ -53,40 +66,45 @@ class Java {
   ///
   /// Returns null if no java binary could be found.
   static Java? find({
+    required AndroidStudio? Function() androidStudioBuilder,
     required Config config,
-    required AndroidStudio? androidStudio,
-    required Logger logger,
     required FileSystem fileSystem,
+    required Logger logger,
     required Platform platform,
     required ProcessManager processManager,
   }) {
-    final OperatingSystemUtils os = OperatingSystemUtils(
+    final os = OperatingSystemUtils(
       fileSystem: fileSystem,
       logger: logger,
       platform: platform,
-      processManager: processManager
+      processManager: processManager,
     );
-    final String? home = _findJavaHome(
+    final _JavaHomePathWithSource? home = _findJavaHome(
+      androidStudioBuilder: androidStudioBuilder,
       config: config,
       logger: logger,
-      androidStudio: androidStudio,
-      platform: platform
+      platform: platform,
     );
     final String? binary = _findJavaBinary(
       logger: logger,
-      javaHome: home,
+      javaHome: home?.path,
       fileSystem: fileSystem,
       operatingSystemUtils: os,
-      platform: platform
+      platform: platform,
     );
 
     if (binary == null) {
       return null;
     }
 
+    // If javaHome == null and binary is not null, it means that
+    // binary obtained from PATH as fallback.
+    final JavaSource javaSource = home?.source ?? JavaSource.path;
+
     return Java(
-      javaHome: home,
+      javaHome: home?.path,
       binaryPath: binary,
+      javaSource: javaSource,
       logger: logger,
       fileSystem: fileSystem,
       os: os,
@@ -111,6 +129,12 @@ class Java {
   /// to this class instead.
   final String binaryPath;
 
+  /// Indicates the source from where the Java runtime was located.
+  ///
+  /// This information is useful for debugging and logging purposes to track
+  /// which source was used to locate the Java runtime environment.
+  final JavaSource javaSource;
+
   final Logger _logger;
   final FileSystem _fileSystem;
   final OperatingSystemUtils _os;
@@ -124,40 +148,76 @@ class Java {
   ///
   /// This map should be used as the environment when invoking any Java-dependent
   /// processes, such as Gradle or Android SDK tools (avdmanager, sdkmanager, etc.)
-  Map<String, String> get environment {
-    return <String, String>{
-      if (javaHome != null) javaHomeEnvironmentVariable: javaHome!,
-      'PATH': _fileSystem.path.dirname(binaryPath) +
-                        _os.pathVarSeparator +
-                        _platform.environment['PATH']!,
-    };
+  Map<String, String> get environment => <String, String>{
+    javaHomeEnvironmentVariable: ?javaHome,
+    'PATH':
+        _fileSystem.path.dirname(binaryPath) +
+        _os.pathVarSeparator +
+        _platform.environment['PATH']!,
+  };
+
+  /// JVM flag that grants native access to code on the class path.
+  static const enableNativeAccessFlag = '--enable-native-access=ALL-UNNAMED';
+
+  /// Returns an environment variable map for invoking Gradle.
+  ///
+  /// This is [environment], plus [enableNativeAccessFlag] appended to
+  /// `GRADLE_OPTS`. The Gradle client loads a native library via
+  /// `System::load`, which on JDK 24+ prints a warning to stderr unless native
+  /// access is enabled. On earlier JDKs, the flag has no effect.
+  ///
+  /// See: https://openjdk.org/jeps/472.
+  Map<String, String> get gradleEnvironment {
+    final Map<String, String> env = environment;
+    final String existingOpts = _platform.environment['GRADLE_OPTS']?.trim() ?? '';
+    if (existingOpts.contains('--enable-native-access')) {
+      return env;
+    }
+    env['GRADLE_OPTS'] = existingOpts.isEmpty
+        ? enableNativeAccessFlag
+        : '$existingOpts $enableNativeAccessFlag';
+    return env;
   }
 
   /// Returns the version of java in the format \d(.\d)+(.\d)+
   /// Returns null if version could not be determined.
   late final Version? version = (() {
-    final RunResult result = _processUtils.runSync(
-      <String>[binaryPath, '--version'],
-      environment: environment,
-    );
+    if (!canRun()) {
+      return null;
+    }
+
+    final RunResult result = _processUtils.runSync(<String>[
+      binaryPath,
+      '--version',
+    ], environment: environment);
     if (result.exitCode != 0) {
-      _logger.printTrace('java --version failed: exitCode: ${result.exitCode}'
-        ' stdout: ${result.stdout} stderr: ${result.stderr}');
+      _logger.printTrace(
+        'java --version failed: exitCode: ${result.exitCode}'
+        ' stdout: ${result.stdout} stderr: ${result.stderr}',
+      );
+      return null;
     }
     final String rawVersionOutput = result.stdout;
     final List<String> versionLines = rawVersionOutput.split('\n');
     // Should look something like 'openjdk 19.0.2 2023-01-17'.
     final String longVersionText = versionLines.length >= 2 ? versionLines[1] : versionLines[0];
 
-    // The contents that matter come in the format '11.0.18' or '1.8.0_202'.
-    final RegExp jdkVersionRegex = RegExp(r'\d+\.\d+(\.\d+(?:_\d+)?)?');
-    final Iterable<RegExpMatch> matches =
-        jdkVersionRegex.allMatches(rawVersionOutput);
+    // The contents that matter come in the format '11.0.18', '1.8.0_202 or 21'.
+    final jdkVersionRegex = RegExp(r'(?<version>\d+(\.\d+(\.\d+(?:_\d+)?)?)?)');
+    final Iterable<RegExpMatch> matches = jdkVersionRegex.allMatches(rawVersionOutput);
     if (matches.isEmpty) {
+      // Fallback to second string format like "java 21.0.1 2023-09-19 LTS"
+      final secondJdkVersionRegex = RegExp(
+        r'java\s+(?<version>\d+(\.\d+)?(\.\d+)?)\s+\d\d\d\d-\d\d-\d\d',
+      );
+      final RegExpMatch? match = secondJdkVersionRegex.firstMatch(versionLines[0]);
+      if (match != null) {
+        return Version.parse(match.namedGroup('version'));
+      }
       _logger.printWarning(_formatJavaVersionWarning(rawVersionOutput));
       return null;
     }
-    final String? version = matches.first.group(0);
+    final String? version = matches.first.namedGroup('version');
     if (version == null || version.split('_').isEmpty) {
       _logger.printWarning(_formatJavaVersionWarning(rawVersionOutput));
       return null;
@@ -183,25 +243,25 @@ class Java {
   }
 }
 
-String? _findJavaHome({
+_JavaHomePathWithSource? _findJavaHome({
+  required AndroidStudio? Function() androidStudioBuilder,
   required Config config,
   required Logger logger,
-  required AndroidStudio? androidStudio,
   required Platform platform,
 }) {
   final Object? configured = config.getValue('jdk-dir');
   if (configured != null) {
-    return configured as String;
+    return (path: configured as String, source: JavaSource.flutterConfig);
   }
 
-  final String? androidStudioJavaPath = androidStudio?.javaPath;
+  final String? androidStudioJavaPath = androidStudioBuilder()?.javaPath;
   if (androidStudioJavaPath != null) {
-    return androidStudioJavaPath;
+    return (path: androidStudioJavaPath, source: JavaSource.androidStudio);
   }
 
   final String? javaHomeEnv = platform.environment[Java.javaHomeEnvironmentVariable];
   if (javaHomeEnv != null) {
-    return javaHomeEnv;
+    return (path: javaHomeEnv, source: JavaSource.javaHome);
   }
   return null;
 }
@@ -225,8 +285,8 @@ String? _findJavaBinary({
 // the version of java along with the output.
 String _formatJavaVersionWarning(String javaVersionRaw) {
   return 'Could not parse java version from: \n'
-    '$javaVersionRaw \n'
-    'If there is a version please look for an existing bug '
-    'https://github.com/flutter/flutter/issues/ '
-    'and if one does not exist file a new issue.';
+      '$javaVersionRaw \n'
+      'If there is a version please look for an existing bug '
+      'https://github.com/flutter/flutter/issues/ '
+      'and if one does not exist file a new issue.';
 }

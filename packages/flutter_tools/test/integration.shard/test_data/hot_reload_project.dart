@@ -6,13 +6,15 @@ import '../test_utils.dart';
 import 'project.dart';
 
 class HotReloadProject extends Project {
-  HotReloadProject({super.indexHtml});
+  HotReloadProject({super.indexHtml, this.constApp = false});
+
+  final bool constApp;
 
   @override
-  final String pubspec = '''
+  final pubspec = '''
   name: test
   environment:
-    sdk: '>=3.0.0-0 <4.0.0'
+    sdk: ^3.7.0-0
 
   dependencies:
     flutter:
@@ -20,7 +22,8 @@ class HotReloadProject extends Project {
   ''';
 
   @override
-  final String main = r'''
+  String get main =>
+      '''
   import 'package:flutter/material.dart';
   import 'package:flutter/scheduler.dart';
   import 'package:flutter/services.dart';
@@ -31,20 +34,14 @@ class HotReloadProject extends Project {
     WidgetsFlutterBinding.ensureInitialized();
     final ByteData message = const StringCodec().encodeMessage('AppLifecycleState.resumed')!;
     await ServicesBinding.instance!.defaultBinaryMessenger.handlePlatformMessage('flutter/lifecycle', message, (_) { });
-    // See https://github.com/flutter/flutter/issues/86202
-    if (kIsWeb) {
-      while (true) {
-        runApp(MyApp());
-        await Future.delayed(const Duration(seconds: 1));
-      }
-    } else {
-     runApp(MyApp());
-    }
+    runApp(${constApp ? 'const ' : ''}MyApp());
   }
 
   int count = 1;
 
   class MyApp extends StatelessWidget {
+    ${constApp ? 'const MyApp({super.key});' : ''}
+
     @override
     Widget build(BuildContext context) {
       // This method gets called each time we hot reload, during reassemble.
@@ -53,7 +50,7 @@ class HotReloadProject extends Project {
       // hot reloading worked:
       // printHotReloadWorked();
 
-      print('((((TICK $count))))');
+      print('((((TICK \$count))))');
       // tick 1 = startup warmup frame
       // tick 2 = hot reload warmup reassemble frame
       // after that there's a post-hot-reload frame scheduled by the tool that
@@ -77,10 +74,20 @@ class HotReloadProject extends Project {
     }
   }
 
-  void printHotReloadWorked() {
+  Future<void> printHotReloadWorked() async {
     // The call to this function is uncommented by a test to verify that hot
     // reloading worked.
     print('(((((RELOAD WORKED)))))');
+
+    // We need to insist here for `const` Apps, so print statements don't
+    // get lost between the browser and the test driver.
+    // See: https://github.com/flutter/flutter/issues/86202
+    if (kIsWeb) {
+      while (true) {
+        await Future.delayed(const Duration(seconds: 1));
+        print('(((((RELOAD WORKED)))))');
+      }
+    }
   }
   ''';
 
@@ -98,6 +105,14 @@ class HotReloadProject extends Project {
     writeFile(
       fileSystem.path.join(dir.path, 'lib', 'main.dart'),
       newMainContents,
+      writeFutureModifiedDate: true,
+    );
+  }
+
+  void restoreOriginalMain() {
+    writeFile(
+      fileSystem.path.join(dir.path, 'lib', 'main.dart'),
+      main,
       writeFutureModifiedDate: true,
     );
   }

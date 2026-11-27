@@ -32,7 +32,8 @@ class CycleException implements Exception {
   final Set<Target> targets;
 
   @override
-  String toString() => 'Dependency cycle detected in build: '
+  String toString() =>
+      'Dependency cycle detected in build: '
       '${targets.map((Target target) => target.name).join(' -> ')}';
 }
 
@@ -91,5 +92,24 @@ class MissingDefineException implements Exception {
   String toString() {
     return 'Target $target required define $define '
         'but it was not provided';
+  }
+}
+
+/// An exception thrown when an extension-defined assemble target fails.
+class ExtensionAssembleException implements Exception {
+  const ExtensionAssembleException(this.target, {this.errorMessage});
+
+  /// The name of the assemble target that failed.
+  final String target;
+
+  /// The optional failure message returned by the tool extension.
+  final String? errorMessage;
+
+  @override
+  String toString() {
+    final String? message = errorMessage;
+    return message != null && message.isNotEmpty
+        ? 'Extension assemble target "$target" failed: $message'
+        : 'Extension assemble target "$target" failed.';
   }
 }

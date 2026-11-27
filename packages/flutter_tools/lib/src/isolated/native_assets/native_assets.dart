@@ -1,0 +1,1041 @@
+// Copyright 2014 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// Logic for native assets shared between all host OSes.
+
+import 'package:code_assets/code_assets.dart';
+import 'package:data_assets/data_assets.dart';
+import 'package:hooks/hooks.dart';
+import 'package:hooks_runner/hooks_runner.dart';
+import 'package:logging/logging.dart' as logging;
+import 'package:package_config/package_config_types.dart';
+import 'package:process/process.dart';
+
+import '../../base/common.dart';
+import '../../base/error_handling_io.dart';
+import '../../base/file_system.dart';
+import '../../base/logger.dart';
+import '../../base/platform.dart';
+import '../../base/process.dart';
+import '../../build_info.dart';
+import '../../build_system/exceptions.dart';
+import '../../context/android_context.dart' show AndroidSdkProvider;
+import '../../features.dart' show FeatureFlags;
+import '../../windows/visual_studio.dart';
+import 'android/native_assets.dart';
+import 'dart_hook_result.dart';
+import 'ios/native_assets.dart';
+import 'macos/native_assets.dart';
+import 'macos/native_assets_host.dart';
+import 'native_assets_manifest.dart';
+import 'targets.dart';
+
+/// The serialized results of running build hooks for all packages.
+typedef SerializedBuildResults = Map<String, Map<String, Object?>>;
+
+/// A [CodeAsset] for a specific target [os] and [architecture].
+///
+/// Flutter builds [CodeAsset]s for multiple architectures (on MacOS and iOS).
+/// This class distinguishes the (otherwise identical) [codeAsset]s on different
+/// architectures.
+class FlutterCodeAsset {
+  FlutterCodeAsset({required this.codeAsset, required this.os, required this.architecture});
+
+  final CodeAsset codeAsset;
+  final OS os;
+  final Architecture architecture;
+
+  /// The target string identifier (e.g. `macos_arm64`, `android_arm64`) used
+  /// in `NativeAssetsManifest.json`.
+  String get targetString => '${os.name}_${architecture.name}';
+}
+
+/// Matching [CodeAsset] and [DataAsset] in native assets - but Flutter could
+/// support more asset types in the future.
+enum SupportedAssetTypes { codeAssets, dataAssets }
+
+/// Hook options specific to building code assets.
+final class BuildCodeAssetsOptions {
+  const BuildCodeAssetsOptions({required this.appBuildDirectory});
+
+  /// The build directory of the main app build, e.g. `/path/to/app/build`.
+  ///
+  /// Depending on the target platform, we may try to lookup compiler options
+  /// based on files in this directory to align code assets toolchains with the
+  /// main app build.
+  ///
+  /// Null for hook invocations not associated with an app build (e.g. widget
+  /// tests).
+  final Directory? appBuildDirectory;
+}
+
+/// Invokes both build and link hooks of all transitive Dart package hooks and
+/// prepares assets to be included in the native build.
+///
+/// The returned [DartHooksResult] contains the aggregated assets (code and data)
+/// from both build and link stages, and the union of dependencies from both
+/// stages.
+///
+/// The `buildStart` timestamp in the result reflects the start of the whole
+/// process (before build hooks run).
+Future<DartHooksResult> runFlutterSpecificHooks({
+  required Map<String, String> environmentDefines,
+  required FlutterNativeAssetsBuildRunner buildRunner,
+  required TargetPlatform targetPlatform,
+  required Uri projectUri,
+  required FileSystem fileSystem,
+  required FeatureFlags featureFlags,
+  required Logger logger,
+  required BuildCodeAssetsOptions? buildCodeAssets,
+  required bool buildDataAssets,
+  required File? recordedUsesFile,
+  AndroidSdkProvider? androidSdkProvider,
+  VisualStudio? visualStudio,
+}) async {
+  if (!await _hookRunRequired(buildRunner, featureFlags: featureFlags, logger: logger)) {
+    return DartHooksResult.empty();
+  }
+
+  final buildStart = DateTime.now();
+
+  final (:SerializedBuildResults results, buildResult: _) = await runFlutterSpecificBuildHooks(
+    androidSdkProvider: androidSdkProvider,
+    environmentDefines: environmentDefines,
+    buildRunner: buildRunner,
+    targetPlatform: targetPlatform,
+    projectUri: projectUri,
+    fileSystem: fileSystem,
+    featureFlags: featureFlags,
+    logger: logger,
+    buildCodeAssets: buildCodeAssets,
+    buildDataAssets: buildDataAssets,
+    visualStudio: visualStudio,
+  );
+
+  final BuildMode buildMode = _getBuildMode(
+    environmentDefines,
+    targetPlatform == TargetPlatform.tester,
+  );
+  final bool linkingEnabled = _nativeAssetsLinkingEnabled(buildMode);
+  final DartHooksResult linkResult;
+  if (linkingEnabled) {
+    linkResult = await runFlutterSpecificLinkHooks(
+      androidSdkProvider: androidSdkProvider,
+      environmentDefines: environmentDefines,
+      buildRunner: buildRunner,
+      targetPlatform: targetPlatform,
+      projectUri: projectUri,
+      fileSystem: fileSystem,
+      featureFlags: featureFlags,
+      logger: logger,
+      buildCodeAssets: buildCodeAssets,
+      buildDataAssets: buildDataAssets,
+      buildResults: results,
+      recordedUsesFile: recordedUsesFile,
+      visualStudio: visualStudio,
+    );
+  } else {
+    linkResult = DartHooksResult.empty();
+  }
+
+  final DartHooksResult combinedResult = combineBuildAndLinkResults(
+    environmentDefines: environmentDefines,
+    targetPlatform: targetPlatform,
+    fileSystem: fileSystem,
+    featureFlags: featureFlags,
+    buildCodeAssets: buildCodeAssets,
+    buildDataAssets: buildDataAssets,
+    buildResults: results,
+    linkResult: linkResult,
+  );
+
+  return DartHooksResult(
+    buildStart: buildStart,
+    buildEnd: combinedResult.buildEnd,
+    codeAssets: combinedResult.codeAssets,
+    dataAssets: combinedResult.dataAssets,
+    dependencies: combinedResult.dependencies,
+  );
+}
+
+/// Invokes the build hooks of all transitive Dart package hooks.
+///
+/// Returns the serialized build results per target and the list of dependencies
+/// collected during the build stage.
+Future<({SerializedBuildResults results, DartHooksResult buildResult})>
+runFlutterSpecificBuildHooks({
+  required AndroidSdkProvider? androidSdkProvider,
+  required Map<String, String> environmentDefines,
+  required FlutterNativeAssetsBuildRunner buildRunner,
+  required TargetPlatform targetPlatform,
+  required Uri projectUri,
+  required FileSystem fileSystem,
+  required FeatureFlags featureFlags,
+  required Logger logger,
+  required BuildCodeAssetsOptions? buildCodeAssets,
+  required bool buildDataAssets,
+  required VisualStudio? visualStudio,
+}) async {
+  if (!await _hookRunRequired(buildRunner, featureFlags: featureFlags, logger: logger)) {
+    return (results: const <String, Map<String, Object?>>{}, buildResult: DartHooksResult.empty());
+  }
+
+  final buildStart = DateTime.now();
+
+  final (
+    targets: List<AssetBuildTarget> targets,
+    buildMode: BuildMode buildMode,
+    linkingEnabled: bool linkingEnabled,
+  ) = await _setupHooks(
+    androidSdkProvider: androidSdkProvider,
+    environmentDefines: environmentDefines,
+    buildRunner: buildRunner,
+    targetPlatform: targetPlatform,
+    fileSystem: fileSystem,
+    featureFlags: featureFlags,
+    buildCodeAssets: buildCodeAssets,
+    buildDataAssets: buildDataAssets,
+    visualStudio: visualStudio,
+  );
+
+  final String targetString = targets
+      .map((AssetBuildTarget target) => target.targetString)
+      .join(', ');
+  logger.printTrace('Running build hooks for $targetString.');
+
+  final results = <String, Map<String, Object?>>{};
+  final dependencies = <Uri>{};
+  final codeAssets = <FlutterCodeAsset>[];
+  final dataAssets = <DataAsset>[];
+
+  for (var i = 0; i < targets.length; i++) {
+    final AssetBuildTarget target = targets[i];
+    // Only run non-code extensions (like data assets) for the first target,
+    // as they are architecture-independent and don't need to be rebuilt for each architecture.
+    final List<ProtocolExtension> extensions = i > 0
+        ? target.extensions.whereType<CodeAssetExtension>().toList()
+        : target.extensions;
+    final BuildResult buildResult = await _build(buildRunner, extensions, linkingEnabled);
+    results[target.targetString] = buildResult.toJson();
+    dependencies.addAll(buildResult.dependencies);
+    _decodeAssets(
+      encodedAssets: buildResult.encodedAssets,
+      target: target,
+      codeAssetsAccumulator: codeAssets,
+      dataAssetsAccumulator: dataAssets,
+    );
+  }
+  _checkForDuplicateAssets(codeAssets: codeAssets, dataAssets: dataAssets, targets: targets);
+  logger.printTrace('Running build hooks for $targetString done.');
+  return (
+    results: results,
+    buildResult: DartHooksResult(
+      buildStart: buildStart,
+      buildEnd: DateTime.now(),
+      codeAssets: codeAssets,
+      dataAssets: dataAssets,
+      dependencies: dependencies.toList(),
+    ),
+  );
+}
+
+List<AssetBuildTarget> _getTargets({
+  required AndroidSdkProvider? androidSdkProvider,
+  required Map<String, String> environmentDefines,
+  required TargetPlatform targetPlatform,
+  required FileSystem fileSystem,
+  required FeatureFlags featureFlags,
+  required BuildCodeAssetsOptions? buildCodeAssets,
+  required bool buildDataAssets,
+  required VisualStudio? visualStudio,
+}) {
+  final supportedAssetTypes = <SupportedAssetTypes>[
+    if (featureFlags.isNativeAssetsEnabled && buildCodeAssets != null)
+      SupportedAssetTypes.codeAssets,
+    if (featureFlags.isDartDataAssetsEnabled && buildDataAssets) SupportedAssetTypes.dataAssets,
+  ];
+
+  final BuildMode buildMode = _getBuildMode(
+    environmentDefines,
+    targetPlatform == TargetPlatform.tester,
+  );
+
+  return AssetBuildTarget.targetsFor(
+    androidSdkProvider: androidSdkProvider,
+    targetPlatform: targetPlatform,
+    buildMode: buildMode,
+    environmentDefines: environmentDefines,
+    fileSystem: fileSystem,
+    supportedAssetTypes: supportedAssetTypes,
+    buildDirectory: buildCodeAssets?.appBuildDirectory,
+    visualStudio: visualStudio,
+  );
+}
+
+Future<({List<AssetBuildTarget> targets, BuildMode buildMode, bool linkingEnabled})> _setupHooks({
+  required AndroidSdkProvider? androidSdkProvider,
+  required Map<String, String> environmentDefines,
+  required FlutterNativeAssetsBuildRunner buildRunner,
+  required TargetPlatform targetPlatform,
+  required FileSystem fileSystem,
+  required FeatureFlags featureFlags,
+  required BuildCodeAssetsOptions? buildCodeAssets,
+  required bool buildDataAssets,
+  required VisualStudio? visualStudio,
+}) async {
+  final List<AssetBuildTarget> targets = _getTargets(
+    androidSdkProvider: androidSdkProvider,
+    environmentDefines: environmentDefines,
+    targetPlatform: targetPlatform,
+    fileSystem: fileSystem,
+    featureFlags: featureFlags,
+    buildCodeAssets: buildCodeAssets,
+    buildDataAssets: buildDataAssets,
+    visualStudio: visualStudio,
+  );
+
+  final supportedAssetTypes = <SupportedAssetTypes>[
+    if (featureFlags.isNativeAssetsEnabled && buildCodeAssets != null)
+      SupportedAssetTypes.codeAssets,
+    if (featureFlags.isDartDataAssetsEnabled && buildDataAssets) SupportedAssetTypes.dataAssets,
+  ];
+
+  final BuildMode buildMode = _getBuildMode(
+    environmentDefines,
+    targetPlatform == TargetPlatform.tester,
+  );
+
+  if (supportedAssetTypes.contains(SupportedAssetTypes.codeAssets)) {
+    for (final CodeAssetTarget target in targets.whereType<CodeAssetTarget>()) {
+      await buildRunner.setCCompilerConfig(target);
+    }
+  }
+
+  final bool linkingEnabled = _nativeAssetsLinkingEnabled(buildMode);
+
+  return (targets: targets, buildMode: buildMode, linkingEnabled: linkingEnabled);
+}
+
+/// Invokes the link hooks of all transitive Dart package hooks.
+///
+/// The returned dependencies only include those collected during the link stage.
+/// The returned assets only include those produced during the link stage.
+Future<DartHooksResult> runFlutterSpecificLinkHooks({
+  required AndroidSdkProvider? androidSdkProvider,
+  required Map<String, String> environmentDefines,
+  required FlutterNativeAssetsBuildRunner buildRunner,
+  required TargetPlatform targetPlatform,
+  required Uri projectUri,
+  required FileSystem fileSystem,
+  required FeatureFlags featureFlags,
+  required Logger logger,
+  required BuildCodeAssetsOptions? buildCodeAssets,
+  required bool buildDataAssets,
+  required SerializedBuildResults buildResults,
+  required File? recordedUsesFile,
+  required VisualStudio? visualStudio,
+}) async {
+  if (buildResults.isEmpty) {
+    return DartHooksResult.empty();
+  }
+  final buildStart = DateTime.now();
+  final (
+    targets: List<AssetBuildTarget> targets,
+    buildMode: BuildMode buildMode,
+    linkingEnabled: bool linkingEnabled,
+  ) = await _setupHooks(
+    androidSdkProvider: androidSdkProvider,
+    environmentDefines: environmentDefines,
+    buildRunner: buildRunner,
+    targetPlatform: targetPlatform,
+    fileSystem: fileSystem,
+    featureFlags: featureFlags,
+    buildCodeAssets: buildCodeAssets,
+    buildDataAssets: buildDataAssets,
+    visualStudio: visualStudio,
+  );
+
+  final String targetString = targets
+      .map((AssetBuildTarget target) => target.targetString)
+      .join(', ');
+  logger.printTrace('Running link hooks for $targetString.');
+
+  final codeAssets = <FlutterCodeAsset>[];
+  final dataAssets = <DataAsset>[];
+  final dependencies = <Uri>{};
+
+  for (var i = 0; i < targets.length; i++) {
+    final AssetBuildTarget target = targets[i];
+    // Only run non-code extensions (like data assets) for the first target,
+    // as they are architecture-independent and don't need to be rebuilt for each architecture.
+    final List<ProtocolExtension> extensions = i > 0
+        ? target.extensions.whereType<CodeAssetExtension>().toList()
+        : target.extensions;
+
+    final Map<String, Object?>? buildResultJson = buildResults[target.targetString];
+    if (buildResultJson == null) {
+      throw StateError('Missing build result for target ${target.targetString}');
+    }
+    final buildResult = BuildResult.fromJson(buildResultJson);
+
+    if (linkingEnabled) {
+      final LinkResult linkResult = await _link(
+        buildRunner,
+        extensions,
+        buildResult,
+        recordedUsesFile,
+      );
+
+      _decodeAssets(
+        encodedAssets: linkResult.encodedAssets,
+        target: target,
+        codeAssetsAccumulator: codeAssets,
+        dataAssetsAccumulator: dataAssets,
+      );
+      dependencies.addAll(linkResult.dependencies);
+    }
+  }
+
+  _checkForDuplicateAssets(codeAssets: codeAssets, dataAssets: dataAssets, targets: targets);
+
+  logger.printTrace('Running link hooks for $targetString done.');
+
+  return DartHooksResult(
+    buildStart: buildStart,
+    buildEnd: DateTime.now(),
+    codeAssets: codeAssets,
+    dataAssets: dataAssets,
+    dependencies: dependencies.toList(),
+  );
+}
+
+/// Combines build-stage and link-stage results into a single, combined [DartHooksResult].
+///
+/// The combined result contains all code and data assets from both stages,
+/// and the union of all dependencies from both stages.
+DartHooksResult combineBuildAndLinkResults({
+  required Map<String, String> environmentDefines,
+  required TargetPlatform targetPlatform,
+  required FileSystem fileSystem,
+  required FeatureFlags featureFlags,
+  required BuildCodeAssetsOptions? buildCodeAssets,
+  required bool buildDataAssets,
+  required SerializedBuildResults buildResults,
+  required DartHooksResult linkResult,
+}) {
+  final List<AssetBuildTarget> targets = _getTargets(
+    androidSdkProvider: null,
+    environmentDefines: environmentDefines,
+    targetPlatform: targetPlatform,
+    fileSystem: fileSystem,
+    featureFlags: featureFlags,
+    buildCodeAssets: buildCodeAssets,
+    buildDataAssets: buildDataAssets,
+    visualStudio: null,
+  );
+
+  final codeAssets = <FlutterCodeAsset>[...linkResult.codeAssets];
+  final dataAssets = <DataAsset>[...linkResult.dataAssets];
+  final dependencies = <Uri>{...linkResult.dependencies};
+
+  for (final target in targets) {
+    final Map<String, Object?>? buildResultJson = buildResults[target.targetString];
+    if (buildResultJson == null) {
+      continue;
+    }
+    final buildResult = BuildResult.fromJson(buildResultJson);
+    _decodeAssets(
+      encodedAssets: buildResult.encodedAssets,
+      target: target,
+      codeAssetsAccumulator: codeAssets,
+      dataAssetsAccumulator: dataAssets,
+    );
+    dependencies.addAll(buildResult.dependencies);
+  }
+
+  _checkForDuplicateAssets(codeAssets: codeAssets, dataAssets: dataAssets, targets: targets);
+
+  return DartHooksResult(
+    buildStart: linkResult.buildStart,
+    buildEnd: linkResult.buildEnd,
+    codeAssets: codeAssets,
+    dataAssets: dataAssets,
+    dependencies: dependencies.toList(),
+  );
+}
+
+/// Extracts and categorizes code and data assets from [encodedAssets] for the given [target].
+///
+/// The extracted assets are appended to the optional accumulator lists:
+/// - [codeAssetsAccumulator]: Collects matching [FlutterCodeAsset]s.
+/// - [dataAssetsAccumulator]: Collects matching [DataAsset]s.
+void _decodeAssets({
+  required Iterable<EncodedAsset> encodedAssets,
+  required AssetBuildTarget target,
+  List<FlutterCodeAsset>? codeAssetsAccumulator,
+  List<DataAsset>? dataAssetsAccumulator,
+}) {
+  if (target is CodeAssetTarget) {
+    final Iterable<FlutterCodeAsset> filteredCode = _filterCodeAssets(
+      encodedAssets,
+      os: target.os,
+      architecture: target.architecture,
+    );
+    codeAssetsAccumulator?.addAll(filteredCode);
+  }
+  final Iterable<DataAsset> filteredData = _filterDataAssets(encodedAssets);
+  dataAssetsAccumulator?.addAll(filteredData);
+}
+
+void _checkForDuplicateAssets({
+  required List<FlutterCodeAsset> codeAssets,
+  required List<DataAsset> dataAssets,
+  required List<AssetBuildTarget> targets,
+}) {
+  final List<String> targetStrings = targets.map((AssetBuildTarget e) => e.targetString).toList();
+
+  final dataAssetIds = <String>{};
+  final duplicateDataAssetIds = <String>{};
+  for (final asset in dataAssets) {
+    if (!dataAssetIds.add(asset.id)) {
+      duplicateDataAssetIds.add(asset.id);
+    }
+  }
+  if (duplicateDataAssetIds.isNotEmpty) {
+    throwToolExit(
+      'Found duplicates in the data assets: '
+      '${duplicateDataAssetIds.toList()} while compiling for '
+      '$targetStrings.',
+    );
+  }
+
+  final codeAssetIds = <(String, OS, Architecture)>{};
+  final duplicateCodeAssetIds = <String>{};
+  for (final asset in codeAssets) {
+    if (!codeAssetIds.add((asset.codeAsset.id, asset.os, asset.architecture))) {
+      duplicateCodeAssetIds.add(asset.codeAsset.id);
+    }
+  }
+  if (duplicateCodeAssetIds.isNotEmpty) {
+    throwToolExit(
+      'Found duplicates in the code assets: '
+      '${duplicateCodeAssetIds.toList()} while compiling for '
+      '$targetStrings.',
+    );
+  }
+}
+
+Future<List<File>> installCodeAssets({
+  required DartHooksResult dartHookResult,
+  required Map<String, String> environmentDefines,
+  required TargetPlatform targetPlatform,
+  required Uri projectUri,
+  required FileSystem fileSystem,
+  required Logger logger,
+  required ProcessManager processManager,
+  required Uri nativeAssetsFileUri,
+  required Uri targetUri,
+}) async {
+  assert(
+    !fileSystem.path.isWithin(
+      fileSystem.path.fromUri(targetUri),
+      fileSystem.path.fromUri(nativeAssetsFileUri),
+    ),
+    'nativeAssetsFileUri ($nativeAssetsFileUri) must be outside targetUri ($targetUri).',
+  );
+  final OS targetOS = getNativeOSFromTargetPlatform(targetPlatform);
+  final flutterTester = targetPlatform == TargetPlatform.tester;
+  final BuildMode buildMode = _getBuildMode(environmentDefines, flutterTester);
+
+  final String? codesignIdentity = environmentDefines[kCodesignIdentity];
+  final Map<FlutterCodeAsset, FlutterCodeAssetTargetLocation> assetTargetLocations =
+      assetTargetLocationsForOS(
+        targetOS,
+        dartHookResult.codeAssets,
+        flutterTester,
+        targetUri,
+        logger: logger,
+      );
+  final List<File> installedFiles = await _copyNativeCodeAssetsForOS(
+    targetOS,
+    targetUri,
+    buildMode,
+    fileSystem,
+    assetTargetLocations,
+    codesignIdentity,
+    flutterTester,
+    iosDeploymentVersion: targetOS == OS.iOS ? iosDeploymentVersion(environmentDefines) : null,
+    logger: logger,
+    processManager: processManager,
+  );
+  final manifest = NativeAssetsManifest.fromTargetLocations(assetTargetLocations);
+  await _writeNativeAssetsJson(manifest, nativeAssetsFileUri, fileSystem, logger: logger);
+  return <File>[fileSystem.file(nativeAssetsFileUri), ...installedFiles];
+}
+
+/// Programmatic API to be used by Dart launchers to invoke native builds.
+///
+/// It enables mocking `package:hooks_runner` package.
+/// It also enables mocking native toolchain discovery via [setCCompilerConfig].
+abstract interface class FlutterNativeAssetsBuildRunner {
+  /// All packages in the transitive dependencies that have a `build.dart`.
+  Future<List<String>> packagesWithNativeAssets();
+
+  /// Runs all [packagesWithNativeAssets] `build.dart`.
+  Future<BuildResult?> build({
+    required List<ProtocolExtension> extensions,
+    required bool linkingEnabled,
+  });
+
+  /// Runs all [packagesWithNativeAssets] `link.dart`.
+  Future<LinkResult?> link({
+    required List<ProtocolExtension> extensions,
+    required BuildResult buildResult,
+    required File? recordedUsesFile,
+  });
+
+  Future<void> setCCompilerConfig(CodeAssetTarget target);
+}
+
+/// Uses `package:hooks_runner` for its implementation.
+class FlutterNativeAssetsBuildRunnerImpl implements FlutterNativeAssetsBuildRunner {
+  FlutterNativeAssetsBuildRunnerImpl(
+    this.packageConfigPath,
+    this.packageConfig,
+    this.fileSystem,
+    this.logger,
+    this.platform,
+    this.processManager,
+    this.runPackageName,
+    this.pubspecPath, {
+    required this._flutterRoot,
+    required this.includeDevDependencies,
+  });
+
+  final String pubspecPath;
+  final String packageConfigPath;
+  final PackageConfig packageConfig;
+  final FileSystem fileSystem;
+  final Logger logger;
+  final Platform platform;
+  final ProcessManager processManager;
+  final String runPackageName;
+
+  /// Include the dev dependencies of [runPackageName].
+  final bool includeDevDependencies;
+  final String _flutterRoot;
+
+  late final _logger = logging.Logger('')
+    ..onRecord.listen((logging.LogRecord record) {
+      final int levelValue = record.level.value;
+      final String message = record.message;
+      if (levelValue >= logging.Level.SEVERE.value) {
+        logger.printError(message);
+      } else if (levelValue >= logging.Level.WARNING.value) {
+        logger.printWarning(message);
+      } else if (levelValue >= logging.Level.INFO.value) {
+        logger.printTrace(message);
+      } else {
+        logger.printTrace(message);
+      }
+    });
+
+  // Flutter wraps the Dart executable to update it in place
+  // ($FLUTTER_ROOT/bin/dart). However, since this is a Dart process invocation
+  // in a Flutter process invocation, it should not try to update in place, so
+  // use the Dart standalone executable
+  // ($FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart).
+  late final Uri _dartExecutable = fileSystem
+      .directory(_flutterRoot)
+      .uri
+      .resolve('bin/cache/dart-sdk/bin/dart${platform.isWindows ? '.exe' : ''}');
+
+  late final packageLayout = PackageLayout.fromPackageConfig(
+    fileSystem,
+    packageConfig,
+    Uri.file(packageConfigPath),
+    runPackageName,
+    includeDevDependencies: includeDevDependencies,
+  );
+
+  late final _buildRunner = NativeAssetsBuildRunner(
+    logger: _logger,
+    dartExecutable: _dartExecutable,
+    fileSystem: fileSystem,
+    packageLayout: packageLayout,
+    userDefines: UserDefines(workspacePubspec: Uri.file(pubspecPath)),
+  );
+
+  @override
+  Future<List<String>> packagesWithNativeAssets() async {
+    // It suffices to only check for build hooks. If no packages have a build
+    // hook. Then no build hook will output any assets for any link hook, and
+    // thus the link hooks will never be run.
+    return _buildRunner.packagesWithBuildHooks();
+  }
+
+  @override
+  Future<BuildResult?> build({
+    required List<ProtocolExtension> extensions,
+    required bool linkingEnabled,
+  }) async {
+    final Result<BuildResult, HooksRunnerFailure> result = await _buildRunner.build(
+      linkingEnabled: linkingEnabled,
+      extensions: extensions,
+    );
+    if (result.isSuccess) {
+      return result.success;
+    } else {
+      return null;
+    }
+  }
+
+  @override
+  Future<LinkResult?> link({
+    required List<ProtocolExtension> extensions,
+    required BuildResult buildResult,
+    required File? recordedUsesFile,
+  }) async {
+    final Result<LinkResult, HooksRunnerFailure> result = await _buildRunner.link(
+      extensions: extensions,
+      buildResult: buildResult,
+      resourceIdentifiers: recordedUsesFile?.uri,
+    );
+    if (result.isSuccess) {
+      return result.success;
+    } else {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> setCCompilerConfig(CodeAssetTarget target) => target.setCCompilerConfig(
+    processUtils: ProcessUtils(processManager: processManager, logger: logger),
+  );
+}
+
+Future<Uri> _writeNativeAssetsJson(
+  NativeAssetsManifest manifest,
+  Uri nativeAssetsJsonUri,
+  FileSystem fileSystem, {
+  required Logger logger,
+}) async {
+  logger.printTrace('Writing native assets json to $nativeAssetsJsonUri.');
+  final String nativeAssetsDartContents = manifest.toJsonString();
+  final File nativeAssetsFile = fileSystem.file(nativeAssetsJsonUri);
+  final Directory parentDirectory = nativeAssetsFile.parent;
+  if (!parentDirectory.existsSync()) {
+    await parentDirectory.create(recursive: true);
+  }
+  await nativeAssetsFile.writeAsString(nativeAssetsDartContents);
+  logger.printTrace('Writing ${nativeAssetsFile.path} done.');
+  return nativeAssetsFile.uri;
+}
+
+/// Whether link hooks should be run.
+///
+/// Link hooks should only be run for AOT Dart builds, which is the non-debug
+/// modes in Flutter.
+bool _nativeAssetsLinkingEnabled(BuildMode buildMode) {
+  switch (buildMode) {
+    case BuildMode.debug:
+      return false;
+    case BuildMode.jitRelease:
+    case BuildMode.profile:
+    case BuildMode.release:
+      return true;
+  }
+}
+
+Future<bool> _hookRunRequired(
+  FlutterNativeAssetsBuildRunner buildRunner, {
+  required FeatureFlags featureFlags,
+  required Logger logger,
+}) async {
+  final List<String> packagesWithNativeAssets = await buildRunner.packagesWithNativeAssets();
+  if (packagesWithNativeAssets.isEmpty) {
+    logger.printTrace('No packages with native assets. Skipping native assets compilation.');
+    return false;
+  }
+
+  if (!featureFlags.isNativeAssetsEnabled && !featureFlags.isDartDataAssetsEnabled) {
+    final String packageNames = packagesWithNativeAssets.join(' ');
+    throwToolExit(
+      'Package(s) $packageNames require the dart assets feature to be enabled.\n'
+      '  Enable code assets using `flutter config --enable-native-assets`.'
+      '  Enable data assets using `flutter config --enable-dart-data-assets`.',
+    );
+  }
+  return true;
+}
+
+/// Ensures that either this project has no native assets, or that native assets
+/// are supported on that operating system.
+///
+/// Exits the tool if the above condition is not satisfied.
+Future<void> ensureNoNativeAssetsOrOsIsSupported(
+  Uri workingDirectory,
+  String os,
+  FileSystem fileSystem,
+  FlutterNativeAssetsBuildRunner buildRunner, {
+  required Logger logger,
+}) async {
+  final List<String> packagesWithNativeAssets = await buildRunner.packagesWithNativeAssets();
+  if (packagesWithNativeAssets.isEmpty) {
+    logger.printTrace('No packages with native assets. Skipping native assets compilation.');
+    return;
+  }
+  final String packageNames = packagesWithNativeAssets.join(' ');
+  throwToolExit(
+    'Package(s) $packageNames require the native assets feature. '
+    'This feature has not yet been implemented for `$os`. '
+    'For more info see https://github.com/flutter/flutter/issues/129757.',
+  );
+}
+
+Map<FlutterCodeAsset, FlutterCodeAssetTargetLocation> _assetTargetLocationsWindowsLinux(
+  List<FlutterCodeAsset> assets,
+  Uri? absolutePath,
+) {
+  return <FlutterCodeAsset, FlutterCodeAssetTargetLocation>{
+    for (final FlutterCodeAsset asset in assets)
+      asset: targetLocationForCodeAsset(asset, (FlutterCodeAsset asset) {
+        final String fileName = asset.codeAsset.file!.pathSegments.last;
+        final bundlePath = Uri(path: fileName);
+        final Uri runtimeUri = absolutePath != null ? absolutePath.resolve(fileName) : bundlePath;
+        return FlutterCodeAssetTargetLocation(
+          runtimePath: NativeAssetAbsolutePath.fromFileUri(runtimeUri),
+          bundlePath: bundlePath,
+        );
+      }),
+  };
+}
+
+Map<FlutterCodeAsset, FlutterCodeAssetTargetLocation> assetTargetLocationsForOS(
+  OS targetOS,
+  List<FlutterCodeAsset> codeAssets,
+  bool flutterTester,
+  Uri buildUri, {
+  required Logger logger,
+}) {
+  final Uri? absolutePath = flutterTester ? buildUri : null;
+  return switch (targetOS) {
+    OS.windows || OS.linux => _assetTargetLocationsWindowsLinux(codeAssets, absolutePath),
+    OS.macOS => assetTargetLocationsMacOS(codeAssets, absolutePath, logger: logger),
+    OS.iOS => assetTargetLocationsIOS(codeAssets, logger: logger),
+    OS.android => assetTargetLocationsAndroid(codeAssets),
+    _ => throw UnimplementedError('This should be unreachable.'),
+  };
+}
+
+Future<List<File>> _copyNativeCodeAssetsForOS(
+  OS targetOS,
+  Uri targetUri,
+  BuildMode buildMode,
+  FileSystem fileSystem,
+  Map<FlutterCodeAsset, FlutterCodeAssetTargetLocation> assetTargetLocations,
+  String? codesignIdentity,
+  bool flutterTester, {
+  AppleVersion? iosDeploymentVersion,
+  required Logger logger,
+  required ProcessManager processManager,
+}) async {
+  // We only have to copy code assets that are bundled within the app.
+  // If a code asset that use a linking mode of [LookupInProcess],
+  // [LookupInExecutable] or [DynamicLoadingSystem] do not have anything to
+  // bundle as part of the app.
+  assetTargetLocations = <FlutterCodeAsset, FlutterCodeAssetTargetLocation>{
+    for (final FlutterCodeAsset codeAsset in assetTargetLocations.keys)
+      if (codeAsset.codeAsset.linkMode is DynamicLoadingBundled)
+        codeAsset: assetTargetLocations[codeAsset]!,
+  };
+
+  final Directory targetDir = fileSystem.directory(targetUri);
+  if (!targetDir.existsSync()) {
+    targetDir.createSync(recursive: true);
+  }
+  for (final FileSystemEntity entity in await targetDir.list(followLinks: false).toList()) {
+    ErrorHandlingFileSystem.deleteIfExists(entity, recursive: true);
+  }
+
+  if (assetTargetLocations.isEmpty) {
+    return const <File>[];
+  }
+
+  logger.printTrace('Copying native assets to ${targetUri.toFilePath()}.');
+  final processUtils = ProcessUtils(processManager: processManager, logger: logger);
+  final List<File> installedFiles;
+  switch (targetOS) {
+    case OS.windows:
+    case OS.linux:
+      assert(codesignIdentity == null);
+      installedFiles = await _copyNativeCodeAssetsToBundleOnWindowsLinux(
+        targetUri,
+        assetTargetLocations,
+        buildMode,
+        fileSystem,
+      );
+    case OS.macOS:
+      if (flutterTester) {
+        installedFiles = await copyNativeCodeAssetsMacOSFlutterTester(
+          targetUri,
+          fatAssetTargetLocations(assetTargetLocations),
+          codesignIdentity,
+          buildMode,
+          fileSystem,
+          logger: logger,
+          processUtils: processUtils,
+        );
+      } else {
+        installedFiles = await copyNativeCodeAssetsMacOS(
+          targetUri,
+          fatAssetTargetLocations(assetTargetLocations),
+          codesignIdentity,
+          buildMode,
+          fileSystem,
+          logger: logger,
+          processUtils: processUtils,
+        );
+      }
+    case OS.iOS:
+      installedFiles = await copyNativeCodeAssetsIOS(
+        targetUri,
+        fatAssetTargetLocations(assetTargetLocations),
+        codesignIdentity,
+        buildMode,
+        fileSystem,
+        deploymentVersion: iosDeploymentVersion,
+        logger: logger,
+        processUtils: processUtils,
+      );
+    case OS.android:
+      assert(codesignIdentity == null);
+      installedFiles = await copyNativeCodeAssetsAndroid(
+        targetUri,
+        assetTargetLocations,
+        fileSystem,
+      );
+    default:
+      throw StateError('This should be unreachable.');
+  }
+  logger.printTrace('Copying native assets done.');
+  return installedFiles;
+}
+
+Iterable<FlutterCodeAsset> _filterCodeAssets(
+  Iterable<EncodedAsset> assets, {
+  required OS os,
+  required Architecture architecture,
+}) => assets
+    .where((EncodedAsset asset) => asset.isCodeAsset)
+    .map<FlutterCodeAsset>(
+      (EncodedAsset encodedAsset) =>
+          FlutterCodeAsset(codeAsset: encodedAsset.asCodeAsset, os: os, architecture: architecture),
+    );
+
+Iterable<DataAsset> _filterDataAssets(Iterable<EncodedAsset> assets) =>
+    assets.where((EncodedAsset asset) => asset.isDataAsset).map<DataAsset>(DataAsset.fromEncoded);
+
+Future<BuildResult> _build(
+  FlutterNativeAssetsBuildRunner buildRunner,
+  List<ProtocolExtension> extensions,
+  bool linkingEnabled,
+) async {
+  final BuildResult? buildResult = await buildRunner.build(
+    extensions: extensions,
+    linkingEnabled: linkingEnabled,
+  );
+  if (buildResult == null) {
+    _throwNativeAssetsBuildFailed();
+  }
+  return buildResult;
+}
+
+Future<LinkResult> _link(
+  FlutterNativeAssetsBuildRunner buildRunner,
+  List<ProtocolExtension> extensions,
+  BuildResult buildResult,
+  File? recordedUsesFile,
+) async {
+  final LinkResult? linkResult = await buildRunner.link(
+    extensions: extensions,
+    buildResult: buildResult,
+    recordedUsesFile: recordedUsesFile,
+  );
+  if (linkResult == null) {
+    _throwNativeAssetsLinkFailed();
+  }
+  return linkResult;
+}
+
+Future<List<File>> _copyNativeCodeAssetsToBundleOnWindowsLinux(
+  Uri targetUri,
+  Map<FlutterCodeAsset, FlutterCodeAssetTargetLocation> assetTargetLocations,
+  BuildMode buildMode,
+  FileSystem fileSystem,
+) async {
+  assert(assetTargetLocations.isNotEmpty);
+
+  final installedFiles = <File>[];
+  for (final MapEntry<FlutterCodeAsset, FlutterCodeAssetTargetLocation> assetMapping
+      in assetTargetLocations.entries) {
+    final Uri source = assetMapping.key.codeAsset.file!;
+    final Uri target = assetMapping.value.bundlePath!;
+    final Uri assetTargetUri = targetUri.resolveUri(target);
+    final String targetFullPath = assetTargetUri.toFilePath();
+    final File installedFile = await fileSystem.file(source).copy(targetFullPath);
+    installedFiles.add(installedFile);
+  }
+  return installedFiles;
+}
+
+Never _throwNativeAssetsBuildFailed() {
+  throwToolExit('Building native assets failed. See the logs for more details.');
+}
+
+Never _throwNativeAssetsLinkFailed() {
+  throwToolExit('Linking native assets failed. See the logs for more details.');
+}
+
+OS getNativeOSFromTargetPlatform(TargetPlatform platform) {
+  switch (platform.os) {
+    case .ios:
+      return OS.iOS;
+    case .macos:
+      return OS.macOS;
+    case .linux:
+      return OS.linux;
+    case .windows:
+      return OS.windows;
+    case .fuchsia:
+      return OS.fuchsia;
+    case .android:
+      return OS.android;
+    case .tester:
+      if (const LocalPlatform().isMacOS) {
+        return OS.macOS;
+      } else if (const LocalPlatform().isLinux) {
+        return OS.linux;
+      } else if (const LocalPlatform().isWindows) {
+        return OS.windows;
+      } else {
+        throw StateError('Unknown operating system');
+      }
+    case .web:
+      throw StateError('No dart builds for web yet.');
+    case .unsupported:
+      TargetPlatform.throwUnsupportedTarget();
+  }
+}
+
+BuildMode _getBuildMode(Map<String, String> environmentDefines, bool isFlutterTester) {
+  if (isFlutterTester) {
+    return BuildMode.debug;
+  }
+  final String? environmentBuildMode = environmentDefines[kBuildMode];
+  if (environmentBuildMode == null) {
+    throw MissingDefineException(kBuildMode, 'native_assets');
+  }
+  return BuildMode.fromCliName(environmentBuildMode);
+}

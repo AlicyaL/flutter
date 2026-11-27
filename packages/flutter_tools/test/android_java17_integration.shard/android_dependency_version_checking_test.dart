@@ -1,0 +1,85 @@
+// Copyright 2014 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import 'dart:io';
+
+import 'package:file/src/interface/file_system_entity.dart';
+
+import '../integration.shard/test_utils.dart';
+import '../src/android_common.dart';
+import '../src/common.dart';
+
+void main() {
+  late Directory tempDir;
+
+  setUpAll(() async {
+    tempDir = createResolvedTempDirectorySync('run_test.');
+  });
+
+  tearDownAll(() async {
+    tryToDelete(tempDir as FileSystemEntity);
+  });
+
+  test('AGP version out of "warn" support band but in "error" band builds '
+      'successfully and prints warning', () async {
+    final versionTuple = VersionTuple(
+      agpVersion: '9.1.1',
+      gradleVersion: '9.5.0',
+      kotlinVersion: '2.4.20',
+    );
+    final ProcessResult result = await buildFlutterApkWithSpecifiedDependencyVersions(
+      versions: versionTuple,
+      tempDir: tempDir,
+    );
+    expect(result, const ProcessResultMatcher());
+    expect(result.stderr, contains('Please upgrade your Android Gradle Plugin version'));
+  });
+
+  test('Gradle version out of "warn" support band but in "error" band builds '
+      'successfully and prints warning', () async {
+    // Create a new flutter project.
+    final versionTuple = VersionTuple(
+      agpVersion: '9.1.1',
+      gradleVersion: '9.3.1',
+      kotlinVersion: '2.4.20',
+    );
+    final ProcessResult result = await buildFlutterApkWithSpecifiedDependencyVersions(
+      versions: versionTuple,
+      tempDir: tempDir,
+    );
+    expect(result, const ProcessResultMatcher());
+    expect(result.stderr, contains('Please upgrade your Gradle version'));
+  });
+
+  test('Kotlin version out of "warn" support band but in "error" band builds '
+      'successfully and prints warning', () async {
+    final versionTuple = VersionTuple(
+      agpVersion: '9.1.1',
+      gradleVersion: '9.3.1',
+      kotlinVersion: '2.4.10',
+    );
+    final ProcessResult result = await buildFlutterApkWithSpecifiedDependencyVersions(
+      versions: versionTuple,
+      tempDir: tempDir,
+    );
+
+    expect(result, const ProcessResultMatcher());
+    expect(result.stderr, contains('Please upgrade your Kotlin version'));
+  });
+
+  test('No logs are printed when suppression flag is passed', () async {
+    final versionTuple = VersionTuple(
+      agpVersion: '9.1.1',
+      gradleVersion: '9.3.1',
+      kotlinVersion: '2.4.10',
+    );
+    final ProcessResult result = await buildFlutterApkWithSpecifiedDependencyVersions(
+      versions: versionTuple,
+      tempDir: tempDir,
+      skipChecking: true,
+    );
+    expect(result, const ProcessResultMatcher());
+    expect(result.stderr, isNot(contains('Please upgrade your Android Gradle Plugin version')));
+  });
+}

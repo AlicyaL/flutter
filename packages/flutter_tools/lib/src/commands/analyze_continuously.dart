@@ -2,11 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../base/common.dart';
 import '../base/file_system.dart';
-import '../base/io.dart';
 import '../base/logger.dart';
+import '../base/process.dart';
 import '../dart/analysis.dart';
 import 'analyze_base.dart';
 
@@ -14,22 +15,18 @@ class AnalyzeContinuously extends AnalyzeBase {
   AnalyzeContinuously(
     super.argResults,
     List<Directory> repoPackages, {
-    required super.fileSystem,
-    required super.logger,
-    required super.terminal,
-    required super.platform,
-    required super.processManager,
-    required super.artifacts,
+    required this._analytics,
     required super.suppressAnalytics,
-  }) : super(
-        repoPackages: repoPackages,
-      );
+    required super.toolContext,
+  }) : super(repoPackages: repoPackages);
+
+  final Analytics _analytics;
 
   String? analysisTarget;
   bool firstAnalysis = true;
   Set<String> analyzedPaths = <String>{};
   Map<String, List<AnalysisError>> analysisErrors = <String, List<AnalysisError>>{};
-  final Stopwatch analysisTimer = Stopwatch();
+  final analysisTimer = Stopwatch();
   int lastErrorCount = 0;
   Status? analysisStatus;
 
@@ -38,8 +35,12 @@ class AnalyzeContinuously extends AnalyzeBase {
     List<String> directories;
 
     if (isFlutterRepo) {
-      final PackageDependencyTracker dependencies = PackageDependencyTracker();
-      dependencies.checkForConflictingDependencies(repoPackages, dependencies);
+      final dependencies = PackageDependencyTracker();
+      dependencies.checkForConflictingDependencies(
+        repoPackages,
+        fileSystem: fileSystem,
+        flutterRoot: flutterRoot,
+      );
 
       directories = <String>[flutterRoot];
       analysisTarget = 'Flutter repository';
@@ -50,16 +51,17 @@ class AnalyzeContinuously extends AnalyzeBase {
       analysisTarget = fileSystem.currentDirectory.path;
     }
 
-    final AnalysisServer server = AnalysisServer(
+    final server = AnalysisServer(
       sdkPath,
       directories,
-      fileSystem: fileSystem,
-      logger: logger,
-      platform: platform,
-      processManager: processManager,
-      terminal: terminal,
-      protocolTrafficLog: protocolTrafficLog,
       suppressAnalytics: suppressAnalytics,
+      toolContext: toolContext,
+      protocolTrafficLog: protocolTrafficLog,
+      usePlugins: usePlugins,
+      trustPlugins: trustPlugins,
+      alwaysTrustPlugins: alwaysTrustPlugins,
+      neverTrustPlugins: neverTrustPlugins,
+      clientId: AnalysisServer.flutterAnalyzeClientId,
     );
     server.onAnalyzing.listen((bool isAnalyzing) => _handleAnalysisStatus(server, isAnalyzing));
     server.onErrors.listen(_handleAnalysisErrors);
@@ -67,7 +69,7 @@ class AnalyzeContinuously extends AnalyzeBase {
     await server.start();
     final int? exitCode = await server.onExit;
 
-    final String message = 'Analysis server exited with code $exitCode.';
+    final message = 'Analysis server exited with code $exitCode.';
     if (exitCode != 0) {
       throwToolExit(message, exitCode: exitCode);
     }
@@ -95,8 +97,8 @@ class AnalyzeContinuously extends AnalyzeBase {
       logger.printStatus(terminal.clearScreen(), newline: false);
 
       // Remove errors for deleted files, sort, and print errors.
-      final List<AnalysisError> sortedErrors = <AnalysisError>[];
-      final List<String> pathsToRemove = <String>[];
+      final sortedErrors = <AnalysisError>[];
+      final pathsToRemove = <String>[];
       analysisErrors.forEach((String path, List<AnalysisError> errors) {
         if (fileSystem.isFileSync(path)) {
           sortedErrors.addAll(errors);
@@ -108,7 +110,7 @@ class AnalyzeContinuously extends AnalyzeBase {
 
       sortedErrors.sort();
 
-      for (final AnalysisError error in sortedErrors) {
+      for (final error in sortedErrors) {
         logger.printStatus(error.toString());
         logger.printTrace('error code: ${error.code}');
       }
@@ -130,7 +132,14 @@ class AnalyzeContinuously extends AnalyzeBase {
 
       if (firstAnalysis && isBenchmarking) {
         writeBenchmark(analysisTimer, issueCount);
-        server.dispose().whenComplete(() { exit(issueCount > 0 ? 1 : 0); });
+        server.dispose().whenComplete(() {
+          exitWithHooks(
+            issueCount > 0 ? 1 : 0,
+            analytics: _analytics,
+            logger: logger,
+            shutdownHooks: toolContext.shutdownHooks,
+          );
+        });
       }
 
       firstAnalysis = false;
@@ -138,8 +147,6 @@ class AnalyzeContinuously extends AnalyzeBase {
   }
 
   void _handleAnalysisErrors(FileAnalysisErrors fileErrors) {
-    fileErrors.errors.removeWhere((AnalysisError error) => error.type == 'TODO');
-
     analyzedPaths.add(fileErrors.file);
     analysisErrors[fileErrors.file] = fileErrors.errors;
   }

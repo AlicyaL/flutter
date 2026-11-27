@@ -1,0 +1,68 @@
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#include "gtest/gtest.h"
+
+#include <sstream>
+
+#include "txt/font_collection.h"
+
+namespace txt {
+namespace testing {
+
+class FontCollectionTests : public ::testing::Test {
+ public:
+  FontCollectionTests() {}
+
+  void SetUp() override {}
+};
+
+TEST_F(FontCollectionTests, SettingUpDefaultFontManagerClearsCache) {
+  FontCollection font_collection;
+  sk_sp<skia::textlayout::FontCollection> sk_font_collection =
+      font_collection.CreateSktFontCollection();
+  ASSERT_EQ(sk_font_collection->getFallbackManager().get(), nullptr);
+  font_collection.SetupDefaultFontManager(0);
+  sk_font_collection = font_collection.CreateSktFontCollection();
+  ASSERT_NE(sk_font_collection->getFallbackManager().get(), nullptr);
+}
+
+TEST_F(FontCollectionTests,
+       DeferringDefaultFontManagerClearsCacheAndResolvesOnUse) {
+  FontCollection font_collection;
+  sk_sp<skia::textlayout::FontCollection> sk_font_collection =
+      font_collection.CreateSktFontCollection();
+  ASSERT_NE(sk_font_collection, nullptr);
+  EXPECT_EQ(sk_font_collection->getFallbackManager().get(), nullptr);
+  EXPECT_EQ(font_collection.GetFontManagersCount(), 0u);
+
+  font_collection.DeferDefaultFontManager(0);
+  sk_font_collection = font_collection.CreateSktFontCollection();
+  ASSERT_NE(sk_font_collection, nullptr);
+  EXPECT_NE(sk_font_collection->getFallbackManager().get(), nullptr);
+  EXPECT_EQ(font_collection.GetFontManagersCount(), 1u);
+}
+
+TEST_F(FontCollectionTests,
+       DeferringDefaultFontManagerResolvesOnGetFontManagersCount) {
+  FontCollection font_collection;
+  font_collection.DeferDefaultFontManager(0);
+
+  EXPECT_EQ(font_collection.GetFontManagersCount(), 1u);
+}
+
+TEST_F(FontCollectionTests,
+       SetDefaultFontManagerOverridesDeferredDefaultFontManager) {
+  FontCollection font_collection;
+  font_collection.DeferDefaultFontManager(0);
+  font_collection.SetDefaultFontManager(nullptr);
+
+  EXPECT_EQ(font_collection.GetFontManagersCount(), 0u);
+  sk_sp<skia::textlayout::FontCollection> sk_font_collection =
+      font_collection.CreateSktFontCollection();
+  ASSERT_NE(sk_font_collection, nullptr);
+  EXPECT_EQ(sk_font_collection->getFallbackManager().get(), nullptr);
+}
+}  // namespace testing
+}  // namespace txt

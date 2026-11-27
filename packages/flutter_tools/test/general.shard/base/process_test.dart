@@ -2,15 +2,22 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
+
+import 'package:file/memory.dart';
+import 'package:flutter_tools/src/base/error_handling_io.dart';
+import 'package:flutter_tools/src/base/exit.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/base/process.dart';
 import 'package:flutter_tools/src/base/terminal.dart';
+import 'package:flutter_tools/src/convert.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../../src/common.dart';
 import '../../src/fake_process_manager.dart';
-import '../../src/fakes.dart';
+import '../../src/fakes.dart' hide FakeProcess;
 
 void main() {
   group('process exceptions', () {
@@ -19,30 +26,25 @@ void main() {
 
     setUp(() {
       fakeProcessManager = FakeProcessManager.empty();
-      processUtils = ProcessUtils(
-        processManager: fakeProcessManager,
-        logger: BufferLogger.test(),
-      );
+      processUtils = ProcessUtils(processManager: fakeProcessManager, logger: BufferLogger.test());
     });
 
-    testWithoutContext('runAsync throwOnError: exceptions should be ProcessException objects', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'false',
-        ],
-        exitCode: 1,
-      ));
+    test('runAsync throwOnError: exceptions should be ProcessException objects', () async {
+      fakeProcessManager.addCommand(const FakeCommand(command: <String>['false'], exitCode: 1));
 
-      expect(() async => processUtils.run(<String>['false'], throwOnError: true), throwsProcessException());
+      expect(
+        () async => processUtils.run(<String>['false'], throwOnError: true),
+        throwsProcessException(message: 'Process exited abnormally with exit code 1'),
+      );
     });
   });
 
   group('shutdownHooks', () {
-    testWithoutContext('runInExpectedOrder', () async {
-      int i = 1;
+    test('runInExpectedOrder', () async {
+      var i = 1;
       int? cleanup;
 
-      final ShutdownHooks shutdownHooks = ShutdownHooks();
+      final shutdownHooks = ShutdownHooks();
 
       shutdownHooks.addShutdownHook(() async {
         cleanup = i++;
@@ -62,19 +64,18 @@ void main() {
     setUp(() {
       processManager = FakeProcessManager.empty();
       logger = BufferLogger.test();
-      processUtils = ProcessUtils(
-        processManager: processManager,
-        logger: logger,
-      );
+      processUtils = ProcessUtils(processManager: processManager, logger: logger);
     });
 
-    testWithoutContext('Command output is not wrapped.', () async {
-      final List<String> testString = <String>['0123456789' * 10];
-      processManager.addCommand(FakeCommand(
-        command: const <String>['command'],
-        stdout: testString.join(),
-        stderr: testString.join(),
-      ));
+    test('Command output is not wrapped.', () async {
+      final testString = <String>['0123456789' * 10];
+      processManager.addCommand(
+        FakeCommand(
+          command: const <String>['command'],
+          stdout: testString.join(),
+          stderr: testString.join(),
+        ),
+      );
 
       await processUtils.stream(<String>['command']);
 
@@ -82,22 +83,59 @@ void main() {
       expect(logger.errorText, equals('${testString[0]}\n'));
     });
 
-    testWithoutContext('Command output is filtered by mapFunction', () async {
-      processManager.addCommand(const FakeCommand(
-        command: <String>['command'],
-        stdout: 'match\nno match',
-        stderr: 'match\nno match',
-      ));
+    test('Command output is filtered by mapFunction', () async {
+      processManager.addCommand(
+        const FakeCommand(
+          command: <String>['command'],
+          stdout: 'match\nno match',
+          stderr: 'match\nno match',
+        ),
+      );
 
-      await processUtils.stream(<String>['command'], mapFunction: (String line) {
-        if (line == 'match') {
-          return line;
-        }
-        return null;
-      });
+      await processUtils.stream(
+        <String>['command'],
+        mapFunction: (String line) {
+          if (line == 'match') {
+            return line;
+          }
+          return null;
+        },
+      );
 
       expect(logger.statusText, equals('match\n'));
       expect(logger.errorText, equals('match\n'));
+    });
+
+    test('Command output tolerates malformed UTF-8 bytes followed by a newline.', () async {
+      final invalidUtf8Bytes = <int>[0xFF, 0xFE, 0xFD, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F];
+      processManager.addCommand(
+        FakeCommand(
+          command: const <String>['command'],
+          process: FakeProcess(stdout: invalidUtf8Bytes, stderr: invalidUtf8Bytes),
+        ),
+      );
+
+      await processUtils.stream(<String>['command']);
+
+      expect(logger.statusText, contains('hello'));
+      expect(logger.errorText, contains('hello'));
+      expect(logger.statusText, contains('\uFFFD'));
+      expect(logger.errorText, contains('\uFFFD'));
+    });
+
+    test('Command output tolerates malformed UTF-8 sequences within a line.', () async {
+      final fakeProcess = FakeProcess(
+        stdout: <int>[0x61, 0x62, 0xc3, 0x28, 0x63, 0x64], // 'ab' + malformed + 'cd'
+        stderr: <int>[0x61, 0x62, 0xc3, 0x28, 0x63, 0x64],
+      );
+      processManager.addCommand(
+        FakeCommand(command: const <String>['command'], process: fakeProcess),
+      );
+
+      await processUtils.stream(<String>['command']);
+
+      expect(logger.statusText, equals('ab\uFFFD(cd\n'));
+      expect(logger.errorText, equals('ab\uFFFD(cd\n'));
     });
   });
 
@@ -107,48 +145,29 @@ void main() {
 
     setUp(() {
       fakeProcessManager = FakeProcessManager.empty();
-      processUtils = ProcessUtils(
-        processManager: fakeProcessManager,
-        logger: BufferLogger.test(),
-      );
+      processUtils = ProcessUtils(processManager: fakeProcessManager, logger: BufferLogger.test());
     });
 
-    testWithoutContext(' succeeds on success', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'whoohoo',
-        ],
-      ));
+    test(' succeeds on success', () async {
+      fakeProcessManager.addCommand(const FakeCommand(command: <String>['whoohoo']));
       expect((await processUtils.run(<String>['whoohoo'])).exitCode, 0);
     });
 
-    testWithoutContext(' fails on failure', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'boohoo',
-        ],
-        exitCode: 1,
-      ));
+    test(' fails on failure', () async {
+      fakeProcessManager.addCommand(const FakeCommand(command: <String>['boohoo'], exitCode: 1));
       expect((await processUtils.run(<String>['boohoo'])).exitCode, 1);
     });
 
-    testWithoutContext(' throws on failure with throwOnError', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'kaboom',
-        ],
-        exitCode: 1,
-      ));
-      expect(() => processUtils.run(<String>['kaboom'], throwOnError: true), throwsProcessException());
+    test(' throws on failure with throwOnError', () async {
+      fakeProcessManager.addCommand(const FakeCommand(command: <String>['kaboom'], exitCode: 1));
+      expect(
+        () => processUtils.run(<String>['kaboom'], throwOnError: true),
+        throwsProcessException(),
+      );
     });
 
-    testWithoutContext(' does not throw on allowed Failures', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'kaboom',
-        ],
-        exitCode: 1,
-      ));
+    test(' does not throw on allowed Failures', () async {
+      fakeProcessManager.addCommand(const FakeCommand(command: <String>['kaboom'], exitCode: 1));
       expect(
         (await processUtils.run(
           <String>['kaboom'],
@@ -159,13 +178,8 @@ void main() {
       );
     });
 
-    testWithoutContext(' throws on disallowed failure', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'kaboom',
-        ],
-        exitCode: 2,
-      ));
+    test(' throws on disallowed failure', () async {
+      fakeProcessManager.addCommand(const FakeCommand(command: <String>['kaboom'], exitCode: 2));
       expect(
         () => processUtils.run(
           <String>['kaboom'],
@@ -174,6 +188,24 @@ void main() {
         ),
         throwsProcessException(),
       );
+    });
+
+    test(' decodes output with the given encoding', () async {
+      fakeProcessManager.addCommand(
+        const FakeCommand(
+          command: <String>['tree'],
+          // Fails the command match unless this encoding is passed to the
+          // process manager.
+          encoding: utf8,
+          stdout: '├── a\n└── b',
+          stderr: '│',
+        ),
+      );
+
+      final RunResult result = await processUtils.run(<String>['tree'], encoding: utf8);
+
+      expect(result.stdout, '├── a\n└── b');
+      expect(result.stderr, '│');
     });
   });
 
@@ -185,98 +217,63 @@ void main() {
     setUp(() {
       fakeProcessManager = FakeProcessManager.empty();
       testLogger = BufferLogger(
-        terminal: AnsiTerminal(
-          stdio: FakeStdio(),
-          platform: FakePlatform(),
-        ),
+        terminal: AnsiTerminal(stdio: FakeStdio(), platform: FakePlatform()),
         outputPreferences: OutputPreferences(wrapText: true, wrapColumn: 40),
       );
-      processUtils = ProcessUtils(
-        processManager: fakeProcessManager,
-        logger: testLogger,
-      );
+      processUtils = ProcessUtils(processManager: fakeProcessManager, logger: testLogger);
     });
 
-    testWithoutContext(' succeeds on success', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'whoohoo',
-        ],
-      ));
+    test(' succeeds on success', () async {
+      fakeProcessManager.addCommand(const FakeCommand(command: <String>['whoohoo']));
       expect(processUtils.runSync(<String>['whoohoo']).exitCode, 0);
     });
 
-    testWithoutContext(' fails on failure', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'boohoo',
-        ],
-        exitCode: 1,
-      ));
+    test(' fails on failure', () async {
+      fakeProcessManager.addCommand(const FakeCommand(command: <String>['boohoo'], exitCode: 1));
       expect(processUtils.runSync(<String>['boohoo']).exitCode, 1);
     });
 
-    testWithoutContext('throws on failure with throwOnError', () async {
-      const String stderr = 'Something went wrong.';
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'kaboom',
-        ],
-        exitCode: 1,
-        stderr: stderr,
-      ));
+    test('throws on failure with throwOnError', () async {
+      const stderr = 'Something went wrong.';
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['kaboom'], exitCode: 1, stderr: stderr),
+      );
       expect(
         () => processUtils.runSync(<String>['kaboom'], throwOnError: true),
-        throwsA(isA<ProcessException>().having(
-          (ProcessException error) => error.message,
-          'message',
-          isNot(contains(stderr)),
-        )),
+        throwsA(
+          isA<ProcessException>().having(
+            (ProcessException error) => error.message,
+            'message',
+            isNot(contains(stderr)),
+          ),
+        ),
       );
     });
 
-    testWithoutContext('throws with stderr in exception on failure with verboseExceptions', () async {
-      const String stderr = 'Something went wrong.';
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'verybad',
-        ],
-        exitCode: 1,
-        stderr: stderr,
-      ));
+    test('throws with stderr in exception on failure with verboseExceptions', () async {
+      const stderr = 'Something went wrong.';
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['verybad'], exitCode: 1, stderr: stderr),
+      );
       expect(
-        () => processUtils.runSync(
-          <String>['verybad'],
-          throwOnError: true,
-          verboseExceptions: true,
-        ),
+        () =>
+            processUtils.runSync(<String>['verybad'], throwOnError: true, verboseExceptions: true),
         throwsProcessException(message: stderr),
       );
     });
 
-    testWithoutContext(' does not throw on allowed Failures', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'kaboom',
-        ],
-        exitCode: 1,
-      ));
+    test(' does not throw on allowed Failures', () async {
+      fakeProcessManager.addCommand(const FakeCommand(command: <String>['kaboom'], exitCode: 1));
       expect(
-        processUtils.runSync(
-          <String>['kaboom'],
-          throwOnError: true,
-          allowedFailures: (int c) => c == 1,
-        ).exitCode,
-        1);
+        processUtils
+            .runSync(<String>['kaboom'], throwOnError: true, allowedFailures: (int c) => c == 1)
+            .exitCode,
+        1,
+      );
     });
 
-    testWithoutContext(' throws on disallowed failure', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'kaboom',
-        ],
-        exitCode: 2,
-      ));
+    test(' throws on disallowed failure', () async {
+      fakeProcessManager.addCommand(const FakeCommand(command: <String>['kaboom'], exitCode: 2));
       expect(
         () => processUtils.runSync(
           <String>['kaboom'],
@@ -287,41 +284,36 @@ void main() {
       );
     });
 
-    testWithoutContext(' prints stdout and stderr to trace on success', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'whoohoo',
-        ],
-        stdout: 'stdout',
-        stderr: 'stderr',
-      ));
+    test(' prints stdout and stderr to trace on success', () async {
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['whoohoo'], stdout: 'stdout', stderr: 'stderr'),
+      );
       expect(processUtils.runSync(<String>['whoohoo']).exitCode, 0);
       expect(testLogger.traceText, contains('stdout'));
       expect(testLogger.traceText, contains('stderr'));
     });
 
-    testWithoutContext(' prints stdout to status and stderr to error on failure with throwOnError', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'kaboom',
-        ],
-        exitCode: 1,
-        stdout: 'stdout',
-        stderr: 'stderr',
-      ));
-      expect(() => processUtils.runSync(<String>['kaboom'], throwOnError: true), throwsProcessException());
+    test(' prints stdout to status and stderr to error on failure with throwOnError', () async {
+      fakeProcessManager.addCommand(
+        const FakeCommand(
+          command: <String>['kaboom'],
+          exitCode: 1,
+          stdout: 'stdout',
+          stderr: 'stderr',
+        ),
+      );
+      expect(
+        () => processUtils.runSync(<String>['kaboom'], throwOnError: true),
+        throwsProcessException(),
+      );
       expect(testLogger.statusText, contains('stdout'));
       expect(testLogger.errorText, contains('stderr'));
     });
 
-    testWithoutContext(' does not print stdout with hideStdout', () async {
-      fakeProcessManager.addCommand(const FakeCommand(
-        command: <String>[
-          'whoohoo',
-        ],
-        stdout: 'stdout',
-        stderr: 'stderr',
-      ));
+    test(' does not print stdout with hideStdout', () async {
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['whoohoo'], stdout: 'stdout', stderr: 'stderr'),
+      );
       expect(processUtils.runSync(<String>['whoohoo'], hideStdout: true).exitCode, 0);
       expect(testLogger.traceText.contains('stdout'), isFalse);
       expect(testLogger.traceText, contains('stderr'));
@@ -334,54 +326,44 @@ void main() {
 
     setUp(() {
       processManager = FakeProcessManager.empty();
-      processUtils = ProcessUtils(
-        processManager: processManager,
-        logger: BufferLogger.test(),
-      );
+      processUtils = ProcessUtils(processManager: processManager, logger: BufferLogger.test());
     });
 
-    testWithoutContext('succeeds on success', () async {
-      processManager.addCommand(const FakeCommand(
-        command: <String>['whoohoo'],
-      ));
+    test('succeeds on success', () async {
+      processManager.addCommand(const FakeCommand(command: <String>['whoohoo']));
 
       expect(processUtils.exitsHappySync(<String>['whoohoo']), isTrue);
     });
 
-    testWithoutContext('fails on failure', () async {
-      processManager.addCommand(const FakeCommand(
-        command: <String>['boohoo'],
-        exitCode: 1,
-      ));
+    test('fails on failure', () async {
+      processManager.addCommand(const FakeCommand(command: <String>['boohoo'], exitCode: 1));
 
       expect(processUtils.exitsHappySync(<String>['boohoo']), isFalse);
     });
 
-    testWithoutContext('catches Exception and returns false', () {
-      processManager.addCommand(const FakeCommand(
-        command: <String>['boohoo'],
-        exception: ProcessException('Process failed', <String>[]),
-      ));
+    test('catches Exception and returns false', () {
+      processManager.addCommand(
+        const FakeCommand(
+          command: <String>['boohoo'],
+          exception: ProcessException('Process failed', <String>[]),
+        ),
+      );
 
       expect(processUtils.exitsHappySync(<String>['boohoo']), isFalse);
     });
 
-    testWithoutContext('does not throw Exception and returns false if binary cannot run', () {
+    test('does not throw Exception and returns false if binary cannot run', () {
       processManager.excludedExecutables.add('nonesuch');
 
       expect(processUtils.exitsHappySync(<String>['nonesuch']), isFalse);
     });
 
-    testWithoutContext('does not catch ArgumentError', () async {
-      processManager.addCommand(FakeCommand(
-        command: const <String>['invalid'],
-        exception: ArgumentError('Bad input'),
-      ));
-
-      expect(
-        () => processUtils.exitsHappySync(<String>['invalid']),
-        throwsArgumentError,
+    test('does not catch ArgumentError', () async {
+      processManager.addCommand(
+        FakeCommand(command: const <String>['invalid'], exception: ArgumentError('Bad input')),
       );
+
+      expect(() => processUtils.exitsHappySync(<String>['invalid']), throwsArgumentError);
     });
   });
 
@@ -391,54 +373,444 @@ void main() {
 
     setUp(() {
       processManager = FakeProcessManager.empty();
-      processUtils = ProcessUtils(
-        processManager: processManager,
-        logger: BufferLogger.test(),
-      );
+      processUtils = ProcessUtils(processManager: processManager, logger: BufferLogger.test());
     });
 
-    testWithoutContext('succeeds on success', () async {
-      processManager.addCommand(const FakeCommand(
-        command: <String>['whoohoo']
-      ));
+    test('succeeds on success', () async {
+      processManager.addCommand(const FakeCommand(command: <String>['whoohoo']));
 
       expect(await processUtils.exitsHappy(<String>['whoohoo']), isTrue);
     });
 
-    testWithoutContext('fails on failure', () async {
-      processManager.addCommand(const FakeCommand(
-        command: <String>['boohoo'],
-        exitCode: 1,
-      ));
+    test('fails on failure', () async {
+      processManager.addCommand(const FakeCommand(command: <String>['boohoo'], exitCode: 1));
 
       expect(await processUtils.exitsHappy(<String>['boohoo']), isFalse);
     });
 
-    testWithoutContext('catches Exception and returns false', () async {
-      processManager.addCommand(const FakeCommand(
-        command: <String>['boohoo'],
-        exception: ProcessException('Process failed', <String>[])
-      ));
+    test('catches Exception and returns false', () async {
+      processManager.addCommand(
+        const FakeCommand(
+          command: <String>['boohoo'],
+          exception: ProcessException('Process failed', <String>[]),
+        ),
+      );
 
       expect(await processUtils.exitsHappy(<String>['boohoo']), isFalse);
     });
 
-    testWithoutContext('does not throw Exception and returns false if binary cannot run', () async {
+    test('does not throw Exception and returns false if binary cannot run', () async {
       processManager.excludedExecutables.add('nonesuch');
 
       expect(await processUtils.exitsHappy(<String>['nonesuch']), isFalse);
     });
 
-    testWithoutContext('does not catch ArgumentError', () async {
-      processManager.addCommand(FakeCommand(
-        command: const <String>['invalid'],
-        exception: ArgumentError('Bad input')
-      ));
+    test('does not catch ArgumentError', () async {
+      processManager.addCommand(
+        FakeCommand(command: const <String>['invalid'], exception: ArgumentError('Bad input')),
+      );
+
+      expect(() async => processUtils.exitsHappy(<String>['invalid']), throwsArgumentError);
+    });
+  });
+
+  group('writeToStdinGuarded', () {
+    test('handles any error thrown by stdin.flush', () async {
+      final stdin = _ThrowsOnFlushIOSink();
+      Object? errorPassedToCallback;
+
+      await ProcessUtils.writeToStdinGuarded(
+        stdin: stdin,
+        content: 'message to stdin',
+        onError: (Object error, StackTrace stackTrace) {
+          errorPassedToCallback = error;
+        },
+      );
 
       expect(
-        () async => processUtils.exitsHappy(<String>['invalid']),
-        throwsArgumentError,
+        errorPassedToCallback,
+        isNotNull,
+        reason: 'onError callback should have been invoked.',
+      );
+
+      expect(errorPassedToCallback, const TypeMatcher<SocketException>());
+    });
+  });
+
+  group('exitWithHooks', () {
+    late MemoryFileSystem fileSystem;
+    late BufferLogger logger;
+    late Analytics analytics;
+
+    setUp(() {
+      fileSystem = MemoryFileSystem.test();
+      logger = BufferLogger.test();
+      final fakeFlutterVersion = FakeFlutterVersion();
+      analytics = Analytics.fake(
+        tool: DashTool.flutterTool,
+        homeDirectory: fileSystem.currentDirectory,
+        dartVersion: fakeFlutterVersion.dartSdkVersion,
+        fs: fileSystem,
+        flutterChannel: fakeFlutterVersion.channel,
+        flutterVersion: fakeFlutterVersion.getVersionString(),
+      );
+    });
+
+    test('prints analytics welcome message', () async {
+      setExitFunctionForTests((int exitCode) {});
+      final shutdownHooks = ShutdownHooks();
+      await exitWithHooks(0, analytics: analytics, logger: logger, shutdownHooks: shutdownHooks);
+      expect(logger.statusText, contains(analytics.getConsentMessage));
+    });
+
+    test('does not print analytics welcome message if Analytics instance indicates it should not be printed', () async {
+      setExitFunctionForTests((int exitCode) {});
+
+      analytics.clientShowedMessage();
+
+      final shutdownHooks = ShutdownHooks();
+      await exitWithHooks(0, analytics: analytics, logger: logger, shutdownHooks: shutdownHooks);
+      expect(logger.statusText, isNot(contains(analytics.getConsentMessage)));
+    });
+
+    test('[sync] exceptions thrown from a hook do not crash the tool', () async {
+      setExitFunctionForTests((int exitCode) {});
+
+      final shutdownHooks = ShutdownHooks();
+      shutdownHooks.addShutdownHook(() => throw StateError('CRASH'));
+      await expectLater(
+        exitWithHooks(0, analytics: analytics, logger: logger, shutdownHooks: shutdownHooks),
+        completes,
+      );
+      expect(
+        logger.warningText,
+        stringContainsInOrder(<String>['One or more uncaught errors occurred', 'CRASH']),
+      );
+    });
+
+    test('[async] exceptions thrown from a hook do not crash the tool', () async {
+      setExitFunctionForTests((int exitCode) {});
+
+      final shutdownHooks = ShutdownHooks();
+      shutdownHooks.addShutdownHook(() async => throw StateError('CRASH'));
+      await expectLater(
+        exitWithHooks(0, analytics: analytics, logger: logger, shutdownHooks: shutdownHooks),
+        completes,
+      );
+      expect(
+        logger.warningText,
+        stringContainsInOrder(<String>['One or more uncaught errors occurred', 'CRASH']),
       );
     });
   });
+
+  group('Environment variable propagation', () {
+    late Analytics analytics;
+    late FakeProcessManager fakeProcessManager;
+    late ProcessUtils processUtils;
+
+    const expectedEnvWithDefaultTool = <String, String>{
+      'DASH__SUPPRESS_ANALYTICS': 'true',
+      'DASH__TOOL': 'flutter-tool',
+    };
+
+    const expectedEnvWithParentTool = <String, String>{
+      'DASH__SUPPRESS_ANALYTICS': 'true',
+      'DASH__TOOL': 'vscode-plugins',
+    };
+
+    const expectedEnvNotSuppressed = <String, String>{
+      'DASH__SUPPRESS_ANALYTICS': 'false',
+      'DASH__TOOL': 'flutter-tool',
+    };
+
+    ProcessUtils createProcessUtils({
+      Map<String, String> platformEnvironment = const <String, String>{},
+    }) {
+      return ProcessUtils(
+        processManager: ErrorHandlingProcessManager(
+          delegate: fakeProcessManager,
+          platform: FakePlatform(environment: platformEnvironment),
+          analytics: () => analytics,
+        ),
+        logger: BufferLogger.test(),
+      );
+    }
+
+    // A fake [Analytics] in its first-run state: the consent message has not
+    // been shown, so `okToSend` is false for its lifetime.
+    Analytics createFirstRunAnalytics() {
+      final fakeFlutterVersion = FakeFlutterVersion();
+      final fileSystem = MemoryFileSystem.test();
+      return Analytics.fake(
+        tool: DashTool.flutterTool,
+        homeDirectory: fileSystem.currentDirectory,
+        dartVersion: fakeFlutterVersion.dartSdkVersion,
+        fs: fileSystem,
+        flutterChannel: fakeFlutterVersion.channel,
+        flutterVersion: fakeFlutterVersion.getVersionString(),
+      );
+    }
+
+    setUp(() {
+      // An already-onboarded instance (consent message shown, telemetry
+      // enabled), so `okToSend` is true unless a test changes that. This way,
+      // tests that expect suppression exercise exactly one cause.
+      analytics = getInitializedFakeAnalyticsInstance(
+        fs: MemoryFileSystem.test(),
+        fakeFlutterVersion: FakeFlutterVersion(),
+      );
+      fakeProcessManager = FakeProcessManager.empty();
+      processUtils = createProcessUtils();
+    });
+
+    test('propagates DASH__SUPPRESS_ANALYTICS and DASH__TOOL when running a command', () async {
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvWithDefaultTool),
+      );
+
+      await analytics.setTelemetry(false);
+
+      expect((await processUtils.run(<String>['whoohoo'])).exitCode, 0);
+      expect(fakeProcessManager, hasNoRemainingExpectations);
+    });
+
+    test('preserves parent DASH__TOOL if already specified in the environment', () async {
+      final ProcessUtils localProcessUtils = createProcessUtils(
+        platformEnvironment: const <String, String>{'DASH__TOOL': 'vscode-plugins'},
+      );
+
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvWithParentTool),
+      );
+
+      await analytics.setTelemetry(false);
+
+      expect((await localProcessUtils.run(<String>['whoohoo'])).exitCode, 0);
+      expect(fakeProcessManager, hasNoRemainingExpectations);
+    });
+
+    for (final invalidTool in <String>['parent-tool', 'analysis-server']) {
+      test(
+        'does not pass on a parent DASH__TOOL of "$invalidTool", which cannot be a root tool',
+        () async {
+          final ProcessUtils localProcessUtils = createProcessUtils(
+            platformEnvironment: <String, String>{'DASH__TOOL': invalidTool},
+          );
+
+          fakeProcessManager.addCommand(
+            const FakeCommand(
+              command: <String>['whoohoo'],
+              environment: expectedEnvWithDefaultTool,
+            ),
+          );
+
+          await analytics.setTelemetry(false);
+
+          expect((await localProcessUtils.run(<String>['whoohoo'])).exitCode, 0);
+          expect(fakeProcessManager, hasNoRemainingExpectations);
+        },
+      );
+    }
+
+    for (final callerTool in <String>['dart-mcp-server', 'vscode-plugins']) {
+      test(
+        'ignores a caller-supplied DASH__TOOL of "$callerTool" when the parent has none',
+        () async {
+          fakeProcessManager.addCommand(
+            const FakeCommand(
+              command: <String>['whoohoo'],
+              environment: expectedEnvWithDefaultTool,
+            ),
+          );
+
+          await analytics.setTelemetry(false);
+
+          expect(
+            (await processUtils.run(
+              <String>['whoohoo'],
+              environment: <String, String>{'DASH__TOOL': callerTool},
+            )).exitCode,
+            0,
+          );
+          expect(fakeProcessManager, hasNoRemainingExpectations);
+        },
+      );
+    }
+
+    test('prefers a valid parent DASH__TOOL over a different caller-supplied value', () async {
+      final ProcessUtils localProcessUtils = createProcessUtils(
+        platformEnvironment: const <String, String>{'DASH__TOOL': 'vscode-plugins'},
+      );
+
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvWithParentTool),
+      );
+
+      await analytics.setTelemetry(false);
+
+      expect(
+        (await localProcessUtils.run(
+          <String>['whoohoo'],
+          environment: const <String, String>{'DASH__TOOL': 'intellij-plugins'},
+        )).exitCode,
+        0,
+      );
+      expect(fakeProcessManager, hasNoRemainingExpectations);
+    });
+
+    test('sets DASH__SUPPRESS_ANALYTICS to false when analytics can be sent and suppression is not requested', () async {
+      expect(analytics.okToSend, isTrue);
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvNotSuppressed),
+      );
+
+      expect((await processUtils.run(<String>['whoohoo'])).exitCode, 0);
+      expect(fakeProcessManager, hasNoRemainingExpectations);
+    });
+
+    test(
+      'sets DASH__SUPPRESS_ANALYTICS to true during the first run even though telemetry is enabled',
+      () async {
+        analytics = createFirstRunAnalytics();
+        expect(analytics.telemetryEnabled, isTrue);
+        expect(analytics.shouldShowMessage, isTrue);
+        fakeProcessManager.addCommand(
+          const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvWithDefaultTool),
+        );
+
+        expect((await processUtils.run(<String>['whoohoo'])).exitCode, 0);
+        expect(fakeProcessManager, hasNoRemainingExpectations);
+      },
+    );
+
+    test('keeps DASH__SUPPRESS_ANALYTICS true for the rest of the first run after the consent message is shown', () async {
+      analytics = createFirstRunAnalytics();
+      analytics.clientShowedMessage();
+      expect(analytics.telemetryEnabled, isTrue);
+      expect(analytics.shouldShowMessage, isFalse);
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvWithDefaultTool),
+      );
+
+      expect((await processUtils.run(<String>['whoohoo'])).exitCode, 0);
+      expect(fakeProcessManager, hasNoRemainingExpectations);
+    });
+
+    test(
+      'sets DASH__SUPPRESS_ANALYTICS to true when analytics are suppressed for this invocation',
+      () async {
+        expect(analytics.okToSend, isTrue);
+        analytics.suppressTelemetry();
+        expect(analytics.telemetryEnabled, isTrue);
+        fakeProcessManager.addCommand(
+          const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvWithDefaultTool),
+        );
+
+        expect((await processUtils.run(<String>['whoohoo'])).exitCode, 0);
+        expect(fakeProcessManager, hasNoRemainingExpectations);
+      },
+    );
+
+    test('preserves inherited DASH__SUPPRESS_ANALYTICS=true from the parent process', () async {
+      final ProcessUtils localProcessUtils = createProcessUtils(
+        platformEnvironment: const <String, String>{'DASH__SUPPRESS_ANALYTICS': 'true'},
+      );
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvWithDefaultTool),
+      );
+
+      expect((await localProcessUtils.run(<String>['whoohoo'])).exitCode, 0);
+      expect(fakeProcessManager, hasNoRemainingExpectations);
+    });
+
+    test('preserves inherited DASH__SUPPRESS_ANALYTICS=true when starting a process', () async {
+      final ProcessUtils localProcessUtils = createProcessUtils(
+        platformEnvironment: const <String, String>{'DASH__SUPPRESS_ANALYTICS': 'true'},
+      );
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvWithDefaultTool),
+      );
+
+      final Process process = await localProcessUtils.start(<String>['whoohoo']);
+
+      expect(await process.exitCode, 0);
+      expect(fakeProcessManager, hasNoRemainingExpectations);
+    });
+
+    test('preserves DASH__SUPPRESS_ANALYTICS=true supplied by the caller', () async {
+      fakeProcessManager.addCommand(
+        const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvWithDefaultTool),
+      );
+
+      final RunResult result = await processUtils.run(
+        <String>['whoohoo'],
+        environment: const <String, String>{'DASH__SUPPRESS_ANALYTICS': 'true'},
+      );
+
+      expect(result.exitCode, 0);
+      expect(fakeProcessManager, hasNoRemainingExpectations);
+    });
+
+    test(
+      'inherited DASH__SUPPRESS_ANALYTICS=true takes precedence over a caller-supplied false',
+      () async {
+        final ProcessUtils localProcessUtils = createProcessUtils(
+          platformEnvironment: const <String, String>{'DASH__SUPPRESS_ANALYTICS': 'true'},
+        );
+        fakeProcessManager.addCommand(
+          const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvWithDefaultTool),
+        );
+
+        final RunResult result = await localProcessUtils.run(
+          <String>['whoohoo'],
+          environment: const <String, String>{'DASH__SUPPRESS_ANALYTICS': 'false'},
+        );
+
+        expect(result.exitCode, 0);
+        expect(fakeProcessManager, hasNoRemainingExpectations);
+      },
+    );
+
+    test(
+      'inherited DASH__SUPPRESS_ANALYTICS=false is overridden when telemetry is disabled',
+      () async {
+        final ProcessUtils localProcessUtils = createProcessUtils(
+          platformEnvironment: const <String, String>{'DASH__SUPPRESS_ANALYTICS': 'false'},
+        );
+        fakeProcessManager.addCommand(
+          const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvWithDefaultTool),
+        );
+
+        await analytics.setTelemetry(false);
+
+        expect((await localProcessUtils.run(<String>['whoohoo'])).exitCode, 0);
+        expect(fakeProcessManager, hasNoRemainingExpectations);
+      },
+    );
+
+    for (final value in <String>['TRUE', '1', '']) {
+      test(
+        'does not treat inherited DASH__SUPPRESS_ANALYTICS="$value" as a suppression request',
+        () async {
+          final ProcessUtils localProcessUtils = createProcessUtils(
+            platformEnvironment: <String, String>{'DASH__SUPPRESS_ANALYTICS': value},
+          );
+          fakeProcessManager.addCommand(
+            const FakeCommand(command: <String>['whoohoo'], environment: expectedEnvNotSuppressed),
+          );
+
+          expect((await localProcessUtils.run(<String>['whoohoo'])).exitCode, 0);
+          expect(fakeProcessManager, hasNoRemainingExpectations);
+        },
+      );
+    }
+  });
+}
+
+class _ThrowsOnFlushIOSink extends MemoryIOSink {
+  @override
+  Future<Object?> flush() async {
+    throw const SocketException('Write failed', osError: OSError('Broken pipe', 32));
+  }
 }

@@ -12,21 +12,21 @@ void main() {
   MyTestRenderingFlutterBinding.ensureInitialized();
 
   tearDown(() {
-    final List<PipelineOwner> children = <PipelineOwner>[];
-    RendererBinding.instance.pipelineOwner.visitChildren((PipelineOwner child) {
+    final children = <PipelineOwner>[];
+    RendererBinding.instance.rootPipelineOwner.visitChildren((PipelineOwner child) {
       children.add(child);
     });
-    children.forEach(RendererBinding.instance.pipelineOwner.dropChild);
+    children.forEach(RendererBinding.instance.rootPipelineOwner.dropChild);
   });
 
   test("BindingPipelineManifold notifies binding if render object managed by binding's PipelineOwner tree needs visual update", () {
-    final PipelineOwner child = PipelineOwner();
-    RendererBinding.instance.pipelineOwner.adoptChild(child);
+    final child = PipelineOwner();
+    RendererBinding.instance.rootPipelineOwner.adoptChild(child);
 
     final RenderObject renderObject = TestRenderObject();
     child.rootNode = renderObject;
     renderObject.scheduleInitialLayout();
-    RendererBinding.instance.pipelineOwner.flushLayout();
+    RendererBinding.instance.rootPipelineOwner.flushLayout();
 
     MyTestRenderingFlutterBinding.instance.ensureVisualUpdateCount = 0;
     renderObject.markNeedsLayout();
@@ -34,23 +34,21 @@ void main() {
   });
 
   test('Turning global semantics on/off creates semantics owners in PipelineOwner tree', () {
-    final PipelineOwner child = PipelineOwner(
-      onSemanticsUpdate: (_) { },
-    );
-    RendererBinding.instance.pipelineOwner.adoptChild(child);
+    final child = PipelineOwner(onSemanticsUpdate: (_) {});
+    RendererBinding.instance.rootPipelineOwner.adoptChild(child);
 
     expect(child.semanticsOwner, isNull);
-    expect(RendererBinding.instance.pipelineOwner.semanticsOwner, isNull);
+    expect(RendererBinding.instance.rootPipelineOwner.semanticsOwner, isNull);
 
     final SemanticsHandle handle = SemanticsBinding.instance.ensureSemantics();
 
     expect(child.semanticsOwner, isNotNull);
-    expect(RendererBinding.instance.pipelineOwner.semanticsOwner, isNotNull);
+    expect(RendererBinding.instance.rootPipelineOwner.semanticsOwner, isNotNull);
 
     handle.dispose();
 
     expect(child.semanticsOwner, isNull);
-    expect(RendererBinding.instance.pipelineOwner.semanticsOwner, isNull);
+    expect(RendererBinding.instance.rootPipelineOwner.semanticsOwner, isNull);
   });
 }
 
@@ -59,10 +57,7 @@ class MyTestRenderingFlutterBinding extends TestRenderingFlutterBinding {
   static MyTestRenderingFlutterBinding? _instance;
 
   static MyTestRenderingFlutterBinding ensureInitialized() {
-    if (_instance != null) {
-      return _instance!;
-    }
-    return MyTestRenderingFlutterBinding();
+    return _instance ?? MyTestRenderingFlutterBinding();
   }
 
   @override
@@ -82,16 +77,16 @@ class MyTestRenderingFlutterBinding extends TestRenderingFlutterBinding {
 
 class TestRenderObject extends RenderObject {
   @override
-  void debugAssertDoesMeetConstraints() { }
+  void debugAssertDoesMeetConstraints() {}
 
   @override
   Rect get paintBounds => Rect.zero;
 
   @override
-  void performLayout() { }
+  void performLayout() {}
 
   @override
-  void performResize() { }
+  void performResize() {}
 
   @override
   Rect get semanticBounds => Rect.zero;

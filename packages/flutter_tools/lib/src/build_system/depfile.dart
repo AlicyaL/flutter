@@ -2,115 +2,118 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter_tools_core/flutter_tools_core.dart' as core;
+
 import '../base/error_handling_io.dart';
 import '../base/file_system.dart';
 import '../base/logger.dart';
 
 /// A service for creating and parsing [Depfile]s.
 class DepfileService {
-  DepfileService({
-    required Logger logger,
-    required FileSystem fileSystem,
-  }) : _logger = logger,
-       _fileSystem = fileSystem;
+  DepfileService({required this._logger, required this._fileSystem});
 
   final Logger _logger;
   final FileSystem _fileSystem;
-  static final RegExp _separatorExpr = RegExp(r'([^\\]) ');
-  static final RegExp _escapeExpr = RegExp(r'\\(.)');
 
   /// Given an [depfile] File, write the depfile contents.
   ///
-  /// If both [inputs] and [outputs] are empty, ensures the file does not
-  /// exist. This can be overridden with the [writeEmpty] parameter when
+  /// If both [depfile] and [Depfile.outputs] are empty,
+  /// ensures the file does not exist.
+  /// This can be overridden with the [writeEmpty] parameter when
   /// both static and runtime dependencies exist and it is not desired
   /// to force a rerun due to no depfile.
-  void writeToFile(Depfile depfile, File output, {bool writeEmpty = false}) {
+  ///
+  /// If [filterOutputs] is true, files that are listed as both inputs and
+  /// outputs in the depfile are filtered out from the outputs list before
+  /// writing to avoid circular dependency cycles in external systems like Xcode.
+  void writeToFile(
+    Depfile depfile,
+    File output, {
+    bool writeEmpty = false,
+    bool filterOutputs = false,
+  }) {
     if (depfile.inputs.isEmpty && depfile.outputs.isEmpty && !writeEmpty) {
       ErrorHandlingFileSystem.deleteIfExists(output);
       return;
     }
-    final StringBuffer buffer = StringBuffer();
-    _writeFilesToBuffer(depfile.outputs, buffer);
-    buffer.write(': ');
-    _writeFilesToBuffer(depfile.inputs, buffer);
-    output.writeAsStringSync(buffer.toString());
+    final List<File> outputsToWrite;
+    if (filterOutputs) {
+      final Set<String> inputPaths = depfile.inputs.map((File f) => f.absolute.path).toSet();
+      outputsToWrite = depfile.outputs
+          .where((File file) => !inputPaths.contains(file.absolute.path))
+          .toList();
+    } else {
+      outputsToWrite = depfile.outputs;
+    }
+    final coreDepfile = core.Depfile(
+      inputs: <String>[
+        for (final File file in depfile.inputs) _fileSystem.path.normalize(file.path),
+      ],
+      outputs: <String>[
+        for (final File file in outputsToWrite) _fileSystem.path.normalize(file.path),
+      ],
+    );
+    output.writeAsStringSync(coreDepfile.format(windows: _fileSystem.path.style.separator == r'\'));
   }
 
   /// Parse the depfile contents from [file].
   ///
-  /// If the syntax is invalid, returns an empty [Depfile].
-  Depfile parse(File file) {
+  /// If [allowMalformed] is `true` (the default) and the syntax is invalid,
+  /// logs an error and returns an empty [Depfile]. When [allowMalformed] is
+  /// `false`, throws a [FormatException] if [file] is malformed.
+  ///
+  /// If [baseDirectory] is provided, any relative paths in the depfile
+  /// will be resolved relative to it.
+  Depfile parse(File file, {bool allowMalformed = true, Directory? baseDirectory}) {
     final String contents = file.readAsStringSync();
-    final List<String> colonSeparated = contents.split(': ');
-    if (colonSeparated.length != 2) {
+    final core.Depfile parsed;
+    try {
+      parsed = core.Depfile.parse(contents);
+    } on FormatException {
+      if (!allowMalformed) {
+        rethrow;
+      }
       _logger.printError('Invalid depfile: ${file.path}');
       return const Depfile(<File>[], <File>[]);
     }
-    final List<File> inputs = _processList(colonSeparated[1].trim());
-    final List<File> outputs = _processList(colonSeparated[0].trim());
+    final List<File> inputs = _resolvePaths(parsed.inputs, baseDirectory);
+    final List<File> outputs = _resolvePaths(parsed.outputs, baseDirectory);
     return Depfile(inputs, outputs);
   }
-
 
   /// Parse the output of dart2js's used dependencies.
   ///
   /// The [file] contains a list of newline separated file URIs. The output
   /// file must be manually specified.
   Depfile parseDart2js(File file, File output) {
-    final List<File> inputs = <File>[];
-    for (final String rawUri in file.readAsLinesSync()) {
-      if (rawUri.trim().isEmpty) {
-        continue;
-      }
-      final Uri? fileUri = Uri.tryParse(rawUri);
-      if (fileUri == null) {
-        continue;
-      }
-      if (fileUri.scheme != 'file') {
-        continue;
-      }
-      inputs.add(_fileSystem.file(fileUri));
-    }
+    final inputs = <File>[
+      for (final String rawUri in file.readAsLinesSync())
+        if (rawUri.trim().isNotEmpty)
+          if (Uri.tryParse(rawUri) case final Uri fileUri when fileUri.scheme == 'file')
+            _fileSystem.file(fileUri),
+    ];
     return Depfile(inputs, <File>[output]);
   }
 
-  void _writeFilesToBuffer(List<File> files, StringBuffer buffer) {
-    for (final File outputFile in files) {
-      if (_fileSystem.path.style.separator == r'\') {
-        // backslashes and spaces in a depfile have to be escaped if the
-        // platform separator is a backslash.
-        final String path = outputFile.path
-          .replaceAll(r'\', r'\\')
-          .replaceAll(r' ', r'\ ');
-        buffer.write(' $path');
-      } else {
-        final String path = outputFile.path
-          .replaceAll(r' ', r'\ ');
-        buffer.write(' $path');
+  List<File> _resolvePaths(List<String> paths, [Directory? baseDirectory]) {
+    final isWindows = _fileSystem.path.style.separator == r'\';
+    return paths.map((String path) {
+      if (isWindows && path.length >= 5 && path.substring(0, 5).toLowerCase() == r'\unc\') {
+        path = r'\\' + path.substring(5);
       }
-    }
-  }
-
-  List<File> _processList(String rawText) {
-    return rawText
-    // Put every file on right-hand side on the separate line
-        .replaceAllMapped(_separatorExpr, (Match match) => '${match.group(1)}\n')
-        .split('\n')
-    // Expand escape sequences, so that '\ ', for example,ß becomes ' '
-        .map<String>((String path) => path.replaceAllMapped(_escapeExpr, (Match match) => match.group(1)!).trim())
-        .where((String path) => path.isNotEmpty)
-    // The tool doesn't write duplicates to these lists. This call is an attempt to
-    // be resilient to the outputs of other tools which write or user edits to depfiles.
-        .toSet()
-        .map(_fileSystem.file)
-        .toList();
+      if (baseDirectory != null && _fileSystem.path.isRelative(path)) {
+        return _fileSystem.file(
+          _fileSystem.path.normalize(_fileSystem.path.join(baseDirectory.path, path)),
+        );
+      }
+      return _fileSystem.file(_fileSystem.path.normalize(path));
+    }).toList();
   }
 }
 
 /// A class for representing depfile formats.
 class Depfile {
-  /// Create a [Depfile] from a list of [input] files and [output] files.
+  /// Create a [Depfile] from a list of [inputs] and [outputs].
   const Depfile(this.inputs, this.outputs);
 
   /// The input files for this depfile.

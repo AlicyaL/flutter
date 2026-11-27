@@ -7,28 +7,26 @@ import 'package:flutter_tools/src/artifacts.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/platform.dart';
-import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/device.dart';
+import 'package:flutter_tools/src/ios/core_devices.dart';
 import 'package:flutter_tools/src/ios/devices.dart';
 import 'package:flutter_tools/src/ios/ios_deploy.dart';
 import 'package:flutter_tools/src/ios/iproxy.dart';
 import 'package:flutter_tools/src/ios/mac.dart';
+import 'package:flutter_tools/src/ios/xcode_debug.dart';
+import 'package:flutter_tools/src/mdns_discovery.dart';
 import 'package:flutter_tools/src/project.dart';
+import 'package:test/fake.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../../src/common.dart';
-import '../../src/context.dart';
+import '../../src/fake_process_manager.dart';
+import '../../src/fakes.dart';
 
-// FlutterProject still depends on context.
 void main() {
-  late FileSystem fileSystem;
-
-  // This setup is required to inject the context.
-  setUp(() {
-    fileSystem = MemoryFileSystem.test();
-  });
-
-  testUsingContext('IOSDevice.isSupportedForProject is true on module project', () async {
+  test('IOSDevice.isSupportedForProject is true on module project', () async {
+    final FileSystem fileSystem = MemoryFileSystem.test();
     fileSystem.file('pubspec.yaml')
       ..createSync()
       ..writeAsStringSync(r'''
@@ -36,45 +34,38 @@ name: example
 flutter:
   module: {}
   ''');
-    fileSystem.file('.packages').writeAsStringSync('\n');
-    final FlutterProject flutterProject =
-      FlutterProject.fromDirectory(fileSystem.currentDirectory);
+    final FlutterProject flutterProject = FlutterProject.fromDirectory(
+      fileSystem.currentDirectory,
+      logger: BufferLogger.test(),
+    );
     final IOSDevice device = setUpIOSDevice(fileSystem);
 
     expect(device.isSupportedForProject(flutterProject), true);
-  }, overrides: <Type, Generator>{
-    FileSystem: () => fileSystem,
-    ProcessManager: () => FakeProcessManager.any(),
   });
 
-  testUsingContext('IOSDevice.isSupportedForProject is true with editable host app', () async {
+  test('IOSDevice.isSupportedForProject is true with editable host app', () async {
     final FileSystem fileSystem = MemoryFileSystem.test();
     fileSystem.file('pubspec.yaml').createSync();
-    fileSystem.file('.packages').writeAsStringSync('\n');
     fileSystem.directory('ios').createSync();
-    final FlutterProject flutterProject =
-      FlutterProject.fromDirectory(fileSystem.currentDirectory);
+    final FlutterProject flutterProject = FlutterProject.fromDirectory(
+      fileSystem.currentDirectory,
+      logger: BufferLogger.test(),
+    );
     final IOSDevice device = setUpIOSDevice(fileSystem);
 
     expect(device.isSupportedForProject(flutterProject), true);
-  }, overrides: <Type, Generator>{
-    FileSystem: () => fileSystem,
-    ProcessManager: () => FakeProcessManager.any(),
   });
 
-
-  testUsingContext('IOSDevice.isSupportedForProject is false with no host app and no module', () async {
+  test('IOSDevice.isSupportedForProject is false with no host app and no module', () async {
     final FileSystem fileSystem = MemoryFileSystem.test();
     fileSystem.file('pubspec.yaml').createSync();
-    fileSystem.file('.packages').writeAsStringSync('\n');
-    final FlutterProject flutterProject =
-      FlutterProject.fromDirectory(fileSystem.currentDirectory);
+    final FlutterProject flutterProject = FlutterProject.fromDirectory(
+      fileSystem.currentDirectory,
+      logger: BufferLogger.test(),
+    );
     final IOSDevice device = setUpIOSDevice(fileSystem);
 
     expect(device.isSupportedForProject(flutterProject), false);
-  }, overrides: <Type, Generator>{
-    FileSystem: () => fileSystem,
-    ProcessManager: () => FakeProcessManager.any(),
   });
 }
 
@@ -82,25 +73,50 @@ IOSDevice setUpIOSDevice(FileSystem fileSystem) {
   final Platform platform = FakePlatform(operatingSystem: 'macos');
   final Logger logger = BufferLogger.test();
   final ProcessManager processManager = FakeProcessManager.any();
+  final toolContext = FakeToolContext(
+    artifacts: Artifacts.test(),
+    cache: Cache.test(processManager: processManager),
+    fs: fileSystem,
+    logger: logger,
+    platform: platform,
+    processManager: processManager,
+  );
   return IOSDevice(
     'test',
-    fileSystem: fileSystem,
-    logger: logger,
-    iosDeploy: IOSDeploy(
-      platform: platform,
-      logger: logger,
-      processManager: processManager,
-      artifacts: Artifacts.test(),
-      cache: Cache.test(processManager: processManager),
-    ),
+    featureFlags: TestFeatureFlags(isLLDBDebuggingEnabled: true),
+    toolContext: toolContext,
+    xcode: FakeXcode(),
+    iosDeploy: IOSDeploy(toolContext: toolContext),
+    analytics: FakeAnalytics(),
+    cocoaPods: FakeCocoaPods(),
     iMobileDevice: IMobileDevice.test(processManager: processManager),
-    platform: platform,
+    coreDeviceControl: FakeIOSCoreDeviceControl(),
+    coreDeviceLauncher: FakeIOSCoreDeviceLauncher(),
+    plistParser: FakePlistParser(),
+    xcodeDebug: FakeXcodeDebug(),
+    xcodeProjectInterpreter: FakeXcodeProjectInterpreter(),
     name: 'iPhone 1',
     sdkVersion: '13.3',
-    cpuArchitecture: DarwinArch.arm64,
+    cpuArch: .arm64,
     iProxy: IProxy.test(logger: logger, processManager: processManager),
     connectionInterface: DeviceConnectionInterface.attached,
     isConnected: true,
+    isPaired: true,
     devModeEnabled: true,
+    isCoreDevice: false,
+    mdnsVmServiceDiscovery: MDnsVmServiceDiscovery(
+      analytics: const NoOpAnalytics(),
+      logger: logger,
+      platform: platform,
+    ),
+    templateRenderer: FakeTemplateRenderer(),
   );
 }
+
+class FakeXcodeDebug extends Fake implements XcodeDebug {}
+
+class FakeIOSCoreDeviceControl extends Fake implements IOSCoreDeviceControl {}
+
+class FakeIOSCoreDeviceLauncher extends Fake implements IOSCoreDeviceLauncher {}
+
+class FakeAnalytics extends Fake implements Analytics {}

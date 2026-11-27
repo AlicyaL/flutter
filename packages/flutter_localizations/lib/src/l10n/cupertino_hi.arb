@@ -22,5 +22,18 @@
   "tabSemanticsLabel": "$tabCount का टैब $tabIndex",
   "modalBarrierDismissLabel": "खारिज करें",
   "searchTextFieldPlaceholderLabel": "खोजें",
-  "noSpellCheckReplacementsLabel": "No Replacements Found"
+  "noSpellCheckReplacementsLabel": "सही वर्तनी वाला कोई शब्द नहीं मिला",
+  "menuDismissLabel": "मेन्यू खारिज करें",
+  "lookUpButtonLabel": "लुक अप बटन",
+  "searchWebButtonLabel": "वेब पर खोजें",
+  "shareButtonLabel": "शेयर करें…",
+  "clearButtonLabel": "हटाएं",
+  "cancelButtonLabel": "रद्द करें",
+  "backButtonLabel": "वापस जाएं",
+  "expansionTileExpandedHint": "छोटा करने के लिए दो बार टैप करें",
+  "expansionTileCollapsedHint": "बड़ा करने के लिए दो बार टैप करें",
+  "expansionTileExpandedTapHint": "छोटा करें",
+  "expansionTileCollapsedTapHint": "ज़्यादा जानने के लिए बड़ा करें",
+  "expandedHint": "छोटा किया गया",
+  "collapsedHint": "बड़ा किया गया"
 }

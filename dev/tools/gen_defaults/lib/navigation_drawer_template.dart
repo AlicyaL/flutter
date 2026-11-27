@@ -5,13 +5,17 @@
 import 'template.dart';
 
 class NavigationDrawerTemplate extends TokenTemplate {
-  const NavigationDrawerTemplate(super.blockName, super.fileName, super.tokens, {
+  const NavigationDrawerTemplate(
+    super.blockName,
+    super.fileName,
+    super.tokens, {
     super.colorSchemePrefix = '_colors.',
-    super.textThemePrefix = '_textTheme.'
+    super.textThemePrefix = '_textTheme.',
   });
 
   @override
-  String generate() => '''
+  String generate() =>
+      '''
 class _${blockName}DefaultsM3 extends NavigationDrawerThemeData {
   _${blockName}DefaultsM3(this.context)
     : super(
@@ -26,7 +30,7 @@ class _${blockName}DefaultsM3 extends NavigationDrawerThemeData {
   late final TextTheme _textTheme = Theme.of(context).textTheme;
 
   @override
-  Color? get backgroundColor => ${componentColor("md.comp.navigation-drawer.container")};
+  Color? get backgroundColor => ${componentColor("md.comp.navigation-drawer.modal.container")};
 
   @override
   Color? get surfaceTintColor => ${colorOrTransparent("md.comp.navigation-drawer.container.surface-tint-layer.color")};
@@ -38,11 +42,13 @@ class _${blockName}DefaultsM3 extends NavigationDrawerThemeData {
   Color? get indicatorColor => ${componentColor("md.comp.navigation-drawer.active-indicator")};
 
   @override
-  MaterialStateProperty<IconThemeData?>? get iconTheme {
-    return MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+  WidgetStateProperty<IconThemeData?>? get iconTheme {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
       return IconThemeData(
         size: ${getToken("md.comp.navigation-drawer.icon.size")},
-        color: states.contains(MaterialState.selected)
+        color: states.contains(WidgetState.disabled)
+          ? _colors.onSurfaceVariant.withOpacity(0.38)
+          : states.contains(WidgetState.selected)
             ? ${componentColor("md.comp.navigation-drawer.active.icon")}
             : ${componentColor("md.comp.navigation-drawer.inactive.icon")},
       );
@@ -50,11 +56,13 @@ class _${blockName}DefaultsM3 extends NavigationDrawerThemeData {
   }
 
   @override
-  MaterialStateProperty<TextStyle?>? get labelTextStyle {
-    return MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+  WidgetStateProperty<TextStyle?>? get labelTextStyle {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
       final TextStyle style = ${textStyle("md.comp.navigation-drawer.label-text")}!;
       return style.apply(
-        color: states.contains(MaterialState.selected)
+        color: states.contains(WidgetState.disabled)
+          ? _colors.onSurfaceVariant.withOpacity(0.38)
+          : states.contains(WidgetState.selected)
             ? ${componentColor("md.comp.navigation-drawer.active.label-text")}
             : ${componentColor("md.comp.navigation-drawer.inactive.label-text")},
       );

@@ -2,12 +2,49 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter/material.dart';
+///
+/// @docImport 'goldens.dart';
+/// @docImport 'widget_tester.dart';
+library;
+
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
+
+// A Future<ui.Image> that stores the resolved result.
+class _AsyncImage {
+  _AsyncImage(Future<ui.Image> task) {
+    _task = task.then((ui.Image image) {
+      _result = image;
+    });
+  }
+
+  // Returns the resolved image.
+  Future<ui.Image> result() async {
+    if (_result != null) {
+      return _result!;
+    }
+    await _task;
+    assert(_result != null);
+    return _result!;
+  }
+
+  late final Future<void> _task;
+  ui.Image? _result;
+
+  // Wait for a list of `_AsyncImage` and returns the list of its resolved
+  // images.
+  static Future<List<ui.Image>> resolveList(List<_AsyncImage> targets) {
+    final Iterable<Future<ui.Image>> images = targets.map<Future<ui.Image>>(
+      (_AsyncImage target) => target.result(),
+    );
+    return Future.wait<ui.Image>(images);
+  }
+}
 
 /// Records the frames of an animating widget, and later displays the frames as a
 /// grid in an animation sheet.
@@ -20,6 +57,7 @@ import 'package:flutter/widgets.dart';
 /// Using this class includes the following steps:
 ///
 ///  * Create an instance of this class.
+///  * Register [dispose] to the test's tear down callbacks.
 ///  * Pump frames that render the target widget wrapped in [record]. Every frame
 ///    that has `recording` being true will be recorded.
 ///  * Acquire the output image with [collate] and compare against the golden
@@ -33,6 +71,7 @@ import 'package:flutter/widgets.dart';
 /// testWidgets('Inkwell animation sheet', (WidgetTester tester) async {
 ///   // Create instance
 ///   final AnimationSheetBuilder animationSheet = AnimationSheetBuilder(frameSize: const Size(48, 24));
+///   addTearDown(animationSheet.dispose);
 ///
 ///   final Widget target = Material(
 ///     child: Directionality(
@@ -55,14 +94,14 @@ import 'package:flutter/widgets.dart';
 ///   // Start recording (`recording` is true)
 ///   await tester.pumpFrames(animationSheet.record(
 ///     target,
-///     recording: true,
+///     recording: true, // ignore: avoid_redundant_argument_values
 ///   ), const Duration(seconds: 1));
 ///
 ///   await gesture.up();
 ///
 ///   await tester.pumpFrames(animationSheet.record(
 ///     target,
-///     recording: true,
+///     recording: true, // ignore: avoid_redundant_argument_values
 ///   ), const Duration(seconds: 1));
 ///
 ///   // Compare against golden file
@@ -85,10 +124,22 @@ class AnimationSheetBuilder {
   ///
   /// The [allLayers] controls whether to record elements drawn out of the subtree,
   /// and defaults to false.
-  AnimationSheetBuilder({
-    required this.frameSize,
-    this.allLayers = false,
-  }) : assert(!kIsWeb);
+  AnimationSheetBuilder({required this.frameSize, this.allLayers = false}) : assert(!kIsWeb);
+
+  /// Dispose all recorded frames and result images.
+  ///
+  /// This method must be called before the test case ends (usually as a tear
+  /// down callback) to properly deallocate the images.
+  ///
+  /// After this method is called, there will be no frames to [collate].
+  Future<void> dispose() async {
+    final targets = <_AsyncImage>[..._recordedFrames, ..._results];
+    _recordedFrames.clear();
+    _results.clear();
+    for (final ui.Image image in await _AsyncImage.resolveList(targets)) {
+      image.dispose();
+    }
+  }
 
   /// The size of the child to be recorded.
   ///
@@ -112,20 +163,7 @@ class AnimationSheetBuilder {
   /// Defaults to false.
   final bool allLayers;
 
-  final List<Future<ui.Image>> _recordedFrames = <Future<ui.Image>>[];
-  Future<List<ui.Image>> get _frames async {
-    final List<ui.Image> frames = await Future.wait<ui.Image>(_recordedFrames, eagerError: true);
-    assert(() {
-      for (final ui.Image frame in frames) {
-        assert(frame.width == frameSize.width && frame.height == frameSize.height,
-          'Unexpected size mismatch: frame has (${frame.width}, ${frame.height}) '
-          'while `frameSize` is $frameSize.'
-        );
-      }
-      return true;
-    }());
-    return frames;
-  }
+  final List<_AsyncImage> _recordedFrames = <_AsyncImage>[];
 
   /// Returns a widget that renders a widget in a box that can be recorded.
   ///
@@ -138,36 +176,57 @@ class AnimationSheetBuilder {
   /// [collate]. If neither condition is met, the frames are not recorded, which
   /// is useful during setup phases.
   ///
-  /// The `child` must not be null.
-  ///
   /// See also:
   ///
   ///  * [WidgetTester.pumpFrames], which renders a widget in a series of frames
   ///    with a fixed time interval.
-  Widget record(Widget child, {
-    Key? key,
-    bool recording = true,
-  }) {
+  Widget record(Widget child, {Key? key, bool recording = true}) {
     return _AnimationSheetRecorder(
       key: key,
       size: frameSize,
       allLayers: allLayers,
-      handleRecorded: recording ? _recordedFrames.add : null,
+      handleRecorded: !recording
+          ? null
+          : (Future<ui.Image> futureImage) {
+              _recordedFrames.add(
+                _AsyncImage(() async {
+                  final ui.Image image = await futureImage;
+                  assert(
+                    image.width == frameSize.width && image.height == frameSize.height,
+                    'Unexpected size mismatch: frame has (${image.width}, ${image.height}) '
+                    'while `frameSize` is $frameSize.',
+                  );
+                  return image;
+                }()),
+              );
+            },
       child: child,
     );
   }
 
+  // The result images generated by `collate`.
+  //
+  // They're stored here to be disposed by [dispose].
+  final List<_AsyncImage> _results = <_AsyncImage>[];
+
   /// Returns an result image by putting all frames together in a table.
   ///
-  /// This method returns a table of captured frames, `cellsPerRow` images
-  /// per row, from left to right, top to bottom.
+  /// This method returns an image that arranges the captured frames in a table,
+  /// which has `cellsPerRow` images per row with the order from left to right,
+  /// top to bottom.
+  ///
+  /// The result image of this method is managed by [AnimationSheetBuilder],
+  /// and should not be disposed by the caller.
   ///
   /// An example of using this method can be found at [AnimationSheetBuilder].
   Future<ui.Image> collate(int cellsPerRow) async {
-    final List<ui.Image> frames = await _frames;
-    assert(frames.isNotEmpty,
-      'No frames are collected. Have you forgot to set `recording` to true?');
-    return _collateFrames(frames, frameSize, cellsPerRow);
+    assert(
+      _recordedFrames.isNotEmpty,
+      'No frames are collected. Have you forgot to set `recording` to true?',
+    );
+    final result = _AsyncImage(_collateFrames(_recordedFrames, frameSize, cellsPerRow));
+    _results.add(result);
+    return result.result();
   }
 }
 
@@ -196,7 +255,8 @@ class _AnimationSheetRecorderState extends State<_AnimationSheetRecorder> {
 
   void _record(Duration duration) {
     assert(widget.handleRecorded != null);
-    final _RenderRootableRepaintBoundary boundary = boundaryKey.currentContext!.findRenderObject()! as _RenderRootableRepaintBoundary;
+    final boundary =
+        boundaryKey.currentContext!.findRenderObject()! as _RenderRootableRepaintBoundary;
     if (widget.allLayers) {
       widget.handleRecorded!(boundary.allLayersToImage());
     } else {
@@ -231,17 +291,13 @@ class _AnimationSheetRecorderState extends State<_AnimationSheetRecorder> {
 //
 // If `callback` is null, `_PostFrameCallbacker` is equivalent to a proxy box.
 class _PostFrameCallbacker extends SingleChildRenderObjectWidget {
-  const _PostFrameCallbacker({
-    super.child,
-    this.callback,
-  });
+  const _PostFrameCallbacker({super.child, this.callback});
 
   final FrameCallback? callback;
 
   @override
-  _RenderPostFrameCallbacker createRenderObject(BuildContext context) => _RenderPostFrameCallbacker(
-    callback: callback,
-  );
+  _RenderPostFrameCallbacker createRenderObject(BuildContext context) =>
+      _RenderPostFrameCallbacker(callback: callback);
 
   @override
   void updateRenderObject(BuildContext context, _RenderPostFrameCallbacker renderObject) {
@@ -250,9 +306,7 @@ class _PostFrameCallbacker extends SingleChildRenderObjectWidget {
 }
 
 class _RenderPostFrameCallbacker extends RenderProxyBox {
-  _RenderPostFrameCallbacker({
-    FrameCallback? callback,
-  }) : _callback = callback;
+  _RenderPostFrameCallbacker({this._callback});
 
   FrameCallback? get callback => _callback;
   FrameCallback? _callback;
@@ -281,15 +335,20 @@ class _RenderPostFrameCallbacker extends RenderProxyBox {
   }
 }
 
-Future<ui.Image> _collateFrames(List<ui.Image> frames, Size frameSize, int cellsPerRow) async {
+Future<ui.Image> _collateFrames(
+  List<_AsyncImage> futureFrames,
+  Size frameSize,
+  int cellsPerRow,
+) async {
+  final List<ui.Image> frames = await _AsyncImage.resolveList(futureFrames);
   final int rowNum = (frames.length / cellsPerRow).ceil();
 
-  final ui.PictureRecorder recorder = ui.PictureRecorder();
-  final Canvas canvas = Canvas(
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(
     recorder,
     Rect.fromLTWH(0, 0, frameSize.width * cellsPerRow, frameSize.height * rowNum),
   );
-  for (int i = 0; i < frames.length; i += 1) {
+  for (var i = 0; i < frames.length; i += 1) {
     canvas.drawImage(
       frames[i],
       Offset(frameSize.width * (i % cellsPerRow), frameSize.height * (i / cellsPerRow).floor()),
@@ -330,8 +389,9 @@ class _RenderRootableRepaintBoundary extends RenderRepaintBoundary {
 // A [RepaintBoundary], except that its render object has a `fullscreenToImage` method.
 class _RootableRepaintBoundary extends SingleChildRenderObjectWidget {
   /// Creates a widget that isolates repaints.
-  const _RootableRepaintBoundary({ super.key, super.child });
+  const _RootableRepaintBoundary({super.key, super.child});
 
   @override
-  _RenderRootableRepaintBoundary createRenderObject(BuildContext context) => _RenderRootableRepaintBoundary();
+  _RenderRootableRepaintBoundary createRenderObject(BuildContext context) =>
+      _RenderRootableRepaintBoundary();
 }

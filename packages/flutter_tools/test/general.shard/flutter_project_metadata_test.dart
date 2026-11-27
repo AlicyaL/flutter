@@ -9,6 +9,7 @@ import 'package:flutter_tools/src/flutter_project_metadata.dart';
 import 'package:flutter_tools/src/project.dart';
 
 import '../src/common.dart';
+import '../src/fakes.dart';
 
 void main() {
   late FileSystem fileSystem;
@@ -21,8 +22,12 @@ void main() {
     metadataFile = fileSystem.file('.metadata');
   });
 
-  testWithoutContext('project metadata fields are empty when file does not exist', () {
-    final FlutterProjectMetadata projectMetadata = FlutterProjectMetadata(metadataFile, logger);
+  test('project metadata fields are empty when file does not exist', () {
+    final projectMetadata = FlutterProjectMetadata(
+      metadataFile,
+      logger,
+      extensionTemplateManager: null,
+    );
     expect(projectMetadata.projectType, isNull);
     expect(projectMetadata.versionChannel, isNull);
     expect(projectMetadata.versionRevision, isNull);
@@ -30,9 +35,13 @@ void main() {
     expect(logger.traceText, contains('No .metadata file found at .metadata'));
   });
 
-  testWithoutContext('project metadata fields are empty when file is empty', () {
+  test('project metadata fields are empty when file is empty', () {
     metadataFile.createSync();
-    final FlutterProjectMetadata projectMetadata = FlutterProjectMetadata(metadataFile, logger);
+    final projectMetadata = FlutterProjectMetadata(
+      metadataFile,
+      logger,
+      extensionTemplateManager: null,
+    );
     expect(projectMetadata.projectType, isNull);
     expect(projectMetadata.versionChannel, isNull);
     expect(projectMetadata.versionRevision, isNull);
@@ -40,9 +49,13 @@ void main() {
     expect(logger.traceText, contains('.metadata file at .metadata was empty or malformed.'));
   });
 
-  testWithoutContext('project metadata fields are empty when file is not valid yaml', () {
+  test('project metadata fields are empty when file is not valid yaml', () {
     metadataFile.writeAsStringSync(' channel: @something');
-    final FlutterProjectMetadata projectMetadata = FlutterProjectMetadata(metadataFile, logger);
+    final projectMetadata = FlutterProjectMetadata(
+      metadataFile,
+      logger,
+      extensionTemplateManager: null,
+    );
     expect(projectMetadata.projectType, isNull);
     expect(projectMetadata.versionChannel, isNull);
     expect(projectMetadata.versionRevision, isNull);
@@ -50,37 +63,51 @@ void main() {
     expect(logger.traceText, contains('.metadata file at .metadata was empty or malformed.'));
   });
 
-  testWithoutContext('projectType is populated when version is null', () {
+  test('projectType is populated when version is null', () {
     metadataFile
       ..createSync()
       ..writeAsStringSync('''
 version:
 project_type: plugin
       ''');
-    final FlutterProjectMetadata projectMetadata = FlutterProjectMetadata(metadataFile, logger);
-    expect(projectMetadata.projectType, FlutterProjectType.plugin);
+    final projectMetadata = FlutterProjectMetadata(
+      metadataFile,
+      logger,
+      extensionTemplateManager: null,
+    );
+    expect(projectMetadata.projectType, FlutterTemplateType.plugin);
     expect(projectMetadata.versionChannel, isNull);
     expect(projectMetadata.versionRevision, isNull);
 
-    expect(logger.traceText, contains('The value of key `version` in .metadata was expected to be YamlMap but was Null'));
+    expect(
+      logger.traceText,
+      contains('The value of key `version` in .metadata was expected to be YamlMap but was Null'),
+    );
   });
 
-  testWithoutContext('projectType is populated when version is malformed', () {
+  test('projectType is populated when version is malformed', () {
     metadataFile
       ..createSync()
       ..writeAsStringSync('''
 version: STRING INSTEAD OF MAP
 project_type: plugin
       ''');
-    final FlutterProjectMetadata projectMetadata = FlutterProjectMetadata(metadataFile, logger);
-    expect(projectMetadata.projectType, FlutterProjectType.plugin);
+    final projectMetadata = FlutterProjectMetadata(
+      metadataFile,
+      logger,
+      extensionTemplateManager: null,
+    );
+    expect(projectMetadata.projectType, FlutterTemplateType.plugin);
     expect(projectMetadata.versionChannel, isNull);
     expect(projectMetadata.versionRevision, isNull);
 
-    expect(logger.traceText, contains('The value of key `version` in .metadata was expected to be YamlMap but was String'));
+    expect(
+      logger.traceText,
+      contains('The value of key `version` in .metadata was expected to be YamlMap but was String'),
+    );
   });
 
-  testWithoutContext('version is populated when projectType is malformed', () {
+  test('version is populated when projectType is malformed', () {
     metadataFile
       ..createSync()
       ..writeAsStringSync('''
@@ -89,15 +116,24 @@ version:
   channel: stable
 project_type: {}
       ''');
-    final FlutterProjectMetadata projectMetadata = FlutterProjectMetadata(metadataFile, logger);
+    final projectMetadata = FlutterProjectMetadata(
+      metadataFile,
+      logger,
+      extensionTemplateManager: null,
+    );
     expect(projectMetadata.projectType, isNull);
     expect(projectMetadata.versionChannel, 'stable');
     expect(projectMetadata.versionRevision, 'b59b226a49391949247e3d6122e34bb001049ae4');
 
-    expect(logger.traceText, contains('The value of key `project_type` in .metadata was expected to be String but was YamlMap'));
+    expect(
+      logger.traceText,
+      contains(
+        'The value of key `project_type` in .metadata was expected to be String but was YamlMap',
+      ),
+    );
   });
 
-  testWithoutContext('migrate config is populated when version is malformed', () {
+  test('migrate config is populated when version is malformed', () {
     metadataFile
       ..createSync()
       ..writeAsStringSync('''
@@ -113,17 +149,35 @@ migration:
   unmanaged_files:
     - 'file1'
       ''');
-    final FlutterProjectMetadata projectMetadata = FlutterProjectMetadata(metadataFile, logger);
+    final projectMetadata = FlutterProjectMetadata(
+      metadataFile,
+      logger,
+      extensionTemplateManager: null,
+    );
     expect(projectMetadata.projectType, isNull);
-    expect(projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.createRevision, 'abcdefg');
-    expect(projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.baseRevision, 'baserevision');
+    expect(
+      projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.createRevision,
+      'abcdefg',
+    );
+    expect(
+      projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.baseRevision,
+      'baserevision',
+    );
     expect(projectMetadata.migrateConfig.unmanagedFiles[0], 'file1');
 
-    expect(logger.traceText, contains('The value of key `version` in .metadata was expected to be YamlMap but was String'));
-    expect(logger.traceText, contains('The value of key `project_type` in .metadata was expected to be String but was YamlMap'));
+    expect(
+      logger.traceText,
+      contains('The value of key `version` in .metadata was expected to be YamlMap but was String'),
+    );
+    expect(
+      logger.traceText,
+      contains(
+        'The value of key `project_type` in .metadata was expected to be String but was YamlMap',
+      ),
+    );
   });
 
-  testWithoutContext('migrate config is populated when unmanaged_files is malformed', () {
+  test('migrate config is populated when unmanaged_files is malformed', () {
     metadataFile
       ..createSync()
       ..writeAsStringSync('''
@@ -140,17 +194,32 @@ migration:
 
   unmanaged_files: {}
       ''');
-    final FlutterProjectMetadata projectMetadata = FlutterProjectMetadata(metadataFile, logger);
-    expect(projectMetadata.projectType, FlutterProjectType.app);
-    expect(projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.createRevision, 'abcdefg');
-    expect(projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.baseRevision, 'baserevision');
+    final projectMetadata = FlutterProjectMetadata(
+      metadataFile,
+      logger,
+      extensionTemplateManager: null,
+    );
+    expect(projectMetadata.projectType, FlutterTemplateType.app);
+    expect(
+      projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.createRevision,
+      'abcdefg',
+    );
+    expect(
+      projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.baseRevision,
+      'baserevision',
+    );
     // Tool uses default unmanaged files list when malformed.
     expect(projectMetadata.migrateConfig.unmanagedFiles[0], 'lib/main.dart');
 
-    expect(logger.traceText, contains('The value of key `unmanaged_files` in .metadata was expected to be YamlList but was YamlMap'));
+    expect(
+      logger.traceText,
+      contains(
+        'The value of key `unmanaged_files` in .metadata was expected to be YamlList but was YamlMap',
+      ),
+    );
   });
 
-  testWithoutContext('platforms is populated with a malformed entry', () {
+  test('platforms is populated with a malformed entry', () {
     metadataFile
       ..createSync()
       ..writeAsStringSync('''
@@ -173,15 +242,85 @@ migration:
   unmanaged_files:
     - 'file1'
       ''');
-    final FlutterProjectMetadata projectMetadata = FlutterProjectMetadata(metadataFile, logger);
-    expect(projectMetadata.projectType, FlutterProjectType.app);
-    expect(projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.createRevision, 'abcdefg');
-    expect(projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.baseRevision, 'baserevision');
-    expect(projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.ios]?.createRevision, 'abcdefg');
-    expect(projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.ios]?.baseRevision, 'baserevision');
-    expect(projectMetadata.migrateConfig.platformConfigs.containsKey(SupportedPlatform.android), false);
+    final projectMetadata = FlutterProjectMetadata(
+      metadataFile,
+      logger,
+      extensionTemplateManager: null,
+    );
+    expect(projectMetadata.projectType, FlutterTemplateType.app);
+    expect(
+      projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.createRevision,
+      'abcdefg',
+    );
+    expect(
+      projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.root]?.baseRevision,
+      'baserevision',
+    );
+    expect(
+      projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.ios]?.createRevision,
+      'abcdefg',
+    );
+    expect(
+      projectMetadata.migrateConfig.platformConfigs[SupportedPlatform.ios]?.baseRevision,
+      'baserevision',
+    );
+    expect(
+      projectMetadata.migrateConfig.platformConfigs.containsKey(SupportedPlatform.android),
+      false,
+    );
     expect(projectMetadata.migrateConfig.unmanagedFiles[0], 'file1');
 
     expect(logger.traceText, contains('The key `create_revision` was not found'));
+  });
+
+  test('enabledValues does not contain packageFfi if native-assets not enabled', () {
+    final flags = TestFeatureFlags();
+    expect(
+      ParsedFlutterTemplateType.enabledValues(flags, extensionTemplateManager: null),
+      isNot(contains(FlutterTemplateType.packageFfi)),
+    );
+    expect(
+      ParsedFlutterTemplateType.enabledValues(flags, extensionTemplateManager: null),
+      contains(FlutterTemplateType.plugin),
+    );
+  });
+
+  test('enabledValues contains packageFfi if natives-assets enabled', () {
+    final flags = TestFeatureFlags(isNativeAssetsEnabled: true);
+    expect(
+      ParsedFlutterTemplateType.enabledValues(flags, extensionTemplateManager: null),
+      contains(FlutterTemplateType.packageFfi),
+    );
+    expect(
+      ParsedFlutterTemplateType.enabledValues(flags, extensionTemplateManager: null),
+      contains(FlutterTemplateType.plugin),
+    );
+  });
+
+  test(
+    'projectType is null for unknown or custom template when extensionTemplateManager is null',
+    () {
+      metadataFile
+        ..createSync()
+        ..writeAsStringSync('''
+version:
+  revision: b59b226a49391949247e3d6122e34bb001049ae4
+  channel: stable
+project_type: custom-linux-app
+      ''');
+      final projectMetadata = FlutterProjectMetadata(
+        metadataFile,
+        logger,
+        extensionTemplateManager: null,
+      );
+      expect(projectMetadata.projectType, isNull);
+    },
+  );
+
+  test('ParsedFlutterTemplateType.fromCliName returns null when not found', () {
+    expect(
+      ParsedFlutterTemplateType.fromCliName('custom-template', extensionTemplateManager: null),
+      isNull,
+    );
   });
 }

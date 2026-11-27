@@ -2,25 +2,35 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
 
 void main() {
-  late AppLifecycleListener listener;
+  AppLifecycleListener? listener;
 
   Future<void> setAppLifeCycleState(AppLifecycleState state) async {
     final ByteData? message = const StringCodec().encodeMessage(state.toString());
-    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .handlePlatformMessage('flutter/lifecycle', message, (_) {});
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      'flutter/lifecycle',
+      message,
+      (_) {},
+    );
   }
 
   Future<void> sendAppExitRequest() async {
-    final ByteData message = const JSONMethodCodec().encodeMethodCall(const MethodCall('System.requestAppExit'));
-    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .handlePlatformMessage('flutter/platform', message, (_) {});
+    final ByteData message = const JSONMethodCodec().encodeMethodCall(
+      const MethodCall('System.requestAppExit'),
+    );
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+      'flutter/platform',
+      message,
+      (_) {},
+    );
   }
 
   setUp(() async {
@@ -39,18 +49,25 @@ void main() {
   });
 
   tearDown(() {
-    listener.dispose();
+    listener?.dispose();
+    listener = null;
     final TestWidgetsFlutterBinding binding = TestWidgetsFlutterBinding.instance;
-    binding.resetLifecycleState();
+    binding.resetInternalState();
     binding.platformDispatcher.resetInitialLifecycleState();
-    assert(TestAppLifecycleListener.registerCount == 0,
-        'There were ${TestAppLifecycleListener.registerCount} listeners that were not disposed of in tests.');
+    assert(
+      TestAppLifecycleListener.registerCount == 0,
+      'There were ${TestAppLifecycleListener.registerCount} listeners that were not disposed of in tests.',
+    );
   });
 
   testWidgets('Default Diagnostics', (WidgetTester tester) async {
     listener = TestAppLifecycleListener(binding: tester.binding);
-    expect(listener.toString(),
-        equalsIgnoringHashCodes('TestAppLifecycleListener#00000(binding: <AutomatedTestWidgetsFlutterBinding>)'));
+    expect(
+      listener.toString(),
+      equalsIgnoringHashCodes(
+        'TestAppLifecycleListener#00000(binding: <AutomatedTestWidgetsFlutterBinding>)',
+      ),
+    );
   });
 
   testWidgets('Diagnostics', (WidgetTester tester) async {
@@ -64,13 +81,15 @@ void main() {
       onStateChange: (AppLifecycleState _) {},
     );
     expect(
-        listener.toString(),
-        equalsIgnoringHashCodes(
-            'TestAppLifecycleListener#00000(binding: <AutomatedTestWidgetsFlutterBinding>, onStateChange, onExitRequested)'));
+      listener.toString(),
+      equalsIgnoringHashCodes(
+        'TestAppLifecycleListener#00000(binding: <AutomatedTestWidgetsFlutterBinding>, onStateChange, onExitRequested)',
+      ),
+    );
   });
 
   testWidgets('listens to AppLifecycleState', (WidgetTester tester) async {
-    final List<AppLifecycleState> states = <AppLifecycleState>[tester.binding.lifecycleState!];
+    final states = <AppLifecycleState>[tester.binding.lifecycleState!];
     void stateChange(AppLifecycleState state) {
       states.add(state);
     }
@@ -82,21 +101,28 @@ void main() {
     expect(states, equals(<AppLifecycleState>[AppLifecycleState.detached]));
     await setAppLifeCycleState(AppLifecycleState.inactive);
     // "resumed" is generated.
-    expect(states,
-        equals(<AppLifecycleState>[AppLifecycleState.detached, AppLifecycleState.resumed, AppLifecycleState.inactive]));
+    expect(
+      states,
+      equals(<AppLifecycleState>[
+        AppLifecycleState.detached,
+        AppLifecycleState.resumed,
+        AppLifecycleState.inactive,
+      ]),
+    );
     await setAppLifeCycleState(AppLifecycleState.resumed);
     expect(
-        states,
-        equals(<AppLifecycleState>[
-          AppLifecycleState.detached,
-          AppLifecycleState.resumed,
-          AppLifecycleState.inactive,
-          AppLifecycleState.resumed
-        ]));
+      states,
+      equals(<AppLifecycleState>[
+        AppLifecycleState.detached,
+        AppLifecycleState.resumed,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]),
+    );
   });
 
   testWidgets('Triggers correct state transition callbacks', (WidgetTester tester) async {
-    final List<String> transitions = <String>[];
+    final transitions = <String>[];
     listener = TestAppLifecycleListener(
       binding: WidgetsBinding.instance,
       onDetach: () => transitions.add('detach'),
@@ -127,29 +153,44 @@ void main() {
     await setAppLifeCycleState(AppLifecycleState.resumed);
     expect(transitions, equals(<String>['restart', 'show', 'resume']));
 
-    // Generates intermediate states.
+    // Generates intermediate states from lower to higher lifecycle states.
     transitions.clear();
     await setAppLifeCycleState(AppLifecycleState.paused);
     expect(transitions, equals(<String>['inactive', 'hide', 'pause']));
+
     // Wraps around from pause to detach.
     await setAppLifeCycleState(AppLifecycleState.detached);
     expect(transitions, equals(<String>['inactive', 'hide', 'pause', 'detach']));
     await setAppLifeCycleState(AppLifecycleState.resumed);
     expect(transitions, equals(<String>['inactive', 'hide', 'pause', 'detach', 'resume']));
     await setAppLifeCycleState(AppLifecycleState.paused);
-    expect(transitions, equals(<String>['inactive', 'hide', 'pause', 'detach', 'resume', 'inactive', 'hide', 'pause']));
+    expect(
+      transitions,
+      equals(<String>[
+        'inactive',
+        'hide',
+        'pause',
+        'detach',
+        'resume',
+        'inactive',
+        'hide',
+        'pause',
+      ]),
+    );
+
+    // Generates intermediate states from higher to lower lifecycle states.
     transitions.clear();
     await setAppLifeCycleState(AppLifecycleState.resumed);
     expect(transitions, equals(<String>['restart', 'show', 'resume']));
 
-    // Asserts on bad transitions
-    await expectLater(() => setAppLifeCycleState(AppLifecycleState.detached), throwsAssertionError);
-    await setAppLifeCycleState(AppLifecycleState.paused);
+    // Go to detached
+    transitions.clear();
     await setAppLifeCycleState(AppLifecycleState.detached);
+    expect(transitions, equals(<String>['inactive', 'hide', 'pause', 'detach']));
   });
 
   testWidgets('Receives exit requests', (WidgetTester tester) async {
-    bool exitRequested = false;
+    var exitRequested = false;
     Future<AppExitResponse> handleExitRequested() async {
       exitRequested = true;
       return AppExitResponse.cancel;
@@ -161,6 +202,49 @@ void main() {
     );
     await sendAppExitRequest();
     expect(exitRequested, isTrue);
+  });
+
+  testWidgets('Does not notify listeners disposed while handling an exit request', (
+    WidgetTester tester,
+  ) async {
+    final firstRequestStarted = Completer<void>();
+    final finishFirstRequest = Completer<void>();
+    var disposedListenerCalled = false;
+    final firstListener = TestAppLifecycleListener(
+      binding: WidgetsBinding.instance,
+      onExitRequested: () async {
+        firstRequestStarted.complete();
+        await finishFirstRequest.future;
+        return AppExitResponse.exit;
+      },
+    );
+    addTearDown(firstListener.dispose);
+    listener = TestAppLifecycleListener(
+      binding: WidgetsBinding.instance,
+      onExitRequested: () async {
+        disposedListenerCalled = true;
+        return AppExitResponse.exit;
+      },
+    );
+
+    final Future<void> exitRequest = sendAppExitRequest();
+    await firstRequestStarted.future;
+    listener!.dispose();
+    listener = null;
+    finishFirstRequest.complete();
+    await exitRequest;
+
+    expect(disposedListenerCalled, isFalse);
+  });
+
+  test('AppLifecycleListener dispatches memory events', () async {
+    await expectLater(
+      await memoryEvents(
+        () => AppLifecycleListener(binding: WidgetsBinding.instance).dispose(),
+        AppLifecycleListener,
+      ),
+      areCreateAndDispose,
+    );
   });
 }
 

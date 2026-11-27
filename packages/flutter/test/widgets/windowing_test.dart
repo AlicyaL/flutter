@@ -1,0 +1,2452 @@
+// Copyright 2014 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import 'dart:ui' show Display, FlutterView, PlatformDispatcher;
+
+import 'package:flutter/src/foundation/_features.dart' show isWindowingEnabled;
+import 'package:flutter/src/widgets/_window.dart'
+    show
+        BaseWindowController,
+        DialogWindowController,
+        DialogWindowControllerDelegate,
+        PopupWindowController,
+        SatelliteWindowController,
+        TooltipWindowController,
+        Window,
+        WindowController,
+        WindowControllerDelegate,
+        WindowScope,
+        WindowingOwner,
+        createDefaultWindowingOwner;
+import 'package:flutter/src/widgets/_window_positioner.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'multi_view_testing.dart';
+
+class _StubWindowController extends WindowController {
+  _StubWindowController(WidgetTester tester, {FlutterView? rootView}) : super.empty() {
+    this.rootView = rootView ?? FakeView(tester.view);
+  }
+
+  @override
+  Size get contentSize => Size.zero;
+
+  @override
+  String get title => 'Stub Window';
+
+  @override
+  bool get isActivated => true;
+
+  @override
+  bool get isMaximized => false;
+
+  @override
+  bool get isMinimized => false;
+
+  @override
+  bool get isFullscreen => false;
+
+  @override
+  void setSize(Size size) {}
+
+  @override
+  void setConstraints(BoxConstraints constraints) {}
+
+  @override
+  void setTitle(String title) {}
+
+  @override
+  void activate() {}
+
+  @override
+  void setMaximized(bool maximized) {}
+
+  @override
+  void setMinimized(bool minimized) {}
+
+  @override
+  void setFullscreen(bool fullscreen, {Display? display}) {}
+
+  @override
+  bool get isDestroyed => _destroyed;
+  bool _destroyed = false;
+
+  @override
+  void destroy() {
+    _destroyed = true;
+  }
+}
+
+class _StubDialogWindowController extends DialogWindowController {
+  _StubDialogWindowController(WidgetTester tester) : super.empty() {
+    rootView = FakeView(tester.view);
+  }
+
+  @override
+  BaseWindowController? get parent => null;
+
+  @override
+  Size get contentSize => Size.zero;
+
+  @override
+  String get title => 'Stub Window';
+
+  @override
+  bool get isActivated => true;
+
+  @override
+  bool get isMinimized => false;
+
+  @override
+  void setSize(Size size) {}
+
+  @override
+  void setConstraints(BoxConstraints constraints) {}
+
+  @override
+  void setTitle(String title) {}
+
+  @override
+  void activate() {}
+
+  @override
+  void setMinimized(bool minimized) {}
+
+  @override
+  bool get isDestroyed => _destroyed;
+  bool _destroyed = false;
+
+  @override
+  void destroy() {
+    _destroyed = true;
+  }
+}
+
+class _StubTooltipWindowController extends TooltipWindowController {
+  _StubTooltipWindowController({required this.tester}) : super.empty() {
+    rootView = FakeView(tester.view);
+  }
+
+  final WidgetTester tester;
+
+  @override
+  BaseWindowController get parent => _StubWindowController(tester);
+
+  @override
+  Size get contentSize => Size.zero;
+
+  @override
+  void setConstraints(BoxConstraints constraints) {}
+
+  @override
+  void updatePosition({Rect? anchorRect, WindowPositioner? positioner}) {}
+
+  @override
+  bool get isDestroyed => _destroyed;
+  bool _destroyed = false;
+
+  @override
+  void destroy() {
+    _destroyed = true;
+  }
+}
+
+class _StubPopupWindowController extends PopupWindowController {
+  _StubPopupWindowController({required this.tester}) : super.empty() {
+    rootView = FakeView(tester.view);
+  }
+
+  final WidgetTester tester;
+
+  @override
+  BaseWindowController get parent => _StubWindowController(tester);
+
+  @override
+  Size get contentSize => Size.zero;
+
+  @override
+  void setConstraints(BoxConstraints constraints) {}
+
+  @override
+  bool get isDestroyed => _destroyed;
+  bool _destroyed = false;
+
+  @override
+  void destroy() {
+    _destroyed = true;
+  }
+
+  @override
+  void updatePosition({Rect? anchorRect, WindowPositioner? positioner}) {}
+
+  @override
+  Offset get offsetFromParent => Offset.zero;
+}
+
+class _StubSatelliteWindowController extends SatelliteWindowController {
+  _StubSatelliteWindowController({required this.tester}) : super.empty() {
+    rootView = FakeView(tester.view);
+  }
+
+  final WidgetTester tester;
+
+  @override
+  BaseWindowController get parent => _StubWindowController(tester);
+
+  @override
+  Size get contentSize => Size.zero;
+
+  @override
+  String get title => 'Stub Satellite Window';
+
+  @override
+  bool get isActivated => true;
+
+  @override
+  void setParent(BaseWindowController parent) {}
+
+  @override
+  void setSize(Size size) {}
+
+  @override
+  void setConstraints(BoxConstraints constraints) {}
+
+  @override
+  void setTitle(String title) {}
+
+  @override
+  void activate() {}
+
+  @override
+  bool get isDestroyed => _destroyed;
+  bool _destroyed = false;
+
+  @override
+  void destroy() {
+    _destroyed = true;
+  }
+}
+
+// A controller that mutates its aspect values and notifies listeners, used to
+// verify that dependents rebuild when the controller notifies even though the
+// same controller instance is reused across rebuilds.
+class _MutableWindowController extends WindowController {
+  _MutableWindowController(WidgetTester tester) : super.empty() {
+    rootView = FakeView(tester.view);
+  }
+
+  Size _contentSize = Size.zero;
+  bool _activated = false;
+  bool _maximized = false;
+  bool _destroyed = false;
+
+  @override
+  Size get contentSize {
+    _ensureNotDestroyed();
+    return _contentSize;
+  }
+
+  @override
+  String get title {
+    _ensureNotDestroyed();
+    return 'Mutable Window';
+  }
+
+  @override
+  bool get isActivated {
+    _ensureNotDestroyed();
+    return _activated;
+  }
+
+  @override
+  bool get isMaximized {
+    _ensureNotDestroyed();
+    return _maximized;
+  }
+
+  @override
+  bool get isMinimized {
+    _ensureNotDestroyed();
+    return false;
+  }
+
+  @override
+  bool get isFullscreen {
+    _ensureNotDestroyed();
+    return false;
+  }
+
+  @override
+  void setSize(Size size) {
+    _contentSize = size;
+    notifyListeners();
+  }
+
+  @override
+  void setConstraints(BoxConstraints constraints) {}
+
+  @override
+  void setTitle(String title) {}
+
+  @override
+  void activate() {
+    _activated = true;
+    notifyListeners();
+  }
+
+  @override
+  void setMaximized(bool maximized) {
+    _maximized = maximized;
+    notifyListeners();
+  }
+
+  @override
+  void setMinimized(bool minimized) {}
+
+  @override
+  void setFullscreen(bool fullscreen, {Display? display}) {}
+
+  @override
+  bool get isDestroyed => _destroyed;
+
+  @override
+  void destroy() {
+    if (_destroyed) {
+      return;
+    }
+    _destroyed = true;
+    notifyListeners();
+  }
+
+  void _ensureNotDestroyed() {
+    if (_destroyed) {
+      throw StateError('Window has been destroyed.');
+    }
+  }
+}
+
+void main() {
+  // The binding is created by the first testWidgets below and chooses its
+  // windowing owner then: flutter_test installs its test owner only if
+  // windowing is enabled at that moment. Enable it before any test is declared
+  // so that the 'test window controllers' group has a test owner to work with.
+  // Each group then sets the flag for its own tests.
+  isWindowingEnabled = true;
+
+  group('Windowing', () {
+    group('isWindowingEnabled is false', () {
+      setUp(() {
+        isWindowingEnabled = false;
+      });
+
+      test('createDefaultOwner returns a WindowingOwner', () {
+        final WindowingOwner owner = createDefaultWindowingOwner();
+        expect(owner, isA<WindowingOwner>());
+      });
+
+      test('default WindowingOwner throws when accessing createWindowController', () {
+        final WindowingOwner owner = createDefaultWindowingOwner();
+        expect(
+          () => owner.createWindowController(delegate: WindowControllerDelegate(), resizable: true),
+          throwsUnsupportedError,
+        );
+      });
+
+      test('default WindowingOwner throws when accessing createDialogWindowController', () {
+        final WindowingOwner owner = createDefaultWindowingOwner();
+        expect(
+          () => owner.createDialogWindowController(
+            delegate: DialogWindowControllerDelegate(),
+            resizable: true,
+          ),
+          throwsUnsupportedError,
+        );
+      });
+
+      testWidgets('Window throws UnsupportedError', (WidgetTester tester) async {
+        final controllerBuilders = <BaseWindowController Function()>[
+          () => _StubWindowController(tester),
+          () => _StubDialogWindowController(tester),
+          () => _StubTooltipWindowController(tester: tester),
+          () => _StubPopupWindowController(tester: tester),
+          () => _StubSatelliteWindowController(tester: tester),
+        ];
+        for (final createController in controllerBuilders) {
+          final BaseWindowController controller = createController();
+          addTearDown(controller.dispose);
+          expect(
+            () => Window(controller: controller, child: const Text('Test')),
+            throwsUnsupportedError,
+          );
+        }
+      });
+
+      testWidgets('Accessing WindowScope.of throws UnsupportedError', (WidgetTester tester) async {
+        await tester.pumpWidget(LookupBoundary(child: Container()));
+        final BuildContext context = tester.element(find.byType(Container));
+
+        expect(() => WindowScope.of(context), throwsUnsupportedError);
+      });
+    });
+
+    group('isWindowingEnabled is true', () {
+      setUp(() {
+        isWindowingEnabled = true;
+      });
+
+      testWidgets(
+        'Window uses TestFlutterView metrics when rootView is resolved from WidgetsBinding.instance.platformDispatcher.view',
+        (WidgetTester tester) async {
+          tester.view.devicePixelRatio = 2.75;
+          addTearDown(tester.view.resetDevicePixelRatio);
+
+          final FlutterView? resolvedView = WidgetsBinding.instance.platformDispatcher.view(
+            id: tester.view.viewId,
+          );
+          expect(resolvedView, allOf(same(tester.view), isA<TestFlutterView>()));
+          expect(
+            PlatformDispatcher.instance.view(id: tester.view.viewId)?.devicePixelRatio,
+            isNot(2.75),
+          );
+
+          final controller = _StubWindowController(tester, rootView: resolvedView);
+          addTearDown(controller.dispose);
+          expect(controller.rootView.devicePixelRatio, 2.75);
+
+          late FlutterView capturedView;
+          late double capturedDevicePixelRatio;
+          await tester.pumpWidget(
+            wrapWithView: false,
+            Window(
+              controller: controller,
+              child: Builder(
+                builder: (BuildContext context) {
+                  capturedView = View.of(context);
+                  capturedDevicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          );
+
+          expect(capturedView, same(tester.view));
+          expect(capturedDevicePixelRatio, 2.75);
+        },
+      );
+
+      testWidgets('Window does not throw', (WidgetTester tester) async {
+        final controller = _StubWindowController(tester);
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(controller: controller, child: Container()),
+        );
+      });
+
+      testWidgets('Window with a dialog controller does not throw', (WidgetTester tester) async {
+        final controller = _StubDialogWindowController(tester);
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(controller: controller, child: Container()),
+        );
+      });
+
+      testWidgets('Can access WindowScope.of for regular windows', (WidgetTester tester) async {
+        final controller = _StubWindowController(tester);
+        BaseWindowController? scope;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                scope = WindowScope.of(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(scope, isA<WindowController>());
+      });
+
+      testWidgets('Can access WindowScope.of for dialog windows', (WidgetTester tester) async {
+        final controller = _StubDialogWindowController(tester);
+        BaseWindowController? scope;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                scope = WindowScope.of(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(scope, isA<DialogWindowController>());
+      });
+
+      testWidgets('Can access WindowScope.of for tooltip windows', (WidgetTester tester) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        BaseWindowController? scope;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                scope = WindowScope.of(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(scope, isA<TooltipWindowController>());
+      });
+
+      testWidgets('Can access WindowScope.of for popup windows', (WidgetTester tester) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        BaseWindowController? scope;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                scope = WindowScope.of(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(scope, isA<PopupWindowController>());
+      });
+
+      testWidgets('Can access WindowScope.of for satellite windows', (WidgetTester tester) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        BaseWindowController? scope;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                scope = WindowScope.of(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(scope, isA<SatelliteWindowController>());
+      });
+
+      testWidgets('Can access WindowScope.maybeOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        BaseWindowController? scope;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                scope = WindowScope.maybeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(scope, isA<WindowController>());
+      });
+
+      testWidgets('Can access WindowScope.maybeOf for dialog windows', (WidgetTester tester) async {
+        final controller = _StubDialogWindowController(tester);
+        BaseWindowController? scope;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                scope = WindowScope.maybeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(scope, isA<DialogWindowController>());
+      });
+
+      testWidgets('Can access WindowScope.maybeOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        BaseWindowController? scope;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                scope = WindowScope.maybeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(scope, isA<TooltipWindowController>());
+      });
+
+      testWidgets('Can access WindowScope.maybeOf for popup windows', (WidgetTester tester) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        BaseWindowController? scope;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                scope = WindowScope.maybeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(scope, isA<PopupWindowController>());
+      });
+
+      testWidgets('Can access WindowScope.maybeOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        BaseWindowController? scope;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                scope = WindowScope.maybeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(scope, isA<SatelliteWindowController>());
+      });
+
+      testWidgets('Can access WindowScope.contentSizeOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        Size? size;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                size = WindowScope.contentSizeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(size, equals(Size.zero));
+      });
+
+      testWidgets('Can access WindowScope.contentSizeOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        Size? size;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                size = WindowScope.contentSizeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(size, equals(Size.zero));
+      });
+
+      testWidgets('Can access WindowScope.contentSizeOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        Size? size;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                size = WindowScope.contentSizeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(size, equals(Size.zero));
+      });
+
+      testWidgets('Can access WindowScope.contentSizeOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        Size? size;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                size = WindowScope.contentSizeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(size, equals(Size.zero));
+      });
+
+      testWidgets('Can access WindowScope.contentSizeOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        Size? size;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                size = WindowScope.contentSizeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(size, equals(Size.zero));
+      });
+
+      testWidgets('Can access WindowScope.maybeContentSizeOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        Size? size;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                size = WindowScope.maybeContentSizeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(size, equals(Size.zero));
+      });
+
+      testWidgets('Can access WindowScope.maybeContentSizeOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        Size? size;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                size = WindowScope.maybeContentSizeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(size, equals(Size.zero));
+      });
+
+      testWidgets('Can access WindowScope.maybeContentSizeOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        Size? size;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                size = WindowScope.maybeContentSizeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(size, equals(Size.zero));
+      });
+
+      testWidgets('Can access WindowScope.maybeContentSizeOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        Size? size;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                size = WindowScope.maybeContentSizeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(size, equals(Size.zero));
+      });
+
+      testWidgets('Can access WindowScope.maybeContentSizeOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        Size? size;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                size = WindowScope.maybeContentSizeOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(size, equals(Size.zero));
+      });
+
+      testWidgets('Can access WindowScope.titleOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        String? title;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                title = WindowScope.titleOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(title, equals('Stub Window'));
+      });
+
+      testWidgets('Can access WindowScope.titleOf for dialog windows', (WidgetTester tester) async {
+        final controller = _StubDialogWindowController(tester);
+        String? title;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                title = WindowScope.titleOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(title, equals('Stub Window'));
+      });
+
+      testWidgets('Can access WindowScope.titleOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        String? title;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                title = WindowScope.titleOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(title, equals(''));
+      });
+
+      testWidgets('Can access WindowScope.titleOf for popup windows', (WidgetTester tester) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        String? title;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                title = WindowScope.titleOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(title, equals(''));
+      });
+
+      testWidgets('Can access WindowScope.titleOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        String? title;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                title = WindowScope.titleOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(title, equals('Stub Satellite Window'));
+      });
+
+      testWidgets('Can access WindowScope.maybeTitleOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        String? title;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                title = WindowScope.maybeTitleOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(title, equals('Stub Window'));
+      });
+
+      testWidgets('Can access WindowScope.maybeTitleOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        String? title;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                title = WindowScope.maybeTitleOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(title, equals('Stub Window'));
+      });
+
+      testWidgets('Can access WindowScope.maybeTitleOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        String? title;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                title = WindowScope.maybeTitleOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(title, equals(''));
+      });
+
+      testWidgets('Can access WindowScope.maybeTitleOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        String? title;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                title = WindowScope.maybeTitleOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(title, equals(''));
+      });
+
+      testWidgets('Can access WindowScope.maybeTitleOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        String? title;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                title = WindowScope.maybeTitleOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(title, equals('Stub Satellite Window'));
+      });
+
+      testWidgets('Can access WindowScope.isActivatedOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        bool? isActivated;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isActivated = WindowScope.isActivatedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isActivated, equals(true));
+      });
+
+      testWidgets('Can access WindowScope.isActivatedOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        bool? isActivated;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isActivated = WindowScope.isActivatedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isActivated, equals(true));
+      });
+
+      testWidgets('Can access WindowScope.isActivatedOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        bool? isActivated;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isActivated = WindowScope.isActivatedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isActivated, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isActivatedOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        bool? isActivated;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isActivated = WindowScope.isActivatedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isActivated, equals(true));
+      });
+
+      testWidgets('Can access WindowScope.isActivatedOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        bool? isActivated;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isActivated = WindowScope.isActivatedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isActivated, equals(true));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsActivatedOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        bool? isActivated;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isActivated = WindowScope.maybeIsActivatedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isActivated, equals(true));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsActivatedOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        bool? isActivated;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isActivated = WindowScope.maybeIsActivatedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isActivated, equals(true));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsActivatedOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        bool? isActivated;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isActivated = WindowScope.maybeIsActivatedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isActivated, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsActivatedOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        bool? isActivated;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isActivated = WindowScope.maybeIsActivatedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isActivated, isTrue);
+      });
+
+      testWidgets('Can access WindowScope.maybeIsActivatedOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        bool? isActivated;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isActivated = WindowScope.maybeIsActivatedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isActivated, equals(true));
+      });
+
+      testWidgets('Can access WindowScope.isMinimizedOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        bool? isMinimized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMinimized = WindowScope.isMinimizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMinimized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isMinimizedOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        bool? isMinimized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMinimized = WindowScope.isMinimizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMinimized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isMinimizedOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        bool? isMinimized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMinimized = WindowScope.isMinimizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMinimized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isMinimizedOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        bool? isMinimized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMinimized = WindowScope.isMinimizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMinimized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsMinimizedOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        bool? isMinimized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMinimized = WindowScope.maybeIsMinimizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMinimized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsMinimizedOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        bool? isMinimized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMinimized = WindowScope.maybeIsMinimizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMinimized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsMinimizedOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        bool? isMinimized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMinimized = WindowScope.maybeIsMinimizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMinimized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsMinimizedOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        bool? isMinimized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMinimized = WindowScope.maybeIsMinimizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMinimized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isMaximizedOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        bool? isMaximized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMaximized = WindowScope.isMaximizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMaximized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isMaximizedOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        bool? isMaximized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMaximized = WindowScope.isMaximizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMaximized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isMaximizedOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        bool? isMaximized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMaximized = WindowScope.isMaximizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMaximized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isMaximizedOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        bool? isMaximized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMaximized = WindowScope.isMaximizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMaximized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isMaximizedOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        bool? isMaximized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMaximized = WindowScope.isMaximizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMaximized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsMaximizedOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        bool? isMaximized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMaximized = WindowScope.maybeIsMaximizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMaximized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsMaximizedOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        bool? isMaximized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMaximized = WindowScope.maybeIsMaximizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMaximized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsMaximizedOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        bool? isMaximized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMaximized = WindowScope.maybeIsMaximizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMaximized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsMaximizedOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        bool? isMaximized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMaximized = WindowScope.maybeIsMaximizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMaximized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsMaximizedOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        bool? isMaximized;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isMaximized = WindowScope.maybeIsMaximizedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isMaximized, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isFullscreenOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        bool? isFullscreen;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isFullscreen = WindowScope.isFullscreenOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isFullscreen, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isFullscreenOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        bool? isFullscreen;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isFullscreen = WindowScope.isFullscreenOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isFullscreen, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isFullscreenOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        bool? isFullscreen;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isFullscreen = WindowScope.isFullscreenOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isFullscreen, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isFullscreenOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        bool? isFullscreen;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isFullscreen = WindowScope.isFullscreenOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isFullscreen, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isFullscreenOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        bool? isFullscreen;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isFullscreen = WindowScope.isFullscreenOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isFullscreen, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsFullscreenOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        bool? isFullscreen;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isFullscreen = WindowScope.maybeIsFullscreenOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isFullscreen, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsFullscreenOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        bool? isFullscreen;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isFullscreen = WindowScope.maybeIsFullscreenOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isFullscreen, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsFullscreenOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        bool? isFullscreen;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isFullscreen = WindowScope.maybeIsFullscreenOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isFullscreen, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsFullscreenOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        bool? isFullscreen;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isFullscreen = WindowScope.maybeIsFullscreenOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isFullscreen, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsFullscreenOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        bool? isFullscreen;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isFullscreen = WindowScope.maybeIsFullscreenOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isFullscreen, equals(false));
+      });
+
+      testWidgets('Dependent rebuilds when an aspect changes and the controller notifies', (
+        WidgetTester tester,
+      ) async {
+        final controller = _MutableWindowController(tester);
+        addTearDown(controller.dispose);
+        final observed = <bool>[];
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                observed.add(WindowScope.isActivatedOf(context));
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(observed, <bool>[false]);
+
+        controller.activate();
+        await tester.pump();
+
+        expect(observed, <bool>[false, true]);
+      });
+
+      testWidgets('Can access WindowScope.isDestroyedOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        bool? isDestroyed;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isDestroyed = WindowScope.isDestroyedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isDestroyed, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isDestroyedOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        bool? isDestroyed;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isDestroyed = WindowScope.isDestroyedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isDestroyed, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isDestroyedOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        bool? isDestroyed;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isDestroyed = WindowScope.isDestroyedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isDestroyed, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isDestroyedOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        bool? isDestroyed;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isDestroyed = WindowScope.isDestroyedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isDestroyed, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.isDestroyedOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        bool? isDestroyed;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isDestroyed = WindowScope.isDestroyedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isDestroyed, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsDestroyedOf for regular windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubWindowController(tester);
+        bool? isDestroyed;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isDestroyed = WindowScope.maybeIsDestroyedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isDestroyed, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsDestroyedOf for dialog windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubDialogWindowController(tester);
+        bool? isDestroyed;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isDestroyed = WindowScope.maybeIsDestroyedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isDestroyed, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsDestroyedOf for tooltip windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubTooltipWindowController(tester: tester);
+        bool? isDestroyed;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isDestroyed = WindowScope.maybeIsDestroyedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isDestroyed, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsDestroyedOf for popup windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubPopupWindowController(tester: tester);
+        bool? isDestroyed;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isDestroyed = WindowScope.maybeIsDestroyedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isDestroyed, equals(false));
+      });
+
+      testWidgets('Can access WindowScope.maybeIsDestroyedOf for satellite windows', (
+        WidgetTester tester,
+      ) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        bool? isDestroyed;
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                isDestroyed = WindowScope.maybeIsDestroyedOf(context);
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(isDestroyed, equals(false));
+      });
+
+      testWidgets('WindowScope.maybeIsDestroyedOf returns null without a WindowScope ancestor', (
+        WidgetTester tester,
+      ) async {
+        bool? isDestroyed;
+        var builderCalled = false;
+        await tester.pumpWidget(
+          Builder(
+            builder: (BuildContext context) {
+              builderCalled = true;
+              isDestroyed = WindowScope.maybeIsDestroyedOf(context);
+              return const SizedBox.shrink();
+            },
+          ),
+        );
+
+        expect(builderCalled, isTrue);
+        expect(isDestroyed, isNull);
+      });
+
+      testWidgets('Dependent rebuilds when the window is destroyed', (WidgetTester tester) async {
+        final controller = _MutableWindowController(tester);
+        addTearDown(controller.dispose);
+        final observed = <bool>[];
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(
+            controller: controller,
+            child: Builder(
+              builder: (BuildContext context) {
+                observed.add(WindowScope.isDestroyedOf(context));
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        );
+
+        expect(observed, <bool>[false]);
+
+        // Destroying notifies listeners. The rebuild must not throw even though
+        // the controller's other value getters throw once destroyed.
+        controller.destroy();
+        await tester.pump();
+
+        expect(observed, <bool>[false, true]);
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('Window with a satellite controller does not throw', (WidgetTester tester) async {
+        final controller = _StubSatelliteWindowController(tester: tester);
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          wrapWithView: false,
+          Window(controller: controller, child: Container()),
+        );
+      });
+
+      group('test window controllers', () {
+        // These tests exercise flutter_test's own window controller doubles
+        // through the test windowing owner the binding installed (see the top of
+        // main). That owner is shared by the whole file, so each test destroys
+        // the windows it creates.
+
+        testWidgets(
+          'Destroying a test window controller removes its view from platformDispatcher',
+          (WidgetTester tester) async {
+            final WindowController controller = WidgetsBinding.instance.windowingOwner
+                .createWindowController(delegate: WindowControllerDelegate(), resizable: true);
+            _destroyOnTearDown(controller);
+            expect(tester.platformDispatcher.views, contains(controller.rootView));
+
+            controller.destroy();
+            expect(tester.platformDispatcher.views, isNot(contains(controller.rootView)));
+          },
+        );
+
+        testWidgets('Creating a test window controller reports exactly one metrics change', (
+          WidgetTester tester,
+        ) async {
+          var metricsChangedCount = 0;
+          final VoidCallback? previousMetricsChanged = tester.platformDispatcher.onMetricsChanged;
+          tester.platformDispatcher.onMetricsChanged = () {
+            previousMetricsChanged?.call();
+            metricsChangedCount += 1;
+          };
+          addTearDown(() {
+            tester.platformDispatcher.onMetricsChanged = previousMetricsChanged;
+          });
+
+          final WindowController controller = WidgetsBinding.instance.windowingOwner
+              .createWindowController(delegate: WindowControllerDelegate(), resizable: true);
+          _destroyOnTearDown(controller);
+
+          // The view is registered with `notify: false` and the controller reports
+          // the change itself once it has assigned `rootView`. Registering with a
+          // notification would report twice, and the first of those would wake
+          // observers while `rootView` is still unassigned.
+          expect(metricsChangedCount, 1);
+          expect(tester.platformDispatcher.views, contains(controller.rootView));
+        });
+
+        testWidgets(
+          'Destroying a test window controller during a metrics change removes its view',
+          (WidgetTester tester) async {
+            final WindowController controller = WidgetsBinding.instance.windowingOwner
+                .createWindowController(delegate: WindowControllerDelegate(), resizable: true);
+            _destroyOnTearDown(controller);
+            final FlutterView rootView = controller.rootView;
+            expect(tester.platformDispatcher.views, contains(rootView));
+
+            final VoidCallback? previousMetricsChanged = tester.platformDispatcher.onMetricsChanged;
+            addTearDown(() {
+              tester.platformDispatcher.onMetricsChanged = previousMetricsChanged;
+            });
+            var destroyed = false;
+            tester.platformDispatcher.onMetricsChanged = () {
+              if (!destroyed) {
+                destroyed = true;
+                controller.destroy();
+              }
+            };
+
+            // Destroying from inside a notification makes the metrics change that
+            // removeTestView reports reentrant, so it is dropped. Removal still has
+            // to take effect: the controller holds the wrapper rather than the view
+            // it was registered with, and matching only the latter left the
+            // destroyed view in the registry permanently.
+            tester.platformDispatcher.notifyMetricsChanged();
+
+            expect(destroyed, isTrue);
+            expect(tester.platformDispatcher.view(id: rootView.viewId), isNull);
+            expect(tester.platformDispatcher.views, isNot(contains(rootView)));
+          },
+        );
+
+        testWidgets('Destroying a test window controller twice is a no-op the second time', (
+          WidgetTester tester,
+        ) async {
+          var destroyedCount = 0;
+          var rootViewPresentDuringDestroyCallback = true;
+          late final WindowController controller;
+          controller = WidgetsBinding.instance.windowingOwner.createWindowController(
+            delegate: _CountingWindowControllerDelegate(() {
+              destroyedCount += 1;
+              rootViewPresentDuringDestroyCallback = tester.platformDispatcher.views.contains(
+                controller.rootView,
+              );
+            }),
+            resizable: true,
+          );
+          _destroyOnTearDown(controller);
+
+          var metricsChangedCount = 0;
+          final VoidCallback? previousMetricsChanged = tester.platformDispatcher.onMetricsChanged;
+          tester.platformDispatcher.onMetricsChanged = () {
+            previousMetricsChanged?.call();
+            metricsChangedCount += 1;
+          };
+          addTearDown(() {
+            tester.platformDispatcher.onMetricsChanged = previousMetricsChanged;
+          });
+
+          controller.destroy();
+          expect(controller.isDestroyed, isTrue);
+          expect(destroyedCount, 1);
+          expect(rootViewPresentDuringDestroyCallback, isFalse);
+          expect(metricsChangedCount, 1);
+          expect(tester.platformDispatcher.views, isNot(contains(controller.rootView)));
+
+          // A second destroy has nothing left to remove, so it must not report a
+          // metrics change: a view that is already gone did not just go.
+          controller.destroy();
+          expect(controller.isDestroyed, isTrue);
+          expect(destroyedCount, 1);
+          expect(metricsChangedCount, 1);
+          expect(tester.takeException(), isNull);
+        });
+
+        testWidgets(
+          'Destroying an active child test window controller restores activation to parent',
+          (WidgetTester tester) async {
+            final WindowController parent = WidgetsBinding.instance.windowingOwner
+                .createWindowController(delegate: WindowControllerDelegate(), resizable: true);
+            _destroyOnTearDown(parent);
+            expect(parent.isActivated, isTrue);
+
+            final DialogWindowController child = WidgetsBinding.instance.windowingOwner
+                .createDialogWindowController(
+                  delegate: DialogWindowControllerDelegate(),
+                  resizable: true,
+                  parent: parent,
+                );
+            _destroyOnTearDown(child);
+            expect(child.isActivated, isTrue);
+            expect(parent.isActivated, isFalse);
+
+            child.destroy();
+            expect(child.isDestroyed, isTrue);
+            expect(child.isActivated, isFalse);
+            expect(parent.isActivated, isTrue);
+            expect(tester.platformDispatcher.views, isNot(contains(child.rootView)));
+            expect(tester.platformDispatcher.views, contains(parent.rootView));
+
+            parent.destroy();
+            expect(parent.isDestroyed, isTrue);
+            expect(parent.isActivated, isFalse);
+            expect(tester.platformDispatcher.views, isNot(contains(parent.rootView)));
+          },
+        );
+
+        testWidgets(
+          'Destroying a parent test window controller destroys child windows without re-activating parent',
+          (WidgetTester tester) async {
+            final WindowController parent = WidgetsBinding.instance.windowingOwner
+                .createWindowController(delegate: WindowControllerDelegate(), resizable: true);
+            _destroyOnTearDown(parent);
+
+            final DialogWindowController child1 = WidgetsBinding.instance.windowingOwner
+                .createDialogWindowController(
+                  delegate: DialogWindowControllerDelegate(),
+                  resizable: true,
+                  parent: parent,
+                );
+            _destroyOnTearDown(child1);
+
+            final DialogWindowController child2 = WidgetsBinding.instance.windowingOwner
+                .createDialogWindowController(
+                  delegate: DialogWindowControllerDelegate(),
+                  resizable: true,
+                  parent: parent,
+                );
+            _destroyOnTearDown(child2);
+
+            parent.destroy();
+            expect(parent.isDestroyed, isTrue);
+            expect(child1.isDestroyed, isTrue);
+            expect(child2.isDestroyed, isTrue);
+            expect(parent.isActivated, isFalse);
+            expect(child1.isActivated, isFalse);
+            expect(child2.isActivated, isFalse);
+            expect(tester.platformDispatcher.views, isNot(contains(parent.rootView)));
+            expect(tester.platformDispatcher.views, isNot(contains(child1.rootView)));
+            expect(tester.platformDispatcher.views, isNot(contains(child2.rootView)));
+          },
+        );
+      });
+    });
+  });
+}
+
+// The test windowing owner is shared by every test in this file, so a test must
+// not leave the windows it creates behind: this destroys [controller] at
+// teardown, if the test has not already, and then disposes it.
+void _destroyOnTearDown(BaseWindowController controller) {
+  addTearDown(() {
+    controller.destroy();
+    controller.dispose();
+  });
+}
+
+// Counts the destruction notifications a controller sends, which is how the
+// tests here tell a second `destroy()` that did nothing from one that ran again.
+class _CountingWindowControllerDelegate with WindowControllerDelegate {
+  _CountingWindowControllerDelegate(this._onDestroyed);
+
+  final VoidCallback _onDestroyed;
+
+  @override
+  void onWindowDestroyed() {
+    _onDestroyed();
+  }
+}

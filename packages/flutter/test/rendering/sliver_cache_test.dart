@@ -11,15 +11,13 @@ void main() {
   TestRenderingFlutterBinding.ensureInitialized();
 
   test('RenderViewport calculates correct constraints, RenderSliverToBoxAdapter calculates correct geometry', () {
-    final List<RenderSliver> children = List<RenderSliver>.generate(30, (int index) {
-      return RenderSliverToBoxAdapter(
-        child: RenderSizedBox(const Size(400.0, 100.0)),
-      );
+    final children = List<RenderSliver>.generate(30, (int index) {
+      return RenderSliverToBoxAdapter(child: RenderSizedBox(const Size(400.0, 100.0)));
     });
 
     // Viewport is 800x600, can show 6 children at a time.
 
-    final RenderViewport root = RenderViewport(
+    final root = RenderViewport(
       crossAxisDirection: AxisDirection.right,
       offset: ViewportOffset.zero(),
       cacheExtent: 250.0,
@@ -80,12 +78,7 @@ void main() {
       remainingCacheExtent: 50.0,
       scrollOffset: 0.0,
     );
-    expectSliverGeometry(
-      sliver: lastInCache,
-      paintExtent: 0.0,
-      cacheExtent: 50.0,
-      visible: false,
-    );
+    expectSliverGeometry(sliver: lastInCache, paintExtent: 0.0, cacheExtent: 50.0, visible: false);
 
     RenderSliver outsideCache = children[9];
     expectSliverConstraints(
@@ -95,12 +88,7 @@ void main() {
       remainingCacheExtent: 0.0,
       scrollOffset: 0.0,
     );
-    expectSliverGeometry(
-      sliver: outsideCache,
-      paintExtent: 0.0,
-      cacheExtent: 0.0,
-      visible: false,
-    );
+    expectSliverGeometry(sliver: outsideCache, paintExtent: 0.0, cacheExtent: 0.0, visible: false);
 
     // scroll down half a sliver
     root.offset = ViewportOffset.fixed(50.0);
@@ -129,12 +117,7 @@ void main() {
       remainingCacheExtent: 300.0,
       scrollOffset: 0.0,
     );
-    expectSliverGeometry(
-      sliver: lastVisible,
-      paintExtent: 50.0,
-      cacheExtent: 100.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: lastVisible, paintExtent: 50.0, cacheExtent: 100.0, visible: true);
 
     firstInCache = children[7];
     expectSliverConstraints(
@@ -159,12 +142,7 @@ void main() {
       remainingCacheExtent: 100.0,
       scrollOffset: 0.0,
     );
-    expectSliverGeometry(
-      sliver: lastInCache,
-      paintExtent: 0.0,
-      cacheExtent: 100.0,
-      visible: false,
-    );
+    expectSliverGeometry(sliver: lastInCache, paintExtent: 0.0, cacheExtent: 100.0, visible: false);
 
     outsideCache = children[9];
     expectSliverConstraints(
@@ -174,12 +152,7 @@ void main() {
       remainingCacheExtent: 0.0,
       scrollOffset: 0.0,
     );
-    expectSliverGeometry(
-      sliver: outsideCache,
-      paintExtent: 0.0,
-      cacheExtent: 0.0,
-      visible: false,
-    );
+    expectSliverGeometry(sliver: outsideCache, paintExtent: 0.0, cacheExtent: 0.0, visible: false);
 
     // scroll down 1.5 slivers
     root.offset = ViewportOffset.fixed(150.0);
@@ -227,12 +200,7 @@ void main() {
       remainingCacheExtent: 250.0 + 600.0 + 250.0,
       scrollOffset: 1000.0,
     );
-    expectSliverGeometry(
-      sliver: first,
-      paintExtent: 0.0,
-      cacheExtent: 0.0,
-      visible: false,
-    );
+    expectSliverGeometry(sliver: first, paintExtent: 0.0, cacheExtent: 0.0, visible: false);
 
     firstInPreCache = children[7];
     expectSliverConstraints(
@@ -282,20 +250,16 @@ void main() {
 
   test('RenderSliverFixedExtentList calculates correct geometry', () {
     // Viewport is 800x600, can show 6 full children at a time
-    final List<RenderBox> children = List<RenderBox>.generate(30, (int index) {
+    final children = List<RenderBox>.generate(30, (int index) {
       return RenderSizedBox(const Size(400.0, 100.0));
     });
-    final TestRenderSliverBoxChildManager childManager = TestRenderSliverBoxChildManager(
-      children: children,
-    );
+    final childManager = TestRenderSliverBoxChildManager(children: children);
     RenderSliverFixedExtentList inner;
-    final RenderViewport root = RenderViewport(
+    final root = RenderViewport(
       crossAxisDirection: AxisDirection.right,
       offset: ViewportOffset.zero(),
       cacheExtent: 250.0,
-      children: <RenderSliver>[
-        inner = childManager.createRenderSliverFixedExtentList(),
-      ],
+      children: <RenderSliver>[inner = childManager.createRenderSliverFixedExtentList()],
     );
     layout(root);
 
@@ -306,12 +270,7 @@ void main() {
       remainingCacheExtent: 600.0 + 250.0,
       scrollOffset: 0.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 850.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 850.0, visible: true);
     expect(children.sublist(0, 9).every((RenderBox r) => r.attached), true);
     expect(children.sublist(9, 30).any((RenderBox r) => r.attached), false);
 
@@ -326,15 +285,9 @@ void main() {
       remainingCacheExtent: 50.0 + 600.0 + 250.0,
       scrollOffset: 50.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 900.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 900.0, visible: true);
     expect(children.sublist(0, 9).every((RenderBox r) => r.attached), true);
     expect(children.sublist(9, 30).any((RenderBox r) => r.attached), false);
-
 
     // scroll to the middle
     root.offset = ViewportOffset.fixed(1500.0);
@@ -347,12 +300,7 @@ void main() {
       remainingCacheExtent: 250.0 + 600.0 + 250.0,
       scrollOffset: 1500.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 1100.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 1100.0, visible: true);
 
     expect(children.sublist(0, 12).any((RenderBox r) => r.attached), false);
     expect(children.sublist(12, 24).every((RenderBox r) => r.attached), true);
@@ -369,32 +317,23 @@ void main() {
       remainingCacheExtent: 250.0 + 600.0 + 250.0,
       scrollOffset: 2400.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 850.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 850.0, visible: true);
     expect(children.sublist(0, 21).any((RenderBox r) => r.attached), false);
     expect(children.sublist(21, 30).every((RenderBox r) => r.attached), true);
   });
 
   test('RenderSliverList calculates correct geometry', () {
     // Viewport is 800x600, can show 6 full children at a time
-    final List<RenderBox> children = List<RenderBox>.generate(30, (int index) {
+    final children = List<RenderBox>.generate(30, (int index) {
       return RenderSizedBox(const Size(400.0, 100.0));
     });
-    final TestRenderSliverBoxChildManager childManager = TestRenderSliverBoxChildManager(
-      children: children,
-    );
+    final childManager = TestRenderSliverBoxChildManager(children: children);
     RenderSliverList inner;
-    final RenderViewport root = RenderViewport(
+    final root = RenderViewport(
       crossAxisDirection: AxisDirection.right,
       offset: ViewportOffset.zero(),
       cacheExtent: 250.0,
-      children: <RenderSliver>[
-        inner = childManager.createRenderSliverList(),
-      ],
+      children: <RenderSliver>[inner = childManager.createRenderSliverList()],
     );
     layout(root);
 
@@ -405,12 +344,7 @@ void main() {
       remainingCacheExtent: 600.0 + 250.0,
       scrollOffset: 0.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 850.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 850.0, visible: true);
     expect(children.sublist(0, 9).every((RenderBox r) => r.attached), true);
     expect(children.sublist(9, 30).any((RenderBox r) => r.attached), false);
 
@@ -425,15 +359,9 @@ void main() {
       remainingCacheExtent: 50.0 + 600.0 + 250.0,
       scrollOffset: 50.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 900.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 900.0, visible: true);
     expect(children.sublist(0, 9).every((RenderBox r) => r.attached), true);
     expect(children.sublist(9, 30).any((RenderBox r) => r.attached), false);
-
 
     // scroll to the middle
     root.offset = ViewportOffset.fixed(1500.0);
@@ -446,12 +374,7 @@ void main() {
       remainingCacheExtent: 250.0 + 600.0 + 250.0,
       scrollOffset: 1500.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 1100.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 1100.0, visible: true);
 
     expect(children.sublist(0, 12).any((RenderBox r) => r.attached), false);
     expect(children.sublist(12, 24).every((RenderBox r) => r.attached), true);
@@ -468,32 +391,23 @@ void main() {
       remainingCacheExtent: 250.0 + 600.0 + 250.0,
       scrollOffset: 2400.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 850.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 850.0, visible: true);
     expect(children.sublist(0, 21).any((RenderBox r) => r.attached), false);
     expect(children.sublist(21, 30).every((RenderBox r) => r.attached), true);
   });
 
   test('RenderSliverGrid calculates correct geometry', () {
     // Viewport is 800x600, each grid element is 400x100, giving us space for 12 visible children
-    final List<RenderBox> children = List<RenderBox>.generate(60, (int index) {
+    final children = List<RenderBox>.generate(60, (int index) {
       return RenderSizedBox(const Size(400.0, 100.0));
     });
-    final TestRenderSliverBoxChildManager childManager = TestRenderSliverBoxChildManager(
-      children: children,
-    );
+    final childManager = TestRenderSliverBoxChildManager(children: children);
     RenderSliverGrid inner;
-    final RenderViewport root = RenderViewport(
+    final root = RenderViewport(
       crossAxisDirection: AxisDirection.right,
       offset: ViewportOffset.zero(),
       cacheExtent: 250.0,
-      children: <RenderSliver>[
-        inner = childManager.createRenderSliverGrid(),
-      ],
+      children: <RenderSliver>[inner = childManager.createRenderSliverGrid()],
     );
     layout(root);
 
@@ -504,12 +418,7 @@ void main() {
       remainingCacheExtent: 600.0 + 250.0,
       scrollOffset: 0.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 850.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 850.0, visible: true);
     expect(children.sublist(0, 18).every((RenderBox r) => r.attached), true);
     expect(children.sublist(18, 60).any((RenderBox r) => r.attached), false);
 
@@ -524,15 +433,9 @@ void main() {
       remainingCacheExtent: 50.0 + 600.0 + 250.0,
       scrollOffset: 50.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 900.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 900.0, visible: true);
     expect(children.sublist(0, 18).every((RenderBox r) => r.attached), true);
     expect(children.sublist(18, 60).any((RenderBox r) => r.attached), false);
-
 
     // scroll to the middle
     root.offset = ViewportOffset.fixed(1500.0);
@@ -545,12 +448,7 @@ void main() {
       remainingCacheExtent: 250.0 + 600.0 + 250.0,
       scrollOffset: 1500.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 1100.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 1100.0, visible: true);
 
     expect(children.sublist(0, 24).any((RenderBox r) => r.attached), false);
     expect(children.sublist(24, 48).every((RenderBox r) => r.attached), true);
@@ -567,12 +465,7 @@ void main() {
       remainingCacheExtent: 250.0 + 600.0 + 250.0,
       scrollOffset: 2400.0,
     );
-    expectSliverGeometry(
-      sliver: inner,
-      paintExtent: 600.0,
-      cacheExtent: 850.0,
-      visible: true,
-    );
+    expectSliverGeometry(sliver: inner, paintExtent: 600.0, cacheExtent: 850.0, visible: true);
     expect(children.sublist(0, 42).any((RenderBox r) => r.attached), false);
     expect(children.sublist(42, 60).every((RenderBox r) => r.attached), true);
   });
@@ -580,21 +473,18 @@ void main() {
   test('RenderSliverPadding calculates correct geometry', () {
     // Viewport is 800x600, each item is 100px high with 50px before and after = 200px
 
-    final List<RenderSliverToBoxAdapter> adapters = <RenderSliverToBoxAdapter>[];
-    final List<RenderSliverPadding> paddings = List<RenderSliverPadding>.generate(30, (int index) {
+    final adapters = <RenderSliverToBoxAdapter>[];
+    final paddings = List<RenderSliverPadding>.generate(30, (int index) {
       RenderSliverToBoxAdapter adapter;
-      final RenderSliverPadding padding = RenderSliverPadding(
+      final padding = RenderSliverPadding(
         padding: const EdgeInsets.symmetric(vertical: 50.0),
-        child: adapter = RenderSliverToBoxAdapter(
-          child: RenderSizedBox(const Size(400.0, 100.0)),
-        ),
+        child: adapter = RenderSliverToBoxAdapter(child: RenderSizedBox(const Size(400.0, 100.0))),
       );
       adapters.add(adapter);
       return padding;
     });
 
-
-    final RenderViewport root = RenderViewport(
+    final root = RenderViewport(
       crossAxisDirection: AxisDirection.right,
       offset: ViewportOffset.zero(),
       cacheExtent: 250.0,
@@ -755,7 +645,6 @@ void main() {
     root.offset = ViewportOffset.fixed(5400.0);
     pumpFrame();
 
-
     final RenderSliverPadding firstPadding = paddings[0];
     expectSliverConstraints(
       sliver: firstPadding,
@@ -764,12 +653,7 @@ void main() {
       remainingCacheExtent: 250.0 + 600.0 + 250.0,
       scrollOffset: 5400.0,
     );
-    expectSliverGeometry(
-      sliver: firstPadding,
-      paintExtent: 0.0,
-      cacheExtent: 0.0,
-      visible: false,
-    );
+    expectSliverGeometry(sliver: firstPadding, paintExtent: 0.0, cacheExtent: 0.0, visible: false);
     final RenderSliverToBoxAdapter firstPadded = adapters[0];
     expectSliverConstraints(
       sliver: firstPadded,
@@ -778,12 +662,7 @@ void main() {
       remainingCacheExtent: 250.0 + 600.0 + 250.0,
       scrollOffset: 5350.0,
     );
-    expectSliverGeometry(
-      sliver: firstPadded,
-      paintExtent: 0.0,
-      cacheExtent: 0.0,
-      visible: false,
-    );
+    expectSliverGeometry(sliver: firstPadded, paintExtent: 0.0, cacheExtent: 0.0, visible: false);
 
     final RenderSliverPadding firstPreCachePadding = paddings[25];
     expectSliverConstraints(
@@ -872,6 +751,900 @@ void main() {
       visible: true,
     );
   });
+
+  group('RenderSliverFillRemaining calculates correct geometry', () {
+    test('when initially in view', () {
+      // Viewport is 800x600
+      const double viewportHeight = 600;
+      const double viewportWidth = 800;
+      const cacheExtent = 250.0;
+      const double beginningViewportCacheExtent = viewportHeight + cacheExtent;
+      const double firstSliverHeight = 400;
+      const sliverFillRemainingChildHeight = 100.0;
+
+      final slivers = <RenderSliver>[
+        RenderSliverToBoxAdapter(child: RenderSizedBox(const Size(400.0, firstSliverHeight))),
+        RenderSliverFillRemaining(
+          child: RenderSizedBox(const Size(100.0, sliverFillRemainingChildHeight)),
+        ),
+      ];
+
+      final root = RenderViewport(
+        crossAxisDirection: AxisDirection.right,
+        offset: ViewportOffset.zero(),
+        cacheExtent: cacheExtent,
+        children: slivers,
+      );
+      layout(root);
+
+      final RenderSliver firstVisibleSliver = slivers[0];
+      expectSliverConstraints(
+        sliver: firstVisibleSliver,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: viewportHeight,
+        remainingCacheExtent: beginningViewportCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverGeometry(
+        sliver: firstVisibleSliver,
+        paintExtent: firstSliverHeight,
+        cacheExtent: firstSliverHeight,
+        visible: true,
+      );
+
+      // With RenderSliverFillRemaining:
+      // * The child has a minExtent and maxExtent of the remaining space of the
+      // viewportMainAxisExtent or the height of the child - whichever is larger.
+      // * The sliver has a paintExtent of the child's minExtent/maxExtent or the
+      // remainingPaintExtent - whichever is smaller.
+      // * The sliver has a cacheExtent of the child's minExtent/maxExtent or the
+      // remainingCacheExtent - whichever is smaller.
+      final sliverFillRemaining = slivers[1] as RenderSliverSingleBoxAdapter;
+      const double extentOfChild = viewportHeight - firstSliverHeight;
+      double remainingPaintExtent = viewportHeight - firstSliverHeight;
+      double remainingCacheExtent = beginningViewportCacheExtent - firstSliverHeight;
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: extentOfChild,
+        minHeight: extentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: extentOfChild,
+        cacheExtent: extentOfChild,
+        visible: true,
+      );
+
+      // Overscroll
+      const double scrollOffset = 50;
+      root.offset = ViewportOffset.fixed(scrollOffset);
+      pumpFrame();
+      remainingPaintExtent = viewportHeight - firstSliverHeight + scrollOffset;
+      remainingCacheExtent = beginningViewportCacheExtent - firstSliverHeight + scrollOffset;
+
+      // With RenderSliverFillRemaining, when you overscroll, the extent of the
+      // child does not change and therefore neither does paintExtent or cacheExtent.
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: extentOfChild,
+        minHeight: extentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: extentOfChild,
+        cacheExtent: extentOfChild,
+        visible: true,
+      );
+    });
+
+    test('when scrolled into view', () {
+      // Viewport is 800x600
+      const double viewportHeight = 600;
+      const double viewportWidth = 800;
+      const cacheExtent = 250.0;
+      const double beginningViewportCacheExtent = viewportHeight + cacheExtent;
+      const firstSliverHeight = beginningViewportCacheExtent;
+      const sliverFillRemainingChildHeight = 100.0;
+
+      final slivers = <RenderSliver>[
+        RenderSliverToBoxAdapter(child: RenderSizedBox(const Size(400.0, firstSliverHeight))),
+        RenderSliverFillRemaining(
+          child: RenderSizedBox(const Size(100.0, sliverFillRemainingChildHeight)),
+        ),
+      ];
+
+      final root = RenderViewport(
+        crossAxisDirection: AxisDirection.right,
+        offset: ViewportOffset.zero(),
+        cacheExtent: cacheExtent,
+        children: slivers,
+      );
+      layout(root);
+
+      final RenderSliver firstVisibleSliver = slivers[0];
+      expectSliverConstraints(
+        sliver: firstVisibleSliver,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: viewportHeight,
+        remainingCacheExtent: beginningViewportCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverGeometry(
+        sliver: firstVisibleSliver,
+        paintExtent: viewportHeight,
+        cacheExtent: firstSliverHeight,
+        visible: true,
+      );
+
+      // With RenderSliverFillRemaining:
+      // * The child has a minExtent and maxExtent of the remaining space of the
+      // viewportMainAxisExtent or the height of the child - whichever is larger.
+      // * The sliver has a paintExtent of the child's minExtent/maxExtent or the
+      // remainingPaintExtent - whichever is smaller.
+      // * The sliver has a cacheExtent of the child's minExtent/maxExtent or the
+      // remainingCacheExtent - whichever is smaller.
+      final sliverFillRemaining = slivers[1] as RenderSliverSingleBoxAdapter;
+      const extentOfChild = sliverFillRemainingChildHeight;
+      double remainingPaintExtent = 0;
+      double remainingCacheExtent = 0;
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: extentOfChild,
+        minHeight: extentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: remainingPaintExtent,
+        cacheExtent: remainingCacheExtent,
+        visible: false,
+      );
+
+      // Scroll so RenderSliverFillRemaining is not within viewport, but is
+      // within remainingCacheExtent.
+      root.offset = ViewportOffset.fixed(cacheExtent);
+      pumpFrame();
+      remainingPaintExtent = 0;
+      remainingCacheExtent = cacheExtent;
+
+      // When within the remainingCacheExtent, the sliver will have a cacheExtent
+      // of the child's extent.
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: extentOfChild,
+        minHeight: extentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: remainingPaintExtent,
+        cacheExtent: extentOfChild,
+        visible: false,
+      );
+
+      // Scroll so RenderSliverFillRemaining is partially within viewport.
+      root.offset = ViewportOffset.fixed(cacheExtent + 50);
+      pumpFrame();
+      remainingPaintExtent = 50;
+      remainingCacheExtent = cacheExtent + 50;
+
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: extentOfChild,
+        minHeight: extentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: remainingPaintExtent,
+        cacheExtent: extentOfChild,
+        visible: true,
+      );
+
+      // Scroll so RenderSliverFillRemaining is completely within viewport.
+      root.offset = ViewportOffset.fixed(cacheExtent + sliverFillRemainingChildHeight);
+      pumpFrame();
+      remainingPaintExtent = sliverFillRemainingChildHeight;
+      remainingCacheExtent = cacheExtent + sliverFillRemainingChildHeight;
+
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: extentOfChild,
+        minHeight: extentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: extentOfChild,
+        cacheExtent: extentOfChild,
+        visible: true,
+      );
+
+      // Overscroll
+      root.offset = ViewportOffset.fixed(cacheExtent + sliverFillRemainingChildHeight + 50);
+      pumpFrame();
+      remainingPaintExtent = sliverFillRemainingChildHeight + 50;
+      remainingCacheExtent = cacheExtent + sliverFillRemainingChildHeight + 50;
+
+      // With RenderSliverFillRemaining, when you overscroll, the extent of the
+      // child does not change and therefore neither does paintExtent or cacheExtent.
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: extentOfChild,
+        minHeight: extentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: extentOfChild,
+        cacheExtent: extentOfChild,
+        visible: true,
+      );
+    });
+  });
+
+  group('RenderSliverFillRemainingAndOverscroll calculates correct geometry', () {
+    test('when initially in view', () {
+      // Viewport is 800x600
+      const double viewportHeight = 600;
+      const double viewportWidth = 800;
+      const cacheExtent = 250.0;
+      const double beginningViewportCacheExtent = viewportHeight + cacheExtent;
+      const double firstSliverHeight = 400;
+      const sliverFillRemainingChildHeight = 100.0;
+
+      final slivers = <RenderSliver>[
+        RenderSliverToBoxAdapter(child: RenderSizedBox(const Size(400.0, firstSliverHeight))),
+        RenderSliverFillRemainingAndOverscroll(
+          child: RenderSizedBox(const Size(100.0, sliverFillRemainingChildHeight)),
+        ),
+      ];
+
+      final root = RenderViewport(
+        crossAxisDirection: AxisDirection.right,
+        offset: ViewportOffset.zero(),
+        cacheExtent: cacheExtent,
+        children: slivers,
+      );
+      layout(root);
+
+      final RenderSliver firstVisibleSliver = slivers[0];
+      expectSliverConstraints(
+        sliver: firstVisibleSliver,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: viewportHeight,
+        remainingCacheExtent: beginningViewportCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverGeometry(
+        sliver: firstVisibleSliver,
+        paintExtent: firstSliverHeight,
+        cacheExtent: firstSliverHeight,
+        visible: true,
+      );
+
+      // With RenderSliverFillRemainingAndOverscroll:
+      // * The child has a minExtent of the remaining space of the viewportMainAxisExtent
+      // or the height of the child - whichever is larger.
+      // * The child has a maxExtent of the remaining space of the viewportMainAxisExtent,
+      // the height of the child, or the remainingPaintExtent - whichever is larger.
+      // * The sliver has a paintExtent of the child's maxExtent or the
+      // remainingPaintExtent - whichever is smaller.
+      // * The sliver has a cacheExtent of the child's minExtent or the
+      // remainingCacheExtent - whichever is smaller.
+      final sliverFillRemaining = slivers[1] as RenderSliverSingleBoxAdapter;
+      const double minExtentOfChild = viewportHeight - firstSliverHeight;
+      double maxExtentOfChild = viewportHeight - firstSliverHeight;
+      double remainingPaintExtent = viewportHeight - firstSliverHeight;
+      double remainingCacheExtent = beginningViewportCacheExtent - firstSliverHeight;
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: maxExtentOfChild,
+        cacheExtent: minExtentOfChild,
+        visible: true,
+      );
+
+      // Overscroll
+      const double scrollOffset = 50;
+      root.offset = ViewportOffset.fixed(scrollOffset);
+      pumpFrame();
+      remainingPaintExtent = viewportHeight - firstSliverHeight + scrollOffset;
+      remainingCacheExtent = beginningViewportCacheExtent - firstSliverHeight + scrollOffset;
+
+      // When you overscroll, the child's maxExtent is the
+      // remainingPaintExtent, since it's the higher value.
+      maxExtentOfChild = remainingPaintExtent;
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: maxExtentOfChild,
+        cacheExtent: minExtentOfChild,
+        visible: true,
+      );
+    });
+
+    test('when scrolled into view', () {
+      // Viewport is 800x600
+      const double viewportHeight = 600;
+      const double viewportWidth = 800;
+      const cacheExtent = 250.0;
+      const double beginningViewportCacheExtent = viewportHeight + cacheExtent;
+      const firstSliverHeight = beginningViewportCacheExtent;
+      const sliverFillRemainingChildHeight = 100.0;
+
+      final slivers = <RenderSliver>[
+        RenderSliverToBoxAdapter(child: RenderSizedBox(const Size(400.0, firstSliverHeight))),
+        RenderSliverFillRemainingAndOverscroll(
+          child: RenderSizedBox(const Size(100.0, sliverFillRemainingChildHeight)),
+        ),
+      ];
+
+      final root = RenderViewport(
+        crossAxisDirection: AxisDirection.right,
+        offset: ViewportOffset.zero(),
+        cacheExtent: cacheExtent,
+        children: slivers,
+      );
+      layout(root);
+
+      final RenderSliver firstVisibleSliver = slivers[0];
+      expectSliverConstraints(
+        sliver: firstVisibleSliver,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: viewportHeight,
+        remainingCacheExtent: beginningViewportCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverGeometry(
+        sliver: firstVisibleSliver,
+        paintExtent: viewportHeight,
+        cacheExtent: firstSliverHeight,
+        visible: true,
+      );
+
+      // With RenderSliverFillRemainingAndOverscroll:
+      // * The child has a minExtent of the remaining space of the viewportMainAxisExtent
+      // or the height of the child - whichever is larger.
+      // * The child has a maxExtent of the remaining space of the viewportMainAxisExtent,
+      // the height of the child, or the remainingPaintExtent - whichever is larger.
+      // * The sliver has a paintExtent of the child's maxExtent or the
+      // remainingPaintExtent - whichever is smaller.
+      // * The sliver has a cacheExtent of the child's minExtent or the
+      // remainingCacheExtent - whichever is smaller.
+      final sliverFillRemaining = slivers[1] as RenderSliverSingleBoxAdapter;
+      const minExtentOfChild = sliverFillRemainingChildHeight;
+      var maxExtentOfChild = sliverFillRemainingChildHeight;
+      double remainingPaintExtent = 0;
+      double remainingCacheExtent = 0;
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: remainingPaintExtent,
+        cacheExtent: remainingCacheExtent,
+        visible: false,
+      );
+
+      // Scroll so RenderSliverFillRemainingAndOverscroll is not within viewport,
+      // but is within remainingCacheExtent.
+      root.offset = ViewportOffset.fixed(cacheExtent);
+      pumpFrame();
+      remainingPaintExtent = 0;
+      remainingCacheExtent = cacheExtent;
+
+      // When within the remainingCacheExtent, the sliver will have a cacheExtent
+      // of the child's minExtent.
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: remainingPaintExtent,
+        cacheExtent: minExtentOfChild,
+        visible: false,
+      );
+
+      // Scroll so RenderSliverFillRemainingAndOverscroll is partially within
+      // the viewport.
+      root.offset = ViewportOffset.fixed(cacheExtent + 50);
+      pumpFrame();
+      remainingPaintExtent = 50;
+      remainingCacheExtent = cacheExtent + 50;
+
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: remainingPaintExtent,
+        cacheExtent: minExtentOfChild,
+        visible: true,
+      );
+
+      // Scroll so RenderSliverFillRemainingAndOverscroll is completely within
+      // the viewport.
+      root.offset = ViewportOffset.fixed(cacheExtent + sliverFillRemainingChildHeight);
+      pumpFrame();
+      remainingPaintExtent = sliverFillRemainingChildHeight;
+      remainingCacheExtent = cacheExtent + sliverFillRemainingChildHeight;
+
+      // When completely in view, the slivers's paintExtent is the child's
+      // maxExtentOfChild, since it's the smaller value.
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: maxExtentOfChild,
+        cacheExtent: minExtentOfChild,
+        visible: true,
+      );
+
+      // Overscroll
+      root.offset = ViewportOffset.fixed(cacheExtent + sliverFillRemainingChildHeight + 50);
+      pumpFrame();
+      remainingPaintExtent = sliverFillRemainingChildHeight + 50;
+      remainingCacheExtent = cacheExtent + sliverFillRemainingChildHeight + 50;
+
+      // When you overscroll, the child's maxExtent is the remainingPaintExtent,
+      // since it's the higher value.
+      maxExtentOfChild = remainingPaintExtent;
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: maxExtentOfChild,
+        cacheExtent: minExtentOfChild,
+        visible: true,
+      );
+    });
+  });
+
+  group('RenderSliverFillRemainingWithScrollable calculates correct geometry', () {
+    test('when initially in view', () {
+      // Viewport is 800x600
+      const double viewportHeight = 600;
+      const double viewportWidth = 800;
+      const cacheExtent = 250.0;
+      const double beginningViewportCacheExtent = viewportHeight + cacheExtent;
+      const double firstSliverHeight = 400;
+      const sliverFillRemainingChildHeight = 100.0;
+
+      final slivers = <RenderSliver>[
+        RenderSliverToBoxAdapter(child: RenderSizedBox(const Size(400.0, firstSliverHeight))),
+        RenderSliverFillRemainingWithScrollable(
+          child: RenderSizedBox(const Size(100.0, sliverFillRemainingChildHeight)),
+        ),
+      ];
+
+      final root = RenderViewport(
+        crossAxisDirection: AxisDirection.right,
+        offset: ViewportOffset.zero(),
+        cacheExtent: cacheExtent,
+        children: slivers,
+      );
+      layout(root);
+
+      final RenderSliver firstVisibleSliver = slivers[0];
+      expectSliverConstraints(
+        sliver: firstVisibleSliver,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: viewportHeight,
+        remainingCacheExtent: beginningViewportCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverGeometry(
+        sliver: firstVisibleSliver,
+        paintExtent: firstSliverHeight,
+        cacheExtent: firstSliverHeight,
+        visible: true,
+      );
+
+      // With RenderSliverFillRemainingWithScrollable:
+      // * The child has a minExtent of the remainingPaintExtent.
+      // * If not within the viewport but within the cacheExtent, the child has
+      // a maxExtent of the sliver's cacheExtent. Otherwise, the child has a
+      // maxExtent of the remainingPaintExtent
+      // * The sliver has a paintExtent of the child's minExtent or the
+      // remainingPaintExtent - whichever is smaller.
+      // * The sliver has a cacheExtent of either the viewportMainAxisExtent or
+      // the remainingCacheExtent - whichever is smaller.
+      final sliverFillRemaining = slivers[1] as RenderSliverSingleBoxAdapter;
+      double remainingPaintExtent = viewportHeight - firstSliverHeight;
+      double remainingCacheExtent = beginningViewportCacheExtent - firstSliverHeight;
+      var minExtentOfChild = remainingPaintExtent;
+      var maxExtentOfChild = remainingPaintExtent;
+
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: minExtentOfChild,
+        cacheExtent: remainingCacheExtent,
+        visible: true,
+      );
+
+      // Overscroll so first sliver is partially out of view.
+      root.offset = ViewportOffset.fixed(50);
+      pumpFrame();
+      remainingPaintExtent = viewportHeight - firstSliverHeight + 50;
+      remainingCacheExtent = beginningViewportCacheExtent - firstSliverHeight + 50;
+      minExtentOfChild = remainingPaintExtent;
+      maxExtentOfChild = remainingPaintExtent;
+
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: minExtentOfChild,
+        cacheExtent: remainingCacheExtent,
+        visible: true,
+      );
+
+      // Overscroll so only RenderSliverFillRemainingWithScrollable is visible.
+      root.offset = ViewportOffset.fixed(firstSliverHeight);
+      pumpFrame();
+      remainingPaintExtent = viewportHeight;
+      remainingCacheExtent = beginningViewportCacheExtent;
+      minExtentOfChild = remainingPaintExtent;
+      maxExtentOfChild = remainingPaintExtent;
+
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: minExtentOfChild,
+        cacheExtent: viewportHeight,
+        visible: true,
+      );
+    });
+
+    test('when scrolled into view', () {
+      // Viewport is 800x600
+      const double viewportHeight = 600;
+      const double viewportWidth = 800;
+      const cacheExtent = 250.0;
+      const double beginningViewportCacheExtent = viewportHeight + cacheExtent;
+      const firstSliverHeight = beginningViewportCacheExtent;
+      const sliverFillRemainingChildHeight = 100.0;
+
+      final slivers = <RenderSliver>[
+        RenderSliverToBoxAdapter(child: RenderSizedBox(const Size(400.0, firstSliverHeight))),
+        RenderSliverFillRemainingWithScrollable(
+          child: RenderSizedBox(const Size(100.0, sliverFillRemainingChildHeight)),
+        ),
+      ];
+
+      final root = RenderViewport(
+        crossAxisDirection: AxisDirection.right,
+        offset: ViewportOffset.zero(),
+        cacheExtent: cacheExtent,
+        children: slivers,
+      );
+      layout(root);
+
+      final RenderSliver firstVisibleSliver = slivers[0];
+      expectSliverConstraints(
+        sliver: firstVisibleSliver,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: viewportHeight,
+        remainingCacheExtent: beginningViewportCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverGeometry(
+        sliver: firstVisibleSliver,
+        paintExtent: viewportHeight,
+        cacheExtent: firstSliverHeight,
+        visible: true,
+      );
+
+      // With RenderSliverFillRemainingWithScrollable:
+      // * The child has a minExtent of the remainingPaintExtent.
+      // * If not within the viewport but within the cacheExtent, the child has
+      // a maxExtent of the sliver's cacheExtent. Otherwise, the child has a
+      // maxExtent of the remainingPaintExtent
+      // * The sliver has a paintExtent of the child's minExtent or the
+      // remainingPaintExtent - whichever is smaller.
+      // * The sliver has a cacheExtent of either the viewportMainAxisExtent or
+      // the remainingCacheExtent - whichever is smaller.
+      final sliverFillRemaining = slivers[1] as RenderSliverSingleBoxAdapter;
+      double remainingPaintExtent = 0;
+      double remainingCacheExtent = 0;
+      var minExtentOfChild = remainingPaintExtent;
+      var maxExtentOfChild = remainingPaintExtent;
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: minExtentOfChild,
+        cacheExtent: remainingCacheExtent,
+        visible: false,
+      );
+
+      // Scroll so RenderSliverFillRemainingWithScrollable is not within
+      // viewport, but is within remainingCacheExtent.
+      root.offset = ViewportOffset.fixed(cacheExtent);
+      pumpFrame();
+      remainingPaintExtent = 0;
+      remainingCacheExtent = cacheExtent;
+      minExtentOfChild = remainingPaintExtent;
+      // When RenderSliverFillRemainingWithScrollable is completely outside the
+      // viewport, but is within the remainingCacheExtent, the child has a
+      // maxExtent of the slivers's cacheExtent.
+      maxExtentOfChild = remainingCacheExtent;
+
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: minExtentOfChild,
+        cacheExtent: remainingCacheExtent,
+        visible: false,
+      );
+
+      // Scroll so RenderSliverFillRemainingWithScrollable is partially within
+      // viewport.
+      root.offset = ViewportOffset.fixed(cacheExtent + 50);
+      pumpFrame();
+      remainingPaintExtent = 50;
+      remainingCacheExtent = cacheExtent + 50;
+      minExtentOfChild = remainingPaintExtent;
+      maxExtentOfChild = remainingPaintExtent;
+
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: minExtentOfChild,
+        cacheExtent: remainingCacheExtent,
+        visible: true,
+      );
+
+      // Scroll so RenderSliverFillRemainingWithScrollable takes the entire
+      // viewport.
+      root.offset = ViewportOffset.fixed(firstSliverHeight);
+      pumpFrame();
+      remainingPaintExtent = viewportHeight;
+      remainingCacheExtent = beginningViewportCacheExtent;
+      minExtentOfChild = remainingPaintExtent;
+      maxExtentOfChild = remainingPaintExtent;
+
+      expectSliverConstraints(
+        sliver: sliverFillRemaining,
+        cacheOrigin: 0.0,
+        remainingPaintExtent: remainingPaintExtent,
+        remainingCacheExtent: remainingCacheExtent,
+        scrollOffset: 0.0,
+      );
+      expectSliverChildConstraints(
+        sliver: sliverFillRemaining,
+        maxHeight: maxExtentOfChild,
+        minHeight: minExtentOfChild,
+        maxWidth: viewportWidth,
+        minWidth: viewportWidth,
+      );
+      expectSliverGeometry(
+        sliver: sliverFillRemaining,
+        paintExtent: minExtentOfChild,
+        cacheExtent: viewportHeight,
+        visible: true,
+      );
+    });
+  });
 }
 
 void expectSliverConstraints({
@@ -882,8 +1655,16 @@ void expectSliverConstraints({
   required double scrollOffset,
 }) {
   expect(sliver.constraints.cacheOrigin, cacheOrigin, reason: 'cacheOrigin');
-  expect(sliver.constraints.remainingPaintExtent, remainingPaintExtent, reason: 'remainingPaintExtent');
-  expect(sliver.constraints.remainingCacheExtent, remainingCacheExtent, reason: 'remainingCacheExtent');
+  expect(
+    sliver.constraints.remainingPaintExtent,
+    remainingPaintExtent,
+    reason: 'remainingPaintExtent',
+  );
+  expect(
+    sliver.constraints.remainingCacheExtent,
+    remainingCacheExtent,
+    reason: 'remainingCacheExtent',
+  );
   expect(sliver.constraints.scrollOffset, scrollOffset, reason: 'scrollOffset');
 }
 
@@ -898,10 +1679,21 @@ void expectSliverGeometry({
   expect(sliver.geometry!.visible, visible, reason: 'visible');
 }
 
+void expectSliverChildConstraints({
+  required RenderSliverSingleBoxAdapter sliver,
+  required double maxWidth,
+  required double maxHeight,
+  required double minWidth,
+  required double minHeight,
+}) {
+  expect(sliver.child!.constraints.maxWidth, maxWidth, reason: 'maxWidth');
+  expect(sliver.child!.constraints.maxHeight, maxHeight, reason: 'maxHeight');
+  expect(sliver.child!.constraints.minWidth, minWidth, reason: 'minWidth');
+  expect(sliver.child!.constraints.minHeight, minHeight, reason: 'minHeight');
+}
+
 class TestRenderSliverBoxChildManager extends RenderSliverBoxChildManager {
-  TestRenderSliverBoxChildManager({
-    required this.children,
-  });
+  TestRenderSliverBoxChildManager({required this.children});
 
   RenderSliverMultiBoxAdaptor? _renderObject;
   List<RenderBox> children;
@@ -914,10 +1706,7 @@ class TestRenderSliverBoxChildManager extends RenderSliverBoxChildManager {
 
   RenderSliverFixedExtentList createRenderSliverFixedExtentList() {
     assert(_renderObject == null);
-    _renderObject = RenderSliverFixedExtentList(
-      childManager: this,
-      itemExtent: 100.0,
-    );
+    _renderObject = RenderSliverFixedExtentList(childManager: this, itemExtent: 100.0);
     return _renderObject! as RenderSliverFixedExtentList;
   }
 
@@ -936,7 +1725,7 @@ class TestRenderSliverBoxChildManager extends RenderSliverBoxChildManager {
   int? _currentlyUpdatingChildIndex;
 
   @override
-  void createChild(int index, { required RenderBox? after }) {
+  void createChild(int index, {required RenderBox? after}) {
     if (index < 0 || index >= children.length) {
       return;
     }
@@ -962,7 +1751,9 @@ class TestRenderSliverBoxChildManager extends RenderSliverBoxChildManager {
     double? trailingScrollOffset,
   }) {
     assert(lastIndex! >= firstIndex!);
-    return children.length * (trailingScrollOffset! - leadingScrollOffset!) / (lastIndex! - firstIndex! + 1);
+    return children.length *
+        (trailingScrollOffset! - leadingScrollOffset!) /
+        (lastIndex! - firstIndex! + 1);
   }
 
   @override
@@ -971,10 +1762,10 @@ class TestRenderSliverBoxChildManager extends RenderSliverBoxChildManager {
   @override
   void didAdoptChild(RenderBox child) {
     assert(_currentlyUpdatingChildIndex != null);
-    final SliverMultiBoxAdaptorParentData childParentData = child.parentData! as SliverMultiBoxAdaptorParentData;
+    final childParentData = child.parentData! as SliverMultiBoxAdaptorParentData;
     childParentData.index = _currentlyUpdatingChildIndex;
   }
 
   @override
-  void setDidUnderflow(bool value) { }
+  void setDidUnderflow(bool value) {}
 }

@@ -5,9 +5,12 @@
 import 'template.dart';
 
 class ActionChipTemplate extends TokenTemplate {
-  const ActionChipTemplate(super.blockName, super.fileName, super.tokens, {
+  const ActionChipTemplate(
+    super.blockName,
+    super.fileName,
+    super.tokens, {
     super.colorSchemePrefix = '_colors.',
-    super.textThemePrefix = '_textTheme.'
+    super.textThemePrefix = '_textTheme.',
   });
 
   static const String tokenGroup = 'md.comp.assist-chip';
@@ -15,7 +18,8 @@ class ActionChipTemplate extends TokenTemplate {
   static const String elevatedVariant = '.elevated';
 
   @override
-  String generate() => '''
+  String generate() =>
+      '''
 class _${blockName}DefaultsM3 extends ChipThemeData {
   _${blockName}DefaultsM3(this.context, this.isEnabled, this._chipVariant)
     : super(
@@ -38,17 +42,23 @@ class _${blockName}DefaultsM3 extends ChipThemeData {
   double? get pressElevation => ${elevation("$tokenGroup$elevatedVariant.pressed.container")};
 
   @override
-  TextStyle? get labelStyle => ${textStyle("$tokenGroup.label-text")};
+  TextStyle? get labelStyle => ${textStyle("$tokenGroup.label-text")}?.copyWith(
+    color: isEnabled
+      ? ${color("$tokenGroup.label-text.color")}
+      : ${color("$tokenGroup.disabled.label-text.color")},
+  );
 
   @override
-  MaterialStateProperty<Color?>? get color =>
-    MaterialStateProperty.resolveWith((Set<MaterialState> states) {
-      if (states.contains(MaterialState.disabled)) {
+  WidgetStateProperty<Color?>? get color =>
+    WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.disabled)) {
         return _chipVariant == _ChipVariant.flat
           ? ${componentColor("$tokenGroup$flatVariant.disabled.container")}
           : ${componentColor("$tokenGroup$elevatedVariant.disabled.container")};
       }
-      return ${componentColor("$tokenGroup$flatVariant.container")};
+      return _chipVariant == _ChipVariant.flat
+        ? ${componentColor("$tokenGroup$flatVariant.container")}
+        : ${componentColor("$tokenGroup$elevatedVariant.container")};
     });
 
   @override
@@ -60,10 +70,10 @@ class _${blockName}DefaultsM3 extends ChipThemeData {
   Color? get surfaceTintColor => ${colorOrTransparent("$tokenGroup.container.surface-tint-layer.color")};
 
   @override
-  Color? get checkmarkColor => ${color("$tokenGroup.with-icon.selected.icon.color")};
+  Color? get checkmarkColor => null;
 
   @override
-  Color? get deleteIconColor => ${color("$tokenGroup.with-icon.selected.icon.color")};
+  Color? get deleteIconColor => null;
 
   @override
   BorderSide? get side => _chipVariant == _ChipVariant.flat
@@ -83,16 +93,24 @@ class _${blockName}DefaultsM3 extends ChipThemeData {
   @override
   EdgeInsetsGeometry? get padding => const EdgeInsets.all(8.0);
 
-  /// The chip at text scale 1 starts with 8px on each side and as text scaling
-  /// gets closer to 2 the label padding is linearly interpolated from 8px to 4px.
-  /// Once the widget has a text scaling of 2 or higher than the label padding
-  /// remains 4px.
+  /// The label padding of the chip scales with the font size specified in the
+  /// [labelStyle], and the system font size settings that scale font sizes
+  /// globally.
+  ///
+  /// The chip at effective font size 14.0 starts with 8px on each side and as
+  /// the font size scales up to closer to 28.0, the label padding is linearly
+  /// interpolated from 8px to 4px. Once the label has a font size of 2 or
+  /// higher, label padding remains 4px.
   @override
-  EdgeInsetsGeometry? get labelPadding => EdgeInsets.lerp(
-    const EdgeInsets.symmetric(horizontal: 8.0),
-    const EdgeInsets.symmetric(horizontal: 4.0),
-    clampDouble(MediaQuery.textScaleFactorOf(context) - 1.0, 0.0, 1.0),
-  )!;
+  EdgeInsetsGeometry? get labelPadding {
+    final double fontSize = labelStyle?.fontSize ?? 14.0;
+    final double fontSizeRatio = MediaQuery.textScalerOf(context).scale(fontSize) / 14.0;
+    return EdgeInsets.lerp(
+      const EdgeInsets.symmetric(horizontal: 8.0),
+      const EdgeInsets.symmetric(horizontal: 4.0),
+      clampDouble(fontSizeRatio - 1.0, 0.0, 1.0),
+    )!;
+  }
 }
 ''';
 }

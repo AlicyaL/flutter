@@ -1,0 +1,473 @@
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import 'dart:async';
+import 'dart:js_interop';
+import 'dart:typed_data';
+
+import 'package:meta/meta.dart';
+import 'package:ui/src/engine.dart';
+import 'package:ui/src/engine/skwasm/skwasm_impl.dart'
+    // ignore: deprecated_web_configuration, https://github.com/dart-lang/sdk/issues/61464
+    if (dart.library.html) 'package:ui/src/engine/skwasm/skwasm_stub.dart';
+import 'package:ui/ui.dart' as ui;
+import 'package:ui/ui_web/src/ui_web.dart' as ui_web;
+
+final Renderer _renderer = Renderer._internal();
+Renderer get renderer => _renderer;
+
+/// This class is an abstraction over the rendering backend for the web engine.
+/// Which backend is selected is based off of the `--web-renderer` command-line
+/// argument passed to the flutter tool. It provides many of the rendering
+/// primitives of the dart:ui library, as well as other backend-specific pieces
+/// of functionality needed by the rest of the generic web engine code.
+abstract class Renderer {
+  // Abstract generative constructor to allow extending this renderer.
+  Renderer();
+
+  factory Renderer._internal() {
+    if (FlutterConfiguration.flutterWebUseSkwasm) {
+      return SkwasmRenderer();
+    } else if (FlutterConfiguration.useSkia) {
+      return CanvasKitRenderer();
+    } else {
+      throw StateError(
+        'Wrong combination of configuration flags. Was expecting either CanvasKit or Skwasm to be '
+        'selected.',
+      );
+    }
+  }
+
+  String get rendererTag;
+  FlutterFontCollection get fontCollection;
+
+  late Rasterizer rasterizer;
+
+  /// A surface used specifically for `Picture.toImage`.
+  Surface get pictureToImageSurface;
+
+  /// Disposes the current [Rasterizer] and replaces it with the default one.
+  /// Used in tests.
+  ///
+  /// The view rasterizers for registered views are recreated with the new
+  /// [Rasterizer].
+  @visibleForTesting
+  void debugResetRasterizer();
+
+  /// Override the rasterizer with the given [_rasterizer]. Used in tests.
+  @visibleForTesting
+  void debugOverrideRasterizer(Rasterizer testRasterizer) {
+    rasterizer = testRasterizer;
+  }
+
+  // Listens for view creation events from the view manager.
+  late StreamSubscription<int> _onViewCreatedListener;
+  // Listens for view disposal events from the view manager.
+  late StreamSubscription<int> _onViewDisposedListener;
+
+  /// Set the maximum number of bytes that can be held in the GPU resource cache.
+  set resourceCacheMaxBytes(int bytes) => rasterizer.setResourceCacheMaxBytes(bytes);
+
+  @mustCallSuper
+  FutureOr<void> initialize() {
+    _setUpViewListeners();
+  }
+
+  void _setUpViewListeners() {
+    // Views may have been registered before this renderer was initialized.
+    // Create rasterizers for them and then start listening for new view
+    // creation/disposal events.
+    final FlutterViewManager viewManager = EnginePlatformDispatcher.instance.viewManager;
+    for (final EngineFlutterView view in viewManager.views) {
+      _onViewCreated(view.viewId);
+    }
+    _onViewCreatedListener = viewManager.onViewCreated.listen(_onViewCreated);
+    _onViewDisposedListener = viewManager.onViewDisposed.listen(_onViewDisposed);
+  }
+
+  void _onViewCreated(int viewId) {
+    final EngineFlutterView view = EnginePlatformDispatcher.instance.viewManager[viewId]!;
+    rasterizers[view.viewId] = rasterizer.createViewRasterizer(view);
+  }
+
+  void _onViewDisposed(int viewId) {
+    // The view has already been disposed.
+    if (!rasterizers.containsKey(viewId)) {
+      return;
+    }
+    final ViewRasterizer rasterizer = rasterizers.remove(viewId)!;
+    _disposeRasterizer(rasterizer);
+  }
+
+  void _disposeRasterizer(ViewRasterizer rasterizer) {
+    final RenderRequest? next = rasterizer.queue.next;
+    if (next != null) {
+      rasterizer.queue.next = null;
+      _unpinScene(next.scene);
+      next.completer.complete();
+    }
+    rasterizer.dispose();
+  }
+
+  void _pinScene(ui.Scene scene) {
+    (scene as LayerScene).layerTree.rootLayer.pinForRender();
+  }
+
+  void _unpinScene(ui.Scene scene) {
+    (scene as LayerScene).layerTree.rootLayer.unpinForRender();
+  }
+
+  /// Creates a native paint for a single draw call from [paint].
+  ///
+  /// The caller owns the result and must dispose it after the draw call.
+  BackendPaint createPaint(EnginePaint paint, {required ui.TileMode defaultBlurTileMode});
+
+  BackendVertices createVertices(
+    ui.VertexMode mode,
+    Float32List positions, {
+    Float32List? textureCoordinates,
+    Int32List? colors,
+    Uint16List? indices,
+  });
+
+  ui.PictureRecorder createPictureRecorder();
+  ui.Canvas createCanvas(ui.PictureRecorder recorder, [ui.Rect? cullRect]);
+  ui.SceneBuilder createSceneBuilder();
+
+  BackendGradient createGradientLinear(
+    Float32List endPoints,
+    Uint32List colors,
+    Float32List? colorStops,
+    ui.TileMode tileMode,
+    Float32List? matrix4,
+  );
+
+  BackendGradient createGradientRadial(
+    double centerX,
+    double centerY,
+    double radius,
+    Uint32List colors,
+    Float32List? colorStops,
+    ui.TileMode tileMode,
+    Float32List? matrix4,
+  );
+
+  BackendGradient createGradientConical(
+    double startX,
+    double startY,
+    double startRadius,
+    double endX,
+    double endY,
+    double endRadius,
+    Uint32List colors,
+    Float32List? colorStops,
+    ui.TileMode tileMode,
+    Float32List? matrix4,
+  );
+
+  BackendGradient createGradientSweep(
+    double centerX,
+    double centerY,
+    Uint32List colors,
+    Float32List? colorStops,
+    ui.TileMode tileMode,
+    double startAngle,
+    double endAngle,
+    Float32List? matrix4,
+  );
+
+  BackendImageFilter createBlurImageFilter({
+    required double sigmaX,
+    required double sigmaY,
+    required ui.TileMode tileMode,
+    ui.Rect? bounds,
+  });
+  BackendImageFilter createDilateImageFilter({required double radiusX, required double radiusY});
+  BackendImageFilter createErodeImageFilter({required double radiusX, required double radiusY});
+  BackendImageFilter createMatrixImageFilter({
+    required Float64List matrix,
+    required ui.FilterQuality filterQuality,
+  });
+  BackendImageFilter createComposeImageFilter({
+    required BackendImageFilter outer,
+    required BackendImageFilter inner,
+  });
+  BackendImageFilter createColorFilterImageFilter({required BackendColorFilter filter});
+  BackendColorFilter createColorFilter(EngineColorFilter filter);
+  BackendMaskFilter createMaskFilter(EngineMaskFilter filter);
+
+  bool get isMultiThreaded;
+
+  /// Whether this renderer natively supports resizing/scaling animated images during decoding.
+  bool get supportsResizingAnimatedImages;
+
+  /// Whether this renderer can decode images itself via [createAnimatedImage].
+  ///
+  /// When this is false, [createAnimatedImage] must not be called for any
+  /// image, animated or not, and callers must fall back to a browser-provided
+  /// decoder. Some backends (notably the Impeller-based skwasm variants) are
+  /// built without the builtin image codecs.
+  bool get supportsAnimatedImages;
+
+  BackendAnimatedImage createAnimatedImage(Uint8List bytes, {int? targetWidth, int? targetHeight});
+
+  BackendImage createImageFromImageSource(ImageSource source);
+
+  ui.Image createImageFromImageBitmap(DomImageBitmap imageBitmap) {
+    final int width = imageBitmap.width;
+    final int height = imageBitmap.height;
+    final ImageSource source = ImageBitmapImageSource(imageBitmap);
+    final BackendImage backendImage = createImageFromImageSource(source);
+    return EngineImage(backendImage, width, height, imageSource: source);
+  }
+
+  /// Creates a unified [ui.Image] from a raw browser texture source (such as a
+  /// [VideoFrame], [DomImageBitmap], [DomHTMLImageElement], or [DomHTMLCanvasElement]).
+  ///
+  /// This method is a crucial bridge between the browser's DOM environment and
+  /// the engine's rendering backends, particularly when managing multi-threaded
+  /// environments (like Skwasm running in a Web Worker):
+  ///
+  /// - **Thread-Safety & Transferability:** In multi-threaded mode, DOM elements
+  ///    (like `HTMLImageElement` or `HTMLCanvasElement`) cannot be transferred
+  ///    across thread boundaries to a Web Worker. Only "transferable" objects
+  ///    (like `ImageBitmap` and `VideoFrame`) are thread-safe. If the renderer is
+  ///    multi-threaded and the source is non-transferable, we must clone it.
+  /// - **Cloning Heuristic:** We use the browser's native `createImageBitmap` to
+  ///    asynchronously capture a snapshot of the source as a transferable `ImageBitmap`.
+  ///    Cloning is also triggered if [transferOwnership] is false, ensuring the caller's
+  ///    original object remains unaffected by our internal disposal lifecycle.
+  /// - **Ownership Transfer:** If we had to clone the object but the caller requested
+  ///    ownership transfer (`transferOwnership` is true), we eagerly close the original
+  ///    source (if it is closeable like a `VideoFrame` or `ImageBitmap`) to avoid leaking
+  ///    it, as we are now responsible for the cloned copy instead.
+  FutureOr<ui.Image> createImageFromTextureSource(
+    JSAny object, {
+    required int width,
+    required int height,
+    required bool transferOwnership,
+  }) async {
+    var textureSource = object;
+    final originalTextureSource = object;
+    final bool isVideoFrame = object.isA<VideoFrame>();
+    // Although VideoFrame is transferable across threads, drawing directly from a
+    // VideoFrame to a WebGL texture can result in incorrect orientation due to EXIF
+    // metadata handling. Converting it to an ImageBitmap avoids this problem.
+    final bool needsClone =
+        isVideoFrame || !transferOwnership || (isMultiThreaded && !_isTransferable(object));
+    if (needsClone) {
+      textureSource =
+          (await (isVideoFrame
+                  ? createImageBitmap(object)
+                  : createImageBitmap(object, bounds: (x: 0, y: 0, width: width, height: height))))
+              .toJSAnyShallow;
+      if (transferOwnership) {
+        if (originalTextureSource.isA<VideoFrame>()) {
+          (originalTextureSource as VideoFrame).close();
+        } else if (originalTextureSource.isA<DomImageBitmap>()) {
+          (originalTextureSource as DomImageBitmap).close();
+        }
+      }
+    }
+
+    final ImageSource imageSource;
+    if (textureSource.isA<DomImageBitmap>()) {
+      imageSource = ImageBitmapImageSource(textureSource as DomImageBitmap);
+    } else if (textureSource.isA<VideoFrame>()) {
+      imageSource = VideoFrameImageSource(textureSource as VideoFrame);
+    } else if (textureSource.isA<DomHTMLImageElement>()) {
+      imageSource = ImageElementImageSource(textureSource as DomHTMLImageElement);
+    } else {
+      imageSource = CanvasImageSourceWrapper(textureSource as DomCanvasImageSource, width, height);
+    }
+
+    final BackendImage backendImage;
+    try {
+      backendImage = createImageFromImageSource(imageSource);
+    } catch (e) {
+      imageSource.close();
+      rethrow;
+    }
+
+    return EngineImage(backendImage, width, height, imageSource: imageSource);
+  }
+
+  bool _isTransferable(JSAny object) =>
+      object.isA<DomImageBitmap>() || object.isA<DomOffscreenCanvas>() || object.isA<VideoFrame>();
+
+  Future<ui.Codec> instantiateImageCodec(
+    Uint8List list, {
+    int? targetWidth,
+    int? targetHeight,
+    bool allowUpscaling = true,
+  }) => engineInstantiateImageCodec(
+    list,
+    targetWidth: targetWidth,
+    targetHeight: targetHeight,
+    allowUpscaling: allowUpscaling,
+  );
+
+  Future<ui.Codec> instantiateImageCodecFromUrl(
+    Uri uri, {
+    ui_web.ImageCodecChunkCallback? chunkCallback,
+  }) => engineInstantiateImageCodecFromUrl(uri, chunkCallback: chunkCallback);
+
+  FutureOr<BackendImage> decodeBackendImageFromPixels(
+    Uint8List pixels, {
+    required int width,
+    required int height,
+    required ui.PixelFormat format,
+    int? rowBytes,
+  });
+
+  void decodeImageFromPixels(
+    Uint8List pixels,
+    int width,
+    int height,
+    ui.PixelFormat format,
+    ui.ImageDecoderCallback callback, {
+    int? rowBytes,
+    int? targetWidth,
+    int? targetHeight,
+    bool allowUpscaling = true,
+  }) {
+    Timer.run(() async {
+      final BackendImage backendImage = await decodeBackendImageFromPixels(
+        pixels,
+        width: width,
+        height: height,
+        format: format,
+        rowBytes: rowBytes,
+      );
+      final ui.Image image = EngineImage(backendImage, width, height);
+      if (targetWidth != null || targetHeight != null) {
+        final ui.Image scaledImage;
+        try {
+          scaledImage = scaleImageIfNeeded(
+            image,
+            targetWidth: targetWidth,
+            targetHeight: targetHeight,
+            allowUpscaling: allowUpscaling,
+          );
+        } catch (e) {
+          image.dispose();
+          rethrow;
+        }
+        callback(scaledImage);
+      } else {
+        callback(image);
+      }
+    });
+  }
+
+  BackendImageShader createImageShader(
+    EngineImage image,
+    ui.TileMode tmx,
+    ui.TileMode tmy,
+    Float64List? matrix4,
+    ui.FilterQuality filterQuality,
+  );
+
+  void clearFragmentProgramCache();
+  Future<ui.FragmentProgram> createFragmentProgram(String assetKey);
+
+  BackendPathConstructors get pathConstructors;
+
+  BackendParagraphBuilder createParagraphBuilder(EngineParagraphStyle style);
+
+  WebParagraphPainter createWebParagraphPainter(WebParagraph paragraph);
+
+  /// Map from view id to the associated [ViewRasterizer] for that view.
+  final Map<int, ViewRasterizer> rasterizers = <int, ViewRasterizer>{};
+
+  Future<void> renderScene(ui.Scene scene, EngineFlutterView view, {required ui.Size size}) async {
+    assert(
+      rasterizers.containsKey(view.viewId),
+      "Unable to render to a view which hasn't been registered",
+    );
+    final ViewRasterizer rasterizer = rasterizers[view.viewId]!;
+    final RenderQueue renderQueue = rasterizer.queue;
+    final FrameTimingRecorder? recorder = FrameTimingRecorder.frameTimingsEnabled
+        ? FrameTimingRecorder()
+        : null;
+    // Mark build finish immediately upon receiving the scene from the framework.
+    // If another frame is currently rasterizing, this frame will wait in
+    // [renderQueue.next]; recording build finish now ensures queue waiting time
+    // is not mistakenly counted as build time.
+    recorder?.recordBuildFinish();
+    // Pin the scene while it is queued or being rasterized.
+    // The framework typically calls scene.dispose() immediately after submitting
+    // to window.render(), so this protects child picture layers from being
+    // disposed prematurely before rasterization completes.
+    _pinScene(scene);
+    if (renderQueue.current != null) {
+      // If a scene is already queued up, drop it and queue this one up instead
+      // so that the scene view always displays the most recently requested scene.
+      final RenderRequest? dropped = renderQueue.next;
+      if (dropped != null) {
+        _unpinScene(dropped.scene);
+        dropped.completer.complete();
+      }
+      final completer = Completer<void>();
+      renderQueue.next = (scene: scene, size: size, completer: completer, recorder: recorder);
+      return completer.future;
+    }
+    final completer = Completer<void>();
+    renderQueue.current = (scene: scene, size: size, completer: completer, recorder: recorder);
+    unawaited(_kickRenderLoop(rasterizer));
+    return completer.future;
+  }
+
+  Future<void> _kickRenderLoop(ViewRasterizer rasterizer) async {
+    final RenderQueue renderQueue = rasterizer.queue;
+    final RenderRequest current = renderQueue.current!;
+    try {
+      await _renderScene(current.scene, current.size, rasterizer, current.recorder);
+      current.completer.complete();
+    } catch (error, stackTrace) {
+      current.completer.completeError(error, stackTrace);
+    } finally {
+      _unpinScene(current.scene);
+    }
+    renderQueue.current = renderQueue.next;
+    renderQueue.next = null;
+    if (renderQueue.current == null) {
+      return;
+    } else {
+      return _kickRenderLoop(rasterizer);
+    }
+  }
+
+  Future<void> _renderScene(
+    ui.Scene scene,
+    ui.Size size,
+    ViewRasterizer rasterizer,
+    FrameTimingRecorder? recorder,
+  ) async {
+    await rasterizer.draw((scene as LayerScene).layerTree, size, recorder);
+    recorder?.submitTimings();
+  }
+
+  void dumpDebugInfo();
+
+  /// Disposes this renderer.
+  @mustCallSuper
+  void dispose() {
+    _onViewCreatedListener.cancel();
+    _onViewDisposedListener.cancel();
+    rasterizers.values.forEach(_disposeRasterizer);
+    rasterizer.dispose();
+    pictureToImageSurface.dispose();
+  }
+
+  /// Clears the state of this renderer. Used in tests.
+  @mustCallSuper
+  void debugClear() {
+    _onViewCreatedListener.cancel();
+    _onViewDisposedListener.cancel();
+    rasterizers.values.forEach(_disposeRasterizer);
+    rasterizers.clear();
+    _setUpViewListeners();
+  }
+}

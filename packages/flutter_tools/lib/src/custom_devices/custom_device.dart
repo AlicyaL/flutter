@@ -6,26 +6,32 @@ import 'dart:async';
 
 import 'package:meta/meta.dart';
 import 'package:process/process.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../application_package.dart';
+import '../artifacts.dart';
 import '../base/common.dart';
+import '../base/config.dart';
 import '../base/file_system.dart';
 import '../base/io.dart';
 import '../base/logger.dart';
 import '../base/process.dart';
 import '../base/utils.dart';
 import '../build_info.dart';
-import '../bundle.dart';
+import '../build_system/build_system.dart';
+import '../build_system/build_targets.dart';
 import '../bundle_builder.dart';
+import '../context/tool_context.dart';
 import '../convert.dart';
 import '../device.dart';
 import '../device_port_forwarder.dart';
 import '../features.dart';
 import '../project.dart';
 import '../protocol_discovery.dart';
+import '../version.dart';
+import '../vmservice.dart';
 import 'custom_device_config.dart';
 import 'custom_device_workflow.dart';
-import 'custom_devices_config.dart';
 
 /// Replace all occurrences of `${someName}` with the value found for that
 /// name inside replacementValues or additionalReplacementValues.
@@ -36,12 +42,11 @@ import 'custom_devices_config.dart';
 List<String> interpolateCommand(
   List<String> command,
   Map<String, String> replacementValues, {
-  Map<String, String> additionalReplacementValues = const <String, String>{}
+  Map<String, String> additionalReplacementValues = const <String, String>{},
 }) {
   return interpolateStringList(
     command,
-    Map<String, String>.of(additionalReplacementValues)
-      ..addAll(replacementValues)
+    Map<String, String>.of(additionalReplacementValues)..addAll(replacementValues),
   );
 }
 
@@ -55,12 +60,12 @@ class CustomDeviceLogReader extends DeviceLogReader {
   final String name;
 
   @visibleForTesting
-  final StreamController<String> logLinesController = StreamController<String>.broadcast();
+  final logLinesController = StreamController<String>.broadcast();
 
   @visibleForTesting
-  final List<StreamSubscription<String>> subscriptions = <StreamSubscription<String>>[];
+  final subscriptions = <StreamSubscription<String>>[];
 
-  /// Listen to [process]' stdout and stderr, decode them using [SystemEncoding]
+  /// Listen to [process]' stdout and stderr, decode them using [encoding]
   /// and add each decoded line to [logLines].
   ///
   /// However, [logLines] will not be done when the [process]' stdout and stderr
@@ -72,15 +77,17 @@ class CustomDeviceLogReader extends DeviceLogReader {
     final Converter<List<int>, String> decoder = encoding.decoder;
 
     subscriptions.add(
-      process.stdout.transform<String>(decoder)
-        .transform<String>(const LineSplitter())
-        .listen(logLinesController.add),
+      process.stdout
+          .transform<String>(decoder)
+          .transform<String>(const LineSplitter())
+          .listen(logLinesController.add),
     );
 
     subscriptions.add(
-      process.stderr.transform<String>(decoder)
-        .transform<String>(const LineSplitter())
-        .listen(logLinesController.add)
+      process.stderr
+          .transform<String>(decoder)
+          .transform<String>(const LineSplitter())
+          .listen(logLinesController.add),
     );
   }
 
@@ -92,49 +99,39 @@ class CustomDeviceLogReader extends DeviceLogReader {
   ///
   /// Useful when you want to combine the contents of multiple log readers.
   void listenToLinesStream(Stream<String> lines) {
-    subscriptions.add(
-      lines.listen(logLinesController.add)
-    );
+    subscriptions.add(lines.listen(logLinesController.add));
   }
 
   /// Dispose this log reader, freeing all associated resources and marking
   /// [logLines] as done.
   @override
   Future<void> dispose() async {
-    final List<Future<void>> futures = <Future<void>>[];
-
-    for (final StreamSubscription<String> subscription in subscriptions) {
-      futures.add(subscription.cancel());
-    }
-
-    futures.add(logLinesController.close());
-
+    final futures = <Future<void>>[
+      for (final StreamSubscription<String> subscription in subscriptions) subscription.cancel(),
+      logLinesController.close(),
+    ];
     await Future.wait(futures);
   }
 
   @override
   Stream<String> get logLines => logLinesController.stream;
+
+  @override
+  Future<void> provideVmService(FlutterVmService connectedVmService) async {}
 }
 
 /// A [DevicePortForwarder] that uses commands to forward / unforward a port.
 class CustomDevicePortForwarder extends DevicePortForwarder {
   CustomDevicePortForwarder({
-    required String deviceName,
-    required List<String> forwardPortCommand,
-    required RegExp forwardPortSuccessRegex,
+    required this._deviceName,
+    required this._forwardPortCommand,
+    required this._forwardPortSuccessRegex,
     this.numTries,
     required ProcessManager processManager,
     required Logger logger,
-    Map<String, String> additionalReplacementValues = const <String, String>{}
-  }) : _deviceName = deviceName,
-       _forwardPortCommand = forwardPortCommand,
-       _forwardPortSuccessRegex = forwardPortSuccessRegex,
-       _processManager = processManager,
-       _processUtils = ProcessUtils(
-         processManager: processManager,
-         logger: logger
-       ),
-       _additionalReplacementValues = additionalReplacementValues;
+    this._additionalReplacementValues = const <String, String>{},
+  }) : _processManager = processManager,
+       _processUtils = ProcessUtils(processManager: processManager, logger: logger);
 
   final String _deviceName;
   final List<String> _forwardPortCommand;
@@ -143,7 +140,7 @@ class CustomDevicePortForwarder extends DevicePortForwarder {
   final ProcessUtils _processUtils;
   final int? numTries;
   final Map<String, String> _additionalReplacementValues;
-  final List<ForwardedPort> _forwardedPorts = <ForwardedPort>[];
+  final _forwardedPorts = <ForwardedPort>[];
 
   @override
   Future<void> dispose() async {
@@ -152,46 +149,44 @@ class CustomDevicePortForwarder extends DevicePortForwarder {
   }
 
   Future<ForwardedPort?> tryForward(int devicePort, int hostPort) async {
-    final List<String> interpolated = interpolateCommand(
-      _forwardPortCommand,
-      <String, String>{
-        'devicePort': '$devicePort',
-        'hostPort': '$hostPort',
-      },
-      additionalReplacementValues: _additionalReplacementValues
-    );
+    final List<String> interpolated = interpolateCommand(_forwardPortCommand, <String, String>{
+      'devicePort': '$devicePort',
+      'hostPort': '$hostPort',
+    }, additionalReplacementValues: _additionalReplacementValues);
 
     // launch the forwarding command
     final Process process = await _processUtils.start(interpolated);
 
-    final Completer<ForwardedPort?> completer = Completer<ForwardedPort?>();
+    final completer = Completer<ForwardedPort?>();
 
     // Read the outputs of the process; if we find a line that matches
     // the configs forwardPortSuccessRegex, we complete with a successfully
     // forwarded port.
     // If that regex never matches, this will potentially run forever
     // and the forwarding will never complete.
-    final CustomDeviceLogReader reader = CustomDeviceLogReader(_deviceName)..listenToProcessOutput(process);
+    final reader = CustomDeviceLogReader(_deviceName)..listenToProcessOutput(process);
     final StreamSubscription<String> logLinesSubscription = reader.logLines.listen((String line) {
       if (_forwardPortSuccessRegex.hasMatch(line) && !completer.isCompleted) {
-        completer.complete(
-          ForwardedPort.withContext(hostPort, devicePort, process)
-        );
+        completer.complete(ForwardedPort.withContext(hostPort, devicePort, process));
       }
     });
 
     // if the process exits (even with exitCode == 0), that is considered
     // a port forwarding failure and we complete with a null value.
-    unawaited(process.exitCode.whenComplete(() {
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
-    }));
+    unawaited(
+      process.exitCode.whenComplete(() {
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      }),
+    );
 
-    unawaited(completer.future.whenComplete(() {
-      unawaited(logLinesSubscription.cancel());
-      unawaited(reader.dispose());
-    }));
+    unawaited(
+      completer.future.whenComplete(() {
+        unawaited(logLinesSubscription.cancel());
+        unawaited(reader.dispose());
+      }),
+    );
 
     return completer.future;
   }
@@ -199,7 +194,7 @@ class CustomDevicePortForwarder extends DevicePortForwarder {
   @override
   Future<int> forward(int devicePort, {int? hostPort}) async {
     int actualHostPort = (hostPort == 0 || hostPort == null) ? devicePort : hostPort;
-    int tries = 0;
+    var tries = 0;
 
     while ((numTries == null) || (tries < numTries!)) {
       // when the desired host port is already forwarded by this Forwarder,
@@ -221,7 +216,7 @@ class CustomDevicePortForwarder extends DevicePortForwarder {
       }
     }
 
-    throw ToolExit('Forwarding port for custom device $_deviceName failed after $tries tries.');
+    throwToolExit('Forwarding port for custom device $_deviceName failed after $tries tries.');
   }
 
   @override
@@ -249,18 +244,13 @@ class CustomDevicePortForwarder extends DevicePortForwarder {
 class CustomDeviceAppSession {
   CustomDeviceAppSession({
     required this.name,
-    required CustomDevice device,
-    required ApplicationPackage appPackage,
+    required this._device,
+    required this._appPackage,
     required Logger logger,
-    required ProcessManager processManager
-  }) : _appPackage = appPackage,
-       _device = device,
-       _logger = logger,
+    required ProcessManager processManager,
+  }) : _logger = logger,
        _processManager = processManager,
-       _processUtils = ProcessUtils(
-         processManager: processManager,
-         logger: logger
-       ),
+       _processUtils = ProcessUtils(processManager: processManager, logger: logger),
        logReader = CustomDeviceLogReader(name);
 
   final String name;
@@ -281,32 +271,26 @@ class CustomDeviceAppSession {
   ///
   /// For example, `_getEngineOptions(null, false, null)` will return
   /// `['enable-dart-profiling=true']`
-  List<String> _getEngineOptions(DebuggingOptions debuggingOptions, bool traceStartup, String? route) {
-    final String dartVmFlags = computeDartVmFlags(debuggingOptions);
+  List<String> _getEngineOptions(
+    DebuggingOptions debuggingOptions,
+    bool traceStartup,
+    String? route,
+  ) {
     return <String>[
-      if (traceStartup)
-        'trace-startup=true',
-      if (route != null)
-        'route=$route',
-      if (debuggingOptions.enableDartProfiling)
-        'enable-dart-profiling=true',
-      if (debuggingOptions.enableSoftwareRendering)
-        'enable-software-rendering=true',
-      if (debuggingOptions.skiaDeterministicRendering)
-        'skia-deterministic-rendering=true',
-      if (debuggingOptions.traceSkia)
-        'trace-skia=true',
+      if (traceStartup) 'trace-startup=true',
+      if (route != null) 'route=$route',
+      if (debuggingOptions.enableDartProfiling) 'enable-dart-profiling=true',
+      if (debuggingOptions.profileStartup) 'profile-startup=true',
+      if (debuggingOptions.enableSoftwareRendering) 'enable-software-rendering=true',
+      if (debuggingOptions.skiaDeterministicRendering) 'skia-deterministic-rendering=true',
+      if (debuggingOptions.traceSkia) 'trace-skia=true',
       if (debuggingOptions.traceAllowlist != null)
         'trace-allowlist=${debuggingOptions.traceAllowlist}',
-      if (debuggingOptions.traceSystrace)
-        'trace-systrace=true',
-      if (debuggingOptions.endlessTraceBuffer)
-        'endless-trace-buffer=true',
-      if (debuggingOptions.dumpSkpOnShaderCompilation)
-        'dump-skp-on-shader-compilation=true',
-      if (debuggingOptions.cacheSkSL) 'cache-sksl=true',
-      if (debuggingOptions.purgePersistentCache)
-        'purge-persistent-cache=true',
+      if (debuggingOptions.traceSystrace) 'trace-systrace=true',
+      if (debuggingOptions.traceToFile != null) 'trace-to-file=${debuggingOptions.traceToFile}',
+      if (debuggingOptions.endlessTraceBuffer) 'endless-trace-buffer=true',
+      if (debuggingOptions.profileMicrotasks) 'profile-microtasks=true',
+      if (debuggingOptions.purgePersistentCache) 'purge-persistent-cache=true',
       if (debuggingOptions.debuggingEnabled) ...<String>[
         if (debuggingOptions.deviceVmServicePort != null)
           'vm-service-port=${debuggingOptions.deviceVmServicePort}',
@@ -314,16 +298,12 @@ class CustomDeviceAppSession {
           'enable-checked-mode=true',
           'verify-entry-points=true',
         ],
-        if (debuggingOptions.startPaused)
-          'start-paused=true',
-        if (debuggingOptions.disableServiceAuthCodes)
-          'disable-service-auth-codes=true',
-        if (dartVmFlags.isNotEmpty)
-          'dart-flags=$dartVmFlags',
-        if (debuggingOptions.useTestFonts)
-          'use-test-fonts=true',
-        if (debuggingOptions.verboseSystemLogs)
-          'verbose-logging=true',
+        if (debuggingOptions.startPaused) 'start-paused=true',
+        if (debuggingOptions.disableServiceAuthCodes) 'disable-service-auth-codes=true',
+        if (debuggingOptions.disableServiceOriginCheck) 'disable-service-origin-check=true',
+        if (debuggingOptions.dartFlags.isNotEmpty) 'dart-flags=${debuggingOptions.dartFlags}',
+        if (debuggingOptions.useTestFonts) 'use-test-fonts=true',
+        if (debuggingOptions.verboseSystemLogs) 'verbose-logging=true',
       ],
     ];
   }
@@ -335,31 +315,36 @@ class CustomDeviceAppSession {
   ///
   /// For example, `_getEngineOptionsForCmdline(null, false, null)` will return
   /// `--enable-dart-profiling=true`
-  String _getEngineOptionsForCmdline(DebuggingOptions debuggingOptions, bool traceStartup, String? route) {
-    return _getEngineOptions(debuggingOptions, traceStartup, route).map((String e) => '--$e').join(' ');
+  String _getEngineOptionsForCmdline(
+    DebuggingOptions debuggingOptions,
+    bool traceStartup,
+    String? route,
+  ) {
+    return _getEngineOptions(
+      debuggingOptions,
+      traceStartup,
+      route,
+    ).map((String e) => '--$e').join(' ');
   }
 
   /// Start the app on the device.
   /// Needs the app to be installed on the device and not running already.
   ///
-  /// [mainPath], [route], [debuggingOptions], [platformArgs] and
-  /// [userIdentifier] may be null.
-  ///
-  /// [ipv6] may not be respected since it depends on the device config whether
-  /// it uses ipv6 or ipv4
+  /// ipv6 may not be respected since it depends on the device config whether
+  /// it uses ipv6 or ipv4.
   Future<LaunchResult> start({
     String? mainPath,
     String? route,
     required DebuggingOptions debuggingOptions,
     Map<String, Object?> platformArgs = const <String, Object>{},
     bool prebuiltApplication = false,
-    bool ipv6 = false,
-    String? userIdentifier
+    String? userIdentifier,
+    Map<String, String> additionalReplacementValues = const <String, String>{},
   }) async {
     final bool traceStartup = platformArgs['trace-startup'] as bool? ?? false;
     final String? packageName = _appPackage.name;
     if (packageName == null) {
-      throw ToolExit('Could not start app, name for $_appPackage is unknown.');
+      throwToolExit('Could not start app, name for $_appPackage is unknown.');
     }
     final List<String> interpolated = interpolateCommand(
       _device._config.runDebugCommand,
@@ -367,18 +352,19 @@ class CustomDeviceAppSession {
         'remotePath': '/tmp/',
         'appName': packageName,
         'engineOptions': _getEngineOptionsForCmdline(debuggingOptions, traceStartup, route),
-      }
+      },
+      additionalReplacementValues: additionalReplacementValues,
     );
 
     final Process process = await _processUtils.start(interpolated);
     assert(_process == null);
     _process = process;
 
-    final ProtocolDiscovery discovery = ProtocolDiscovery.vmService(
+    final discovery = ProtocolDiscovery.vmService(
       logReader,
       portForwarder: _device._config.usesPortForwarding ? _device.portForwarder : null,
       logger: _logger,
-      ipv6: ipv6,
+      ipv6: debuggingOptions.ipv6,
     );
 
     // We need to make the discovery listen to the logReader before the logReader
@@ -400,7 +386,9 @@ class CustomDeviceAppSession {
 
   void _maybeUnforwardPort() {
     if (_forwardedHostPort != null) {
-      final ForwardedPort forwardedPort = _device.portForwarder.forwardedPorts.singleWhere((ForwardedPort forwardedPort) {
+      final ForwardedPort forwardedPort = _device.portForwarder.forwardedPorts.singleWhere((
+        ForwardedPort forwardedPort,
+      ) {
         return forwardedPort.hostPort == _forwardedHostPort;
       });
 
@@ -423,14 +411,14 @@ class CustomDeviceAppSession {
     return result;
   }
 
-  void dispose() {
+  Future<void> dispose() async {
     if (_process != null) {
       _maybeUnforwardPort();
       _processManager.killPid(_process!.pid);
       _process = null;
     }
 
-    unawaited(logReader.dispose());
+    await logReader.dispose();
   }
 }
 
@@ -439,61 +427,65 @@ class CustomDeviceAppSession {
 /// used to construct it.
 class CustomDevice extends Device {
   CustomDevice({
-    required CustomDeviceConfig config,
-    required Logger logger,
-    required ProcessManager processManager,
-  }) : _config = config,
-       _logger = logger,
-       _processManager = processManager,
-       _processUtils = ProcessUtils(
-         processManager: processManager,
-         logger: logger
-       ),
-       _globalLogReader = CustomDeviceLogReader(config.label),
-       portForwarder = config.usesPortForwarding ?
-         CustomDevicePortForwarder(
-           deviceName: config.label,
-           forwardPortCommand: config.forwardPortCommand!,
-           forwardPortSuccessRegex: config.forwardPortSuccessRegex!,
-           processManager: processManager,
-           logger: logger,
-         ) : const NoOpDevicePortForwarder(),
+    required this._config,
+    required this._analytics,
+    required this._buildSystem,
+    required this._buildTargets,
+    required this._featureFlags,
+    required ToolContext super.toolContext,
+  }) : _globalLogReader = CustomDeviceLogReader(_config.label),
        super(
-         config.id,
+         _config.id,
          category: Category.mobile,
          ephemeral: true,
-         platformType: PlatformType.custom
+         logger: toolContext.logger,
+         platformType: PlatformType.custom,
        );
 
   final CustomDeviceConfig _config;
-  final Logger _logger;
-  final ProcessManager _processManager;
-  final ProcessUtils _processUtils;
-  final Map<ApplicationPackage, CustomDeviceAppSession> _sessions = <ApplicationPackage, CustomDeviceAppSession>{};
+  final Analytics _analytics;
+  final BuildSystem _buildSystem;
+  final BuildTargets _buildTargets;
+  final FeatureFlags _featureFlags;
+  final _sessions = <ApplicationPackage, CustomDeviceAppSession>{};
   final CustomDeviceLogReader _globalLogReader;
+  Process? _globalLogReaderProcess;
 
   @override
-  final DevicePortForwarder portForwarder;
+  late final DevicePortForwarder portForwarder = _createPortForwarder();
+
+  DevicePortForwarder _createPortForwarder() {
+    if (!_config.usesPortForwarding) {
+      return const NoOpDevicePortForwarder();
+    }
+    final ToolContext(:Logger logger, :ProcessManager processManager) = toolContext;
+    return CustomDevicePortForwarder(
+      deviceName: _config.label,
+      forwardPortCommand: _config.forwardPortCommand!,
+      forwardPortSuccessRegex: _config.forwardPortSuccessRegex!,
+      processManager: processManager,
+      logger: logger,
+    );
+  }
 
   CustomDeviceAppSession _getOrCreateAppSession(ApplicationPackage app) {
-    return _sessions.putIfAbsent(
-      app,
-      () {
-        /// create a new session and add its logging to the global log reader.
-        /// (needed bc it's possible the infra requests a global log in [getLogReader]
-        final CustomDeviceAppSession session = CustomDeviceAppSession(
-          name: name,
-          device: this,
-          appPackage: app,
-          logger: _logger,
-          processManager: _processManager
-        );
+    return _sessions.putIfAbsent(app, () {
+      final ToolContext(:Logger logger, :ProcessManager processManager) = toolContext;
 
-        _globalLogReader.listenToLinesStream(session.logReader.logLines);
+      /// create a new session and add its logging to the global log reader.
+      /// (needed bc it's possible the infra requests a global log in [getLogReader]
+      final session = CustomDeviceAppSession(
+        name: name,
+        device: this,
+        appPackage: app,
+        logger: logger,
+        processManager: processManager,
+      );
 
-        return session;
-      }
-    );
+      _globalLogReader.listenToLinesStream(session.logReader.logLines);
+
+      return session;
+    });
   }
 
   /// Tries to ping the device using the ping command given in the config.
@@ -502,25 +494,26 @@ class CustomDevice extends Device {
   ///
   /// If the process finishes with an exit code != 0, false will be returned and
   /// the error (with the process' stdout and stderr) will be logged using
-  /// [_logger.printError].
+  /// [Logger.printError].
   ///
   /// If [timeout] is not null and the process doesn't finish in time,
   /// it will be killed with a SIGTERM, false will be returned and the timeout
-  /// will be reported in the log using [_logger.printError]. If [timeout]
+  /// will be reported in the log using [Logger.printTrace]. If [timeout]
   /// is null, it's treated as if it's an infinite timeout.
   Future<bool> tryPing({
     Duration? timeout,
-    Map<String, String> replacementValues = const <String, String>{}
+    Map<String, String> replacementValues = const <String, String>{},
   }) async {
-    final List<String> interpolated = interpolateCommand(
-      _config.pingCommand,
-      replacementValues
-    );
+    final List<String> interpolated = interpolateCommand(_config.pingCommand, replacementValues);
+    final ToolContext(:Logger logger, :ProcessUtils processUtils) = toolContext;
 
-    final RunResult result = await _processUtils.run(
-      interpolated,
-      timeout: timeout
-    );
+    final RunResult result;
+    try {
+      result = await processUtils.run(interpolated, timeout: timeout);
+    } on ProcessException catch (e) {
+      logger.printTrace('Error pinging custom device $id: $e');
+      return false;
+    }
 
     if (result.exitCode != 0) {
       return false;
@@ -530,9 +523,9 @@ class CustomDevice extends Device {
     // is good enough. Otherwise we check if either stdout or stderr have a match of
     // the pingSuccessRegex.
     final RegExp? pingSuccessRegex = _config.pingSuccessRegex;
-    return pingSuccessRegex == null
-      || pingSuccessRegex.hasMatch(result.stdout)
-      || pingSuccessRegex.hasMatch(result.stderr);
+    return pingSuccessRegex == null ||
+        pingSuccessRegex.hasMatch(result.stdout) ||
+        pingSuccessRegex.hasMatch(result.stderr);
   }
 
   /// Tries to execute the configs postBuild command using [appName] for the
@@ -545,34 +538,28 @@ class CustomDevice extends Device {
   ///
   /// If [timeout] is not null and the process doesn't finish in time, it
   /// will be killed with a SIGTERM, false will be returned and the timeout
-  /// will be reported in the log using [_logger.printError]. If [timeout]
+  /// will be reported in the log using [Logger.printError]. If [timeout]
   /// is null, it's treated as if it's an infinite timeout.
   Future<bool> _tryPostBuild({
     required String appName,
     required String localPath,
     Duration? timeout,
-    Map<String, String> additionalReplacementValues = const <String, String>{}
+    Map<String, String> additionalReplacementValues = const <String, String>{},
   }) async {
     assert(_config.postBuildCommand != null);
 
     final List<String> interpolated = interpolateCommand(
       _config.postBuildCommand!,
-      <String, String>{
-        'appName': appName,
-        'localPath': localPath,
-      },
-      additionalReplacementValues: additionalReplacementValues
+      <String, String>{'appName': appName, 'localPath': localPath},
+      additionalReplacementValues: additionalReplacementValues,
     );
+    final ToolContext(:Logger logger, :ProcessUtils processUtils) = toolContext;
 
     try {
-      await _processUtils.run(
-        interpolated,
-        throwOnError: true,
-        timeout: timeout
-      );
+      await processUtils.run(interpolated, throwOnError: true, timeout: timeout);
       return true;
     } on ProcessException catch (e) {
-      _logger.printError('Error executing postBuild command for custom device $id: $e');
+      logger.printError('Error executing postBuild command for custom device $id: $e');
       return false;
     }
   }
@@ -583,30 +570,23 @@ class CustomDevice extends Device {
   ///
   /// If [timeout] is not null and the process doesn't finish in time, it
   /// will be killed with a SIGTERM, false will be returned and the timeout
-  /// will be reported in the log using [_logger.printError]. If [timeout]
+  /// will be reported in the log using [Logger.printError]. If [timeout]
   /// is null, it's treated as if it's an infinite timeout.
   Future<bool> tryUninstall({
     required String appName,
     Duration? timeout,
-    Map<String, String> additionalReplacementValues = const <String, String>{}
+    Map<String, String> additionalReplacementValues = const <String, String>{},
   }) async {
-    final List<String> interpolated = interpolateCommand(
-      _config.uninstallCommand,
-      <String, String>{
-        'appName': appName,
-      },
-      additionalReplacementValues: additionalReplacementValues
-    );
+    final List<String> interpolated = interpolateCommand(_config.uninstallCommand, <String, String>{
+      'appName': appName,
+    }, additionalReplacementValues: additionalReplacementValues);
+    final ToolContext(:Logger logger, :ProcessUtils processUtils) = toolContext;
 
     try {
-      await _processUtils.run(
-        interpolated,
-        throwOnError: true,
-        timeout: timeout
-      );
+      await processUtils.run(interpolated, throwOnError: true, timeout: timeout);
       return true;
     } on ProcessException catch (e) {
-      _logger.printError('Error executing uninstall command for custom device $id: $e');
+      logger.printError('Error executing uninstall command for custom device $id: $e');
       return false;
     }
   }
@@ -623,27 +603,20 @@ class CustomDevice extends Device {
     required String localPath,
     required String appName,
     Duration? timeout,
-    Map<String, String> additionalReplacementValues = const <String, String>{}
+    Map<String, String> additionalReplacementValues = const <String, String>{},
   }) async {
-    final List<String> interpolated = interpolateCommand(
-      _config.installCommand,
-      <String, String>{
-        'localPath': localPath,
-        'appName': appName,
-      },
-      additionalReplacementValues: additionalReplacementValues
-    );
+    final List<String> interpolated = interpolateCommand(_config.installCommand, <String, String>{
+      'localPath': localPath,
+      'appName': appName,
+    }, additionalReplacementValues: additionalReplacementValues);
+    final ToolContext(:Logger logger, :ProcessUtils processUtils) = toolContext;
 
     try {
-      await _processUtils.run(
-        interpolated,
-        throwOnError: true,
-        timeout: timeout
-      );
+      await processUtils.run(interpolated, throwOnError: true, timeout: timeout);
 
       return true;
     } on ProcessException catch (e) {
-      _logger.printError('Error executing install command for custom device $id: $e');
+      logger.printError('Error executing install command for custom device $id: $e');
       return false;
     }
   }
@@ -653,9 +626,12 @@ class CustomDevice extends Device {
 
   @override
   Future<void> dispose() async {
-    _sessions
-      ..forEach((_, CustomDeviceAppSession session) => session.dispose())
-      ..clear();
+    await Future.wait(<Future<void>>[
+      for (final CustomDeviceAppSession session in _sessions.values) session.dispose(),
+    ]);
+    _sessions.clear();
+    _globalLogReaderProcess?.kill();
+    _globalLogReaderProcess = null;
   }
 
   @override
@@ -664,10 +640,16 @@ class CustomDevice extends Device {
   @override
   FutureOr<DeviceLogReader> getLogReader({
     ApplicationPackage? app,
-    bool includePastLogs = false
-  }) {
+    bool includePastLogs = false,
+  }) async {
     if (app != null) {
       return _getOrCreateAppSession(app).logReader;
+    }
+
+    if (_config.supportsReadingLogs && _globalLogReaderProcess == null) {
+      // launch the readLogs command
+      _globalLogReaderProcess = await toolContext.processUtils.start(_config.readLogsCommand!);
+      _globalLogReader.listenToProcessOutput(_globalLogReaderProcess!);
     }
 
     return _globalLogReader;
@@ -680,8 +662,9 @@ class CustomDevice extends Device {
       return false;
     }
 
+    final ToolContext(:Config config, :FileSystem fs) = toolContext;
     final bool result = await tryInstall(
-      localPath: getAssetBuildDirectory(),
+      localPath: getAssetBuildDirectory(config, fs),
       appName: appName,
     );
 
@@ -715,12 +698,12 @@ class CustomDevice extends Device {
       <String, String>{},
     );
 
-    final RunResult result = await _processUtils.run(interpolated, throwOnError: true);
+    final RunResult result = await toolContext.processUtils.run(interpolated, throwOnError: true);
     await outputFile.writeAsBytes(base64Decode(result.stdout));
   }
 
   @override
-  bool isSupported() {
+  Future<bool> isSupported() async {
     return true;
   }
 
@@ -752,17 +735,36 @@ class CustomDevice extends Device {
     String? userIdentifier,
     BundleBuilder? bundleBuilder,
   }) async {
-    if (!prebuiltApplication) {
-      final String assetBundleDir = getAssetBuildDirectory();
+    final TargetPlatform platform = await targetPlatform;
+    final ToolContext(
+      :Artifacts artifacts,
+      :Config config,
+      :FlutterVersion flutterVersion,
+      :FileSystem fs,
+    ) = toolContext;
 
-      bundleBuilder ??= BundleBuilder();
+    final additionalReplacementValues = <String, String>{
+      'buildMode': debuggingOptions.buildInfo.modeName,
+      'icuDataPath': artifacts.getArtifactPath(Artifact.icuData, platform: platform),
+      'engineRevision': artifacts.usesLocalArtifacts ? 'local' : flutterVersion.engineRevision,
+    };
+
+    if (!prebuiltApplication) {
+      final String assetBundleDir = getAssetBuildDirectory(config, fs);
+
+      bundleBuilder ??= BundleBuilder(
+        analytics: _analytics,
+        buildSystem: _buildSystem,
+        buildTargets: _buildTargets,
+        featureFlags: _featureFlags,
+        toolContext: toolContext,
+      );
 
       // this just builds the asset bundle, it's the same as `flutter build bundle`
       await bundleBuilder.build(
-        platform: await targetPlatform,
+        platform: platform,
         buildInfo: debuggingOptions.buildInfo,
         mainPath: mainPath,
-        depfilePath: defaultDepfilePath,
         assetDirPath: assetBundleDir,
       );
 
@@ -770,11 +772,12 @@ class CustomDevice extends Device {
       if (_config.postBuildCommand != null) {
         final String? packageName = package.name;
         if (packageName == null) {
-          throw ToolExit('Could not start app, name for $package is unknown.');
+          throwToolExit('Could not start app, name for $package is unknown.');
         }
         await _tryPostBuild(
           appName: packageName,
           localPath: assetBundleDir,
+          additionalReplacementValues: additionalReplacementValues,
         );
       }
     }
@@ -790,8 +793,8 @@ class CustomDevice extends Device {
       debuggingOptions: debuggingOptions,
       platformArgs: platformArgs,
       prebuiltApplication: prebuiltApplication,
-      ipv6: ipv6,
       userIdentifier: userIdentifier,
+      additionalReplacementValues: additionalReplacementValues,
     );
   }
 
@@ -807,6 +810,16 @@ class CustomDevice extends Device {
   Future<TargetPlatform> get targetPlatform async => _config.platform ?? TargetPlatform.linux_arm64;
 
   @override
+  Future<CpuArch> get cpuArch async {
+    // Custom devices only support Linux target platforms (see
+    // CustomDeviceConfig), so the arch is derived from that.
+    return switch (_config.platform) {
+      TargetPlatform.linux_x64 => CpuArch.x64,
+      _ => CpuArch.arm64,
+    };
+  }
+
+  @override
   Future<bool> uninstallApp(ApplicationPackage app, {String? userIdentifier}) async {
     final String? appName = app.name;
     if (appName == null) {
@@ -816,28 +829,27 @@ class CustomDevice extends Device {
   }
 }
 
-/// A [PollingDeviceDiscovery] that'll try to ping all enabled devices in the argument
-/// [CustomDevicesConfig] and report the ones that were actually reachable.
+/// A [PollingDeviceDiscovery] that'll try to ping all enabled devices in the
+/// [ToolContext.customDevicesConfig] and report the ones that were actually
+/// reachable.
 class CustomDevices extends PollingDeviceDiscovery {
   /// Create a custom device discovery that pings all enabled devices in the
-  /// given [CustomDevicesConfig].
+  /// given [ToolContext.customDevicesConfig].
   CustomDevices({
     required FeatureFlags featureFlags,
-    required ProcessManager processManager,
-    required Logger logger,
-    required CustomDevicesConfig config
-  }) : _customDeviceWorkflow = CustomDeviceWorkflow(
-         featureFlags: featureFlags,
-       ),
-       _logger = logger,
-       _processManager = processManager,
-       _config = config,
+    required this._analytics,
+    required this._buildSystem,
+    required this._buildTargets,
+    required ToolContext super.toolContext,
+  }) : _featureFlags = featureFlags,
+       _customDeviceWorkflow = CustomDeviceWorkflow(featureFlags: featureFlags),
        super('custom devices');
 
-  final CustomDeviceWorkflow  _customDeviceWorkflow;
-  final ProcessManager _processManager;
-  final Logger _logger;
-  final CustomDevicesConfig _config;
+  final CustomDeviceWorkflow _customDeviceWorkflow;
+  final Analytics _analytics;
+  final BuildSystem _buildSystem;
+  final BuildTargets _buildTargets;
+  final FeatureFlags _featureFlags;
 
   @override
   bool get supportsPlatform => true;
@@ -845,22 +857,28 @@ class CustomDevices extends PollingDeviceDiscovery {
   @override
   bool get canListAnything => _customDeviceWorkflow.canListDevices;
 
-  CustomDevicesConfig get _customDevicesConfig => _config;
-
   List<CustomDevice> get _enabledCustomDevices {
-    return _customDevicesConfig.tryGetDevices()
-      .where((CustomDeviceConfig element) => element.enabled)
-      .map(
-        (CustomDeviceConfig config) => CustomDevice(
-          config: config,
-          logger: _logger,
-          processManager: _processManager
+    return toolContext.customDevicesConfig
+        .tryGetDevices()
+        .where((CustomDeviceConfig element) => element.enabled)
+        .map(
+          (CustomDeviceConfig config) => CustomDevice(
+            config: config,
+            analytics: _analytics,
+            buildSystem: _buildSystem,
+            buildTargets: _buildTargets,
+            featureFlags: _featureFlags,
+            toolContext: toolContext,
+          ),
         )
-      ).toList();
+        .toList();
   }
 
   @override
-  Future<List<Device>> pollingGetDevices({Duration? timeout}) async {
+  Future<List<Device>> pollingGetDevices({
+    Duration? timeout,
+    bool forWirelessDiscovery = false,
+  }) async {
     if (!canListAnything) {
       return const <Device>[];
     }
@@ -868,9 +886,9 @@ class CustomDevices extends PollingDeviceDiscovery {
     final List<CustomDevice> devices = _enabledCustomDevices;
 
     // maps any custom device to whether its reachable or not.
-    final Map<CustomDevice, bool> pingedDevices = Map<CustomDevice, bool>.fromIterables(
+    final pingedDevices = Map<CustomDevice, bool>.fromIterables(
       devices,
-      await Future.wait(devices.map((CustomDevice e) => e.tryPing(timeout: timeout)))
+      await Future.wait(devices.map((CustomDevice e) => e.tryPing(timeout: timeout))),
     );
 
     // remove all the devices we couldn't reach.

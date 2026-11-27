@@ -6,10 +6,14 @@ import 'dart:async';
 
 import 'package:meta/meta.dart';
 import 'package:process/process.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../convert.dart';
+import 'async_guard.dart';
+import 'exit.dart';
 import 'io.dart';
 import 'logger.dart';
+import 'utils.dart';
 
 typedef StringConverter = String? Function(String string);
 
@@ -23,12 +27,13 @@ typedef ShutdownHook = FutureOr<void> Function();
 // for more details.
 
 abstract class ShutdownHooks {
-  factory ShutdownHooks() => _DefaultShutdownHooks();
+  factory ShutdownHooks() = _DefaultShutdownHooks;
+
+  /// Indicates whether the shutdown hooks have been run.
+  bool get isShuttingDown;
 
   /// Registers a [ShutdownHook] to be executed before the VM exits.
-  void addShutdownHook(
-    ShutdownHook shutdownHook
-  );
+  void addShutdownHook(ShutdownHook shutdownHook);
 
   @visibleForTesting
   List<ShutdownHook> get registeredHooks;
@@ -36,7 +41,7 @@ abstract class ShutdownHooks {
   /// Runs all registered shutdown hooks and returns a future that completes when
   /// all such hooks have finished.
   ///
-  /// Shutdown hooks will be run in groups by their [ShutdownStage]. All shutdown
+  /// Shutdown hooks will be run in groups by their shutdown stage. All shutdown
   /// hooks within a given stage will be started in parallel and will be
   /// guaranteed to run to completion before shutdown hooks in the next stage are
   /// started.
@@ -50,35 +55,56 @@ class _DefaultShutdownHooks implements ShutdownHooks {
   _DefaultShutdownHooks();
 
   @override
-  final List<ShutdownHook> registeredHooks = <ShutdownHook>[];
-
-  bool _shutdownHooksRunning = false;
+  final registeredHooks = <ShutdownHook>[];
 
   @override
-  void addShutdownHook(
-    ShutdownHook shutdownHook
-  ) {
+  bool get isShuttingDown => _isShuttingDown;
+  var _isShuttingDown = false;
+
+  var _shutdownHooksRunning = false;
+
+  @override
+  void addShutdownHook(ShutdownHook shutdownHook) {
     assert(!_shutdownHooksRunning);
     registeredHooks.add(shutdownHook);
   }
 
   @override
   Future<void> runShutdownHooks(Logger logger) async {
+    if (_isShuttingDown) {
+      return;
+    }
+    _isShuttingDown = true;
     logger.printTrace(
       'Running ${registeredHooks.length} shutdown hook${registeredHooks.length == 1 ? '' : 's'}',
     );
     _shutdownHooksRunning = true;
+    final uncaught = <(Object, StackTrace)>[];
     try {
-      final List<Future<dynamic>> futures = <Future<dynamic>>[];
+      final futures = <Future<void>>[];
       for (final ShutdownHook shutdownHook in registeredHooks) {
-        final FutureOr<dynamic> result = shutdownHook();
-        if (result is Future<dynamic>) {
-          futures.add(result);
+        try {
+          final Future<void> future = asyncGuard<void>(
+            () async => shutdownHook(),
+            onError: (Object e, StackTrace s) {
+              uncaught.add((e, s));
+            },
+          );
+          futures.add(future);
+        } on Object catch (e, s) {
+          uncaught.add((e, s));
         }
       }
-      await Future.wait<dynamic>(futures);
+      await Future.wait<void>(futures);
     } finally {
       _shutdownHooksRunning = false;
+    }
+    if (uncaught.isNotEmpty) {
+      logger.printWarning('One or more uncaught errors occurred shutting down:');
+      for (final (Object e, StackTrace s) in uncaught) {
+        logger.printWarning('$e', indent: 2);
+        logger.printTrace('$s');
+      }
     }
     logger.printTrace('Shutdown hooks complete');
   }
@@ -97,8 +123,7 @@ class ProcessExit implements Exception {
 }
 
 class RunResult {
-  RunResult(this.processResult, this._command)
-    : assert(_command.isNotEmpty);
+  RunResult(this.processResult, this._command) : assert(_command.isNotEmpty);
 
   final ProcessResult processResult;
 
@@ -108,9 +133,12 @@ class RunResult {
   String get stdout => processResult.stdout as String;
   String get stderr => processResult.stderr as String;
 
+  /// Returns the command executed.
+  List<String> get command => [..._command];
+
   @override
   String toString() {
-    final StringBuffer out = StringBuffer();
+    final out = StringBuffer();
     if (stdout.isNotEmpty) {
       out.writeln(stdout);
     }
@@ -122,25 +150,15 @@ class RunResult {
 
   /// Throws a [ProcessException] with the given `message`.
   void throwException(String message) {
-    throw ProcessException(
-      _command.first,
-      _command.skip(1).toList(),
-      message,
-      exitCode,
-    );
+    throw ProcessException(_command.first, _command.skip(1).toList(), message, exitCode);
   }
 }
 
 typedef RunResultChecker = bool Function(int);
 
 abstract class ProcessUtils {
-  factory ProcessUtils({
-    required ProcessManager processManager,
-    required Logger logger,
-  }) => _DefaultProcessUtils(
-    processManager: processManager,
-    logger: logger,
-  );
+  factory ProcessUtils({required ProcessManager processManager, required Logger logger}) =
+      _DefaultProcessUtils;
 
   /// Spawns a child process to run the command [cmd].
   ///
@@ -160,11 +178,15 @@ abstract class ProcessUtils {
   /// When [environment] is supplied, it is used as the environment for the child
   /// process.
   ///
-  /// When [timeout] is supplied, [runAsync] will kill the child process and
-  /// throw a [ProcessException] when it doesn't finish in time.
+  /// When [timeout] is supplied, kills the child process and
+  /// throws a [ProcessException] when it doesn't finish in time.
   ///
   /// If [timeout] is supplied, the command will be retried [timeoutRetries] times
   /// if it times out.
+  ///
+  /// The child process's stdout and stderr are decoded with [encoding], which
+  /// defaults to the system encoding. When [timeout] is supplied, they are
+  /// always decoded as UTF-8.
   Future<RunResult> run(
     List<String> cmd, {
     bool throwOnError = false,
@@ -174,6 +196,7 @@ abstract class ProcessUtils {
     Map<String, String>? environment,
     Duration? timeout,
     int timeoutRetries = 0,
+    Encoding encoding = systemEncoding,
   });
 
   /// Run the command and block waiting for its result.
@@ -222,23 +245,103 @@ abstract class ProcessUtils {
     Map<String, String>? environment,
   });
 
-  bool exitsHappySync(
-    List<String> cli, {
-    Map<String, String>? environment,
-  });
+  bool exitsHappySync(List<String> cli, {Map<String, String>? environment});
 
-  Future<bool> exitsHappy(
-    List<String> cli, {
-    Map<String, String>? environment,
-  });
+  Future<bool> exitsHappy(List<String> cli, {Map<String, String>? environment});
+
+  /// Write [line] to [stdin] and catch any errors with [onError].
+  ///
+  /// Specifically with [Process] file descriptors, an exception that is
+  /// thrown as part of a write can be most reliably caught with a
+  /// [ZoneSpecification] error handler.
+  ///
+  /// On some platforms, the following code appears to work:
+  ///
+  /// ```dart
+  /// stdin.writeln(line);
+  /// try {
+  ///   await stdin.flush(line);
+  /// } catch (err) {
+  ///   // handle error
+  /// }
+  /// ```
+  ///
+  /// However it did not catch a [SocketException] on Linux.
+  ///
+  /// As part of making sure errors are caught, this function will call [IOSink.flush]
+  /// on [stdin] to ensure that [line] is written to the pipe before this
+  /// function returns. This means completion will be blocked if the kernel
+  /// buffer of the pipe is full.
+  static Future<void> writelnToStdinGuarded({
+    required IOSink stdin,
+    required String line,
+    required void Function(Object, StackTrace) onError,
+  }) async {
+    await _writeToStdinGuarded(stdin: stdin, content: line, onError: onError, isLine: true);
+  }
+
+  /// Please see [writelnToStdinGuarded].
+  ///
+  /// This calls `stdin.write` instead of `stdin.writeln`.
+  static Future<void> writeToStdinGuarded({
+    required IOSink stdin,
+    required String content,
+    required void Function(Object, StackTrace) onError,
+  }) async {
+    await _writeToStdinGuarded(stdin: stdin, content: content, onError: onError, isLine: false);
+  }
+
+  static Future<void> writelnToStdinUnsafe({required IOSink stdin, required String line}) async {
+    await _writeToStdinUnsafe(stdin: stdin, content: line, isLine: true);
+  }
+
+  static Future<void> writeToStdinUnsafe({required IOSink stdin, required String content}) async {
+    await _writeToStdinUnsafe(stdin: stdin, content: content, isLine: false);
+  }
+
+  static Future<void> _writeToStdinGuarded({
+    required IOSink stdin,
+    required String content,
+    required void Function(Object, StackTrace) onError,
+    required bool isLine,
+  }) async {
+    try {
+      await _writeToStdinUnsafe(stdin: stdin, content: content, isLine: isLine);
+    } on Exception catch (error, stackTrace) {
+      onError(error, stackTrace);
+    }
+  }
+
+  static Future<void> _writeToStdinUnsafe({
+    required IOSink stdin,
+    required String content,
+    required bool isLine,
+  }) {
+    final completer = Completer<void>();
+
+    void handleError(Object error, StackTrace stackTrace) {
+      completer.completeError(error, stackTrace);
+    }
+
+    void writeFlushAndComplete() {
+      if (isLine) {
+        stdin.writeln(content);
+      } else {
+        stdin.write(content);
+      }
+      stdin.flush().then((_) {
+        completer.complete();
+      }, onError: handleError);
+    }
+
+    runZonedGuarded(writeFlushAndComplete, handleError);
+
+    return completer.future;
+  }
 }
 
 class _DefaultProcessUtils implements ProcessUtils {
-  _DefaultProcessUtils({
-    required ProcessManager processManager,
-    required Logger logger,
-  }) : _processManager = processManager,
-      _logger = logger;
+  _DefaultProcessUtils({required this._processManager, required this._logger});
 
   final ProcessManager _processManager;
 
@@ -254,6 +357,7 @@ class _DefaultProcessUtils implements ProcessUtils {
     Map<String, String>? environment,
     Duration? timeout,
     int timeoutRetries = 0,
+    Encoding encoding = systemEncoding,
   }) async {
     if (cmd.isEmpty) {
       throw ArgumentError('cmd must be a non-empty list');
@@ -270,12 +374,17 @@ class _DefaultProcessUtils implements ProcessUtils {
         cmd,
         workingDirectory: workingDirectory,
         environment: _environment(allowReentrantFlutter, environment),
+        stdoutEncoding: encoding,
+        stderrEncoding: encoding,
       );
-      final RunResult runResult = RunResult(results, cmd);
+      final runResult = RunResult(results, cmd);
       _logger.printTrace(runResult.toString());
-      if (throwOnError && runResult.exitCode != 0 &&
+      if (throwOnError &&
+          runResult.exitCode != 0 &&
           (allowedFailures == null || !allowedFailures(runResult.exitCode))) {
-        runResult.throwException('Process exited abnormally:\n$runResult');
+        runResult.throwException(
+          'Process exited abnormally with exit code ${runResult.exitCode}:\n$runResult',
+        );
       }
       return runResult;
     }
@@ -287,14 +396,14 @@ class _DefaultProcessUtils implements ProcessUtils {
       timeoutRetries = timeoutRetries - 1;
 
       final Process process = await start(
-          cmd,
-          workingDirectory: workingDirectory,
-          allowReentrantFlutter: allowReentrantFlutter,
-          environment: environment,
+        cmd,
+        workingDirectory: workingDirectory,
+        allowReentrantFlutter: allowReentrantFlutter,
+        environment: environment,
       );
 
-      final StringBuffer stdoutBuffer = StringBuffer();
-      final StringBuffer stderrBuffer = StringBuffer();
+      final stdoutBuffer = StringBuffer();
+      final stderrBuffer = StringBuffer();
       final Future<void> stdoutFuture = process.stdout
           .transform<String>(const Utf8Decoder(reportErrors: false))
           .listen(stdoutBuffer.write)
@@ -305,17 +414,21 @@ class _DefaultProcessUtils implements ProcessUtils {
           .asFuture<void>();
 
       int? exitCode;
-      exitCode = await process.exitCode.then<int?>((int x) => x).timeout(timeout, onTimeout: () {
-        // The process timed out. Kill it.
-        _processManager.killPid(process.pid);
-        return null;
-      });
+      exitCode = await process.exitCode
+          .then<int?>((int x) => x)
+          .timeout(
+            timeout,
+            onTimeout: () {
+              // The process timed out. Kill it.
+              _processManager.killPid(process.pid);
+              return null;
+            },
+          );
 
       String stdoutString;
       String stderrString;
       try {
-        Future<void> stdioFuture =
-            Future.wait<void>(<Future<void>>[stdoutFuture, stderrFuture]);
+        Future<void> stdioFuture = Future.wait<void>(<Future<void>>[stdoutFuture, stderrFuture]);
         if (exitCode == null) {
           // If we had to kill the process for a timeout, only wait a short time
           // for the stdio streams to drain in case killing the process didn't
@@ -330,16 +443,18 @@ class _DefaultProcessUtils implements ProcessUtils {
       stdoutString = stdoutBuffer.toString();
       stderrString = stderrBuffer.toString();
 
-      final ProcessResult result = ProcessResult(
-          process.pid, exitCode ?? -1, stdoutString, stderrString);
-      final RunResult runResult = RunResult(result, cmd);
+      final result = ProcessResult(process.pid, exitCode ?? -1, stdoutString, stderrString);
+      final runResult = RunResult(result, cmd);
 
       // If the process did not timeout. We are done.
       if (exitCode != null) {
         _logger.printTrace(runResult.toString());
-        if (throwOnError && runResult.exitCode != 0 &&
+        if (throwOnError &&
+            runResult.exitCode != 0 &&
             (allowedFailures == null || !allowedFailures(exitCode))) {
-          runResult.throwException('Process exited abnormally:\n$runResult');
+          runResult.throwException(
+            'Process exited abnormally with exit code $exitCode:\n$runResult',
+          );
         }
         return runResult;
       }
@@ -379,11 +494,11 @@ class _DefaultProcessUtils implements ProcessUtils {
       stderrEncoding: encoding,
       stdoutEncoding: encoding,
     );
-    final RunResult runResult = RunResult(results, cmd);
+    final runResult = RunResult(results, cmd);
 
     _logger.printTrace('Exit code ${runResult.exitCode} from: ${cmd.join(' ')}');
 
-    bool failedExitCode = runResult.exitCode != 0;
+    var failedExitCode = runResult.exitCode != 0;
     if (allowedFailures != null && failedExitCode) {
       failedExitCode = !allowedFailures(runResult.exitCode);
     }
@@ -405,9 +520,10 @@ class _DefaultProcessUtils implements ProcessUtils {
     }
 
     if (failedExitCode && throwOnError) {
-      String message = 'The command failed';
+      var message = 'The command failed with exit code ${runResult.exitCode}';
       if (verboseExceptions) {
-        message = 'The command failed\nStdout:\n${runResult.stdout}\n'
+        message =
+            'The command failed\nStdout:\n${runResult.stdout}\n'
             'Stderr:\n${runResult.stderr}';
       }
       runResult.throwException(message);
@@ -452,38 +568,36 @@ class _DefaultProcessUtils implements ProcessUtils {
       environment: environment,
     );
     final StreamSubscription<String> stdoutSubscription = process.stdout
-      .transform<String>(utf8.decoder)
-      .transform<String>(const LineSplitter())
-      .where((String line) => filter == null || filter.hasMatch(line))
-      .listen((String line) {
-        String? mappedLine = line;
-        if (mapFunction != null) {
-          mappedLine = mapFunction(line);
-        }
-        if (mappedLine != null) {
-          final String message = '$prefix$mappedLine';
-          if (stdoutErrorMatcher?.hasMatch(mappedLine) ?? false) {
-            _logger.printError(message, wrap: false);
-          } else if (trace) {
-            _logger.printTrace(message);
-          } else {
-            _logger.printStatus(message, wrap: false);
+        .transform(utf8AllowMalformedLineDecoder)
+        .where((String line) => filter == null || filter.hasMatch(line))
+        .listen((String line) {
+          String? mappedLine = line;
+          if (mapFunction != null) {
+            mappedLine = mapFunction(line);
           }
-        }
-      });
+          if (mappedLine != null) {
+            final message = '$prefix$mappedLine';
+            if (stdoutErrorMatcher?.hasMatch(mappedLine) ?? false) {
+              _logger.printError(message, wrap: false);
+            } else if (trace) {
+              _logger.printTrace(message);
+            } else {
+              _logger.printStatus(message, wrap: false);
+            }
+          }
+        });
     final StreamSubscription<String> stderrSubscription = process.stderr
-      .transform<String>(utf8.decoder)
-      .transform<String>(const LineSplitter())
-      .where((String line) => filter == null || filter.hasMatch(line))
-      .listen((String line) {
-        String? mappedLine = line;
-        if (mapFunction != null) {
-          mappedLine = mapFunction(line);
-        }
-        if (mappedLine != null) {
-          _logger.printError('$prefix$mappedLine', wrap: false);
-        }
-      });
+        .transform(utf8AllowMalformedLineDecoder)
+        .where((String line) => filter == null || filter.hasMatch(line))
+        .listen((String line) {
+          String? mappedLine = line;
+          if (mapFunction != null) {
+            mappedLine = mapFunction(line);
+          }
+          if (mappedLine != null) {
+            _logger.printError('$prefix$mappedLine', wrap: false);
+          }
+        });
 
     // Wait for stdout to be fully processed
     // because process.exitCode may complete first causing flaky tests.
@@ -504,10 +618,7 @@ class _DefaultProcessUtils implements ProcessUtils {
   }
 
   @override
-  bool exitsHappySync(
-    List<String> cli, {
-    Map<String, String>? environment,
-  }) {
+  bool exitsHappySync(List<String> cli, {Map<String, String>? environment}) {
     _traceCommand(cli);
     if (!_processManager.canRun(cli.first)) {
       _logger.printTrace('$cli either does not exist or is not executable.');
@@ -523,10 +634,7 @@ class _DefaultProcessUtils implements ProcessUtils {
   }
 
   @override
-  Future<bool> exitsHappy(
-    List<String> cli, {
-    Map<String, String>? environment,
-  }) async {
+  Future<bool> exitsHappy(List<String> cli, {Map<String, String>? environment}) async {
     _traceCommand(cli);
     if (!_processManager.canRun(cli.first)) {
       _logger.printTrace('$cli either does not exist or is not executable.');
@@ -541,7 +649,8 @@ class _DefaultProcessUtils implements ProcessUtils {
     }
   }
 
-  Map<String, String>? _environment(bool allowReentrantFlutter, [
+  Map<String, String>? _environment(
+    bool allowReentrantFlutter, [
     Map<String, String>? environment,
   ]) {
     if (allowReentrantFlutter) {
@@ -555,7 +664,7 @@ class _DefaultProcessUtils implements ProcessUtils {
     return environment;
   }
 
-  void _traceCommand(List<String> args, { String? workingDirectory }) {
+  void _traceCommand(List<String> args, {String? workingDirectory}) {
     final String argsText = args.join(' ');
     if (workingDirectory == null) {
       _logger.printTrace('executing: $argsText');
@@ -563,4 +672,42 @@ class _DefaultProcessUtils implements ProcessUtils {
       _logger.printTrace('executing: [$workingDirectory/] $argsText');
     }
   }
+}
+
+Future<int> exitWithHooks(
+  int code, {
+  required Analytics analytics,
+  required Logger logger,
+  required ShutdownHooks shutdownHooks,
+}) async {
+  if (analytics.shouldShowMessage) {
+    logger.printStatus(analytics.getConsentMessage);
+    analytics.clientShowedMessage();
+
+    // This trace is searched for in tests.
+    logger.printTrace('Showed analytics consent message.');
+  }
+
+  // Run shutdown hooks before flushing logs
+  await shutdownHooks.runShutdownHooks(logger);
+
+  final completer = Completer<void>();
+
+  await analytics.close();
+
+  // Give the task / timer queue one cycle through before we hard exit.
+  Timer.run(() {
+    try {
+      logger.printTrace('exiting with code $code');
+      exit(code);
+      completer.complete();
+      // This catches all exceptions because the error is propagated on the
+      // completer.
+    } catch (error, stackTrace) {
+      completer.completeError(error, stackTrace);
+    }
+  });
+
+  await completer.future;
+  return code;
 }

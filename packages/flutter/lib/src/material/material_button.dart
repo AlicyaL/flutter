@@ -2,7 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:ui';
+/// @docImport 'elevated_button.dart';
+/// @docImport 'elevated_button_theme.dart';
+/// @docImport 'filled_button.dart';
+/// @docImport 'filled_button_theme.dart';
+/// @docImport 'icon_button.dart';
+/// @docImport 'outlined_button.dart';
+/// @docImport 'outlined_button_theme.dart';
+/// @docImport 'text_button.dart';
+/// @docImport 'text_button_theme.dart';
+/// @docImport 'text_theme.dart';
+library;
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
@@ -23,7 +33,8 @@ import 'theme_data.dart';
 ///
 ///  * [TextButton], [TextButtonTheme], [TextButtonThemeData],
 ///  * [ElevatedButton], [ElevatedButtonTheme], [ElevatedButtonThemeData],
-///  * [OutlinedButton], [OutlinedButtonTheme], [OutlinedButtonThemeData]
+///  * [OutlinedButton], [OutlinedButtonTheme], [OutlinedButtonThemeData],
+///  * [FilledButton], [FilledButtonTheme], [FilledButtonThemeData]
 ///
 /// The button's size will expand to fit the child widget, if necessary.
 ///
@@ -45,10 +56,8 @@ class MaterialButton extends StatelessWidget {
   /// To create a custom Material button consider using [TextButton],
   /// [ElevatedButton], or [OutlinedButton].
   ///
-  /// The [autofocus] and [clipBehavior] arguments must not be null.
-  /// Additionally,  [elevation], [hoverElevation], [focusElevation],
-  /// [highlightElevation], and [disabledElevation] must be non-negative, if
-  /// specified.
+  /// The [elevation], [hoverElevation], [focusElevation], [highlightElevation],
+  /// and [disabledElevation] arguments must be non-negative, if specified.
   const MaterialButton({
     super.key,
     required this.onPressed,
@@ -116,7 +125,7 @@ class MaterialButton extends StatelessWidget {
 
   /// {@macro flutter.material.RawMaterialButton.mouseCursor}
   ///
-  /// If this property is null, [MaterialStateMouseCursor.clickable] will be used.
+  /// If this property is null, [WidgetStateMouseCursor.adaptiveClickable] will be used.
   final MouseCursor? mouseCursor;
 
   /// Defines the button's base colors, and the defaults for the button's minimum
@@ -134,7 +143,7 @@ class MaterialButton extends StatelessWidget {
   /// The default text color depends on the button theme's text theme,
   /// [ButtonThemeData.textTheme].
   ///
-  /// If [textColor] is a [MaterialStateProperty<Color>], [disabledTextColor]
+  /// If [textColor] is a [WidgetStateProperty<Color>], [disabledTextColor]
   /// will be ignored.
   ///
   /// See also:
@@ -152,7 +161,7 @@ class MaterialButton extends StatelessWidget {
   /// The default value is the theme's disabled color,
   /// [ThemeData.disabledColor].
   ///
-  /// If [textColor] is a [MaterialStateProperty<Color>], [disabledTextColor]
+  /// If [textColor] is a [WidgetStateProperty<Color>], [disabledTextColor]
   /// will be ignored.
   ///
   /// See also:
@@ -338,7 +347,7 @@ class MaterialButton extends StatelessWidget {
 
   /// {@macro flutter.material.Material.clipBehavior}
   ///
-  /// Defaults to [Clip.none], and must not be null.
+  /// Defaults to [Clip.none].
   final Clip clipBehavior;
 
   /// {@macro flutter.widgets.Focus.focusNode}
@@ -404,10 +413,7 @@ class MaterialButton extends StatelessWidget {
       highlightElevation: buttonTheme.getHighlightElevation(this),
       padding: buttonTheme.getPadding(this),
       visualDensity: visualDensity ?? theme.visualDensity,
-      constraints: buttonTheme.getConstraints(this).copyWith(
-        minWidth: minWidth,
-        minHeight: height,
-      ),
+      constraints: buttonTheme.getConstraints(this).copyWith(minWidth: minWidth, minHeight: height),
       shape: buttonTheme.getShape(this),
       clipBehavior: clipBehavior,
       focusNode: focusNode,
@@ -423,7 +429,9 @@ class MaterialButton extends StatelessWidget {
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(FlagProperty('enabled', value: enabled, ifFalse: 'disabled'));
-    properties.add(DiagnosticsProperty<ButtonTextTheme>('textTheme', textTheme, defaultValue: null));
+    properties.add(
+      DiagnosticsProperty<ButtonTextTheme>('textTheme', textTheme, defaultValue: null),
+    );
     properties.add(ColorProperty('textColor', textColor, defaultValue: null));
     properties.add(ColorProperty('disabledTextColor', disabledTextColor, defaultValue: null));
     properties.add(ColorProperty('color', color, defaultValue: null));
@@ -432,25 +440,21 @@ class MaterialButton extends StatelessWidget {
     properties.add(ColorProperty('hoverColor', hoverColor, defaultValue: null));
     properties.add(ColorProperty('highlightColor', highlightColor, defaultValue: null));
     properties.add(ColorProperty('splashColor', splashColor, defaultValue: null));
-    properties.add(DiagnosticsProperty<Brightness>('colorBrightness', colorBrightness, defaultValue: null));
+    properties.add(
+      DiagnosticsProperty<Brightness>('colorBrightness', colorBrightness, defaultValue: null),
+    );
     properties.add(DiagnosticsProperty<EdgeInsetsGeometry>('padding', padding, defaultValue: null));
-    properties.add(DiagnosticsProperty<VisualDensity>('visualDensity', visualDensity, defaultValue: null));
+    properties.add(
+      DiagnosticsProperty<VisualDensity>('visualDensity', visualDensity, defaultValue: null),
+    );
     properties.add(DiagnosticsProperty<ShapeBorder>('shape', shape, defaultValue: null));
     properties.add(DiagnosticsProperty<FocusNode>('focusNode', focusNode, defaultValue: null));
-    properties.add(DiagnosticsProperty<MaterialTapTargetSize>('materialTapTargetSize', materialTapTargetSize, defaultValue: null));
+    properties.add(
+      DiagnosticsProperty<MaterialTapTargetSize>(
+        'materialTapTargetSize',
+        materialTapTargetSize,
+        defaultValue: null,
+      ),
+    );
   }
 }
-
-/// The distinguished type of [MaterialButton].
-///
-/// This class is deprecated and will be removed in a future release.
-///
-/// This mixin only exists to give the "label and icon" button widgets a distinct
-/// type for the sake of [ButtonTheme].
-@Deprecated(
-  'This was used to differentiate types of FlatButton, RaisedButton, and OutlineButton in ButtonTheme. '
-  'These buttons have been replaced with TextButton, ElevatedButton, and OutlinedButton, each of which have their own respective themes now. '
-  'Use one of these button classes instead. '
-  'This feature was deprecated after v2.11.0-0.0.pre.',
-)
-mixin MaterialButtonWithIconMixin { }

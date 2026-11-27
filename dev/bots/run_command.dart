@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:core' hide print;
 import 'dart:io' as io;
@@ -10,39 +9,6 @@ import 'dart:io' as io;
 import 'package:path/path.dart' as path;
 
 import 'utils.dart';
-
-/// Runs the `executable` and returns standard output as a stream of lines.
-///
-/// The returned stream reaches its end immediately after the command exits.
-///
-/// If `expectNonZeroExit` is false and the process exits with a non-zero exit
-/// code fails the test immediately by exiting the test process with exit code
-/// 1.
-Stream<String> runAndGetStdout(String executable, List<String> arguments, {
-  String? workingDirectory,
-  Map<String, String>? environment,
-  bool expectNonZeroExit = false,
-}) async* {
-  final StreamController<String> output = StreamController<String>();
-  final Future<CommandResult?> command = runCommand(
-    executable,
-    arguments,
-    workingDirectory: workingDirectory,
-    environment: environment,
-    expectNonZeroExit: expectNonZeroExit,
-    // Capture the output so it's not printed to the console by default.
-    outputMode: OutputMode.capture,
-    outputListener: (String line, io.Process process) {
-      output.add(line);
-    },
-  );
-
-  // Close the stream controller after the command is complete. Otherwise,
-  // the yield* will never finish.
-  command.whenComplete(output.close);
-
-  yield* output.stream;
-}
 
 /// Represents a running process launched using [startCommand].
 class Command {
@@ -76,108 +42,222 @@ class CommandResult {
 /// running process.
 ///
 /// `outputListener` is called for every line of standard output from the
-/// process, and is given the [Process] object. This can be used to interrupt
-/// an indefinitely running process, for example, by waiting until the process
-/// emits certain output.
+/// process, and `stderrListener` is called for every line of standard error.
+/// Both are given the [io.Process] object, which can be used to interrupt an
+/// indefinitely running process (for example, after waiting until the process
+/// emits certain output).
 ///
-/// `outputMode` controls where the standard output from the command process
-/// goes. See [OutputMode].
-Future<Command> startCommand(String executable, List<String> arguments, {
+/// Standard output and standard error are decoded as UTF-8 with
+/// `allowMalformed: true` so non-UTF-8 bytes (such as raw crash tombstones in
+/// `adb logcat`) are replaced with U+FFFD rather than throwing a
+/// [FormatException].
+///
+/// `outputMode` controls where the standard output and standard error from the
+/// command process go. See [OutputMode].
+Future<Command> startCommand(
+  String executable,
+  List<String> arguments, {
   String? workingDirectory,
   Map<String, String>? environment,
   OutputMode outputMode = OutputMode.print,
   bool Function(String)? removeLine,
   void Function(String, io.Process)? outputListener,
+  void Function(String, io.Process)? stderrListener,
 }) async {
-  final String commandDescription = '${path.relative(executable, from: workingDirectory)} ${arguments.join(' ')}';
   final String relativeWorkingDir = path.relative(workingDirectory ?? io.Directory.current.path);
+  final commandDescription =
+      '${path.relative(executable, from: workingDirectory)} ${arguments.join(' ')}';
   print('RUNNING: cd $cyan$relativeWorkingDir$reset; $green$commandDescription$reset');
 
-  final Stopwatch time = Stopwatch()..start();
-  final io.Process process = await io.Process.start(executable, arguments,
+  final time = Stopwatch()..start();
+  print('workingDirectory: $workingDirectory, executable: $executable, arguments: $arguments');
+
+  // Override ANDROID_NDK_PATH with a valid discovered path or empty string to clear a potentially bad value.
+  // See also dev/devicelab/lib/framework/utils.dart.
+  final finalEnvironment = <String, String>{
+    ...?environment,
+    'ANDROID_NDK_PATH': ?_discoverBestNdkPath(),
+  };
+  final io.Process process = await io.Process.start(
+    executable,
+    arguments,
     workingDirectory: workingDirectory,
-    environment: environment,
+    environment: finalEnvironment,
   );
   return Command._(
     process,
     time,
     process.stdout
-      .transform<String>(const Utf8Decoder())
-      .transform(const LineSplitter())
-      .where((String line) => removeLine == null || !removeLine(line))
-      .map<String>((String line) {
-        final String formattedLine = '$line\n';
-        if (outputListener != null) {
-          outputListener(formattedLine, process);
-        }
-        switch (outputMode) {
-          case OutputMode.print:
-            print(line);
-          case OutputMode.capture:
-            break;
-        }
-        return line;
-      })
-      .join('\n'),
+        .transform<String>(const Utf8Decoder(allowMalformed: true))
+        .transform(const LineSplitter())
+        .where((String line) => removeLine == null || !removeLine(line))
+        .map<String>((String line) {
+          final formattedLine = '$line\n';
+          if (outputListener != null) {
+            outputListener(formattedLine, process);
+          }
+          switch (outputMode) {
+            case OutputMode.print:
+              print(line);
+            case OutputMode.capture:
+              break;
+          }
+          return line;
+        })
+        .join('\n'),
     process.stderr
-      .transform<String>(const Utf8Decoder())
-      .transform(const LineSplitter())
-      .map<String>((String line) {
-        switch (outputMode) {
-          case OutputMode.print:
-            print(line);
-          case OutputMode.capture:
-            break;
-        }
-        return line;
-      })
-      .join('\n'),
+        .transform<String>(const Utf8Decoder(allowMalformed: true))
+        .transform(const LineSplitter())
+        .map<String>((String line) {
+          final formattedLine = '$line\n';
+          if (stderrListener != null) {
+            stderrListener(formattedLine, process);
+          }
+          switch (outputMode) {
+            case OutputMode.print:
+              print(line);
+            case OutputMode.capture:
+              break;
+          }
+          return line;
+        })
+        .join('\n'),
   );
+}
+
+String? _bestNdkPath;
+String? _discoverBestNdkPath() {
+  if (_bestNdkPath != null) {
+    return _bestNdkPath;
+  }
+  // If we found a valid NDK, return it.
+  // Otherwise return empty string to clear any bad inherited value.
+  final Map<String, String> env = io.Platform.environment;
+  String? androidHome = env['ANDROID_HOME'] ?? env['ANDROID_SDK_ROOT'];
+  if (androidHome == null) {
+    // Try to find it in common default locations.
+    if (io.Platform.isMacOS) {
+      final String? home = env['HOME'];
+      if (home != null) {
+        androidHome = path.join(home, 'Library', 'Android', 'sdk');
+      }
+    } else if (io.Platform.isLinux) {
+      final String? home = env['HOME'];
+      if (home != null) {
+        androidHome = path.join(home, 'Android', 'Sdk');
+      }
+    } else if (io.Platform.isWindows) {
+      final String? homeDrive = env['HOMEDRIVE'];
+      final String? homePath = env['HOMEPATH'];
+      if (homeDrive != null && homePath != null) {
+        androidHome = path.join(homeDrive + homePath, 'AppData', 'Local', 'Android', 'sdk');
+      }
+    }
+  }
+
+  if (androidHome == null) {
+    return _bestNdkPath = null;
+  }
+  final ndkDir = io.Directory(path.join(androidHome, 'ndk'));
+  if (!ndkDir.existsSync()) {
+    return _bestNdkPath = null;
+  }
+  final versions = <String>[];
+  for (final io.FileSystemEntity entity in ndkDir.listSync()) {
+    if (entity is io.Directory) {
+      final String name = path.basename(entity.path);
+      // flutter_tools ignores non-SemVer directories. NDK versions should start with a number.
+      if (int.tryParse(name.split('.').first) != null) {
+        versions.add(name);
+      }
+    }
+  }
+  if (versions.isEmpty) {
+    return _bestNdkPath = null;
+  }
+  // Sort numerically/lexicographically to find the "highest" version.
+  // We assume versions are like "21.4.7075529" or "23.1.7779620".
+  // A simple sort works for major versions if they have the same number of digits,
+  // but to be safe we parse the major version.
+  versions.sort((String a, String b) {
+    // Try to parse major version.
+    final int? aMajor = int.tryParse(a.split('.').first);
+    final int? bMajor = int.tryParse(b.split('.').first);
+    if (aMajor != null && bMajor != null) {
+      if (aMajor != bMajor) {
+        return aMajor.compareTo(bMajor);
+      }
+    }
+    // Fallback to string comparison.
+    return a.compareTo(b);
+  });
+
+  return _bestNdkPath = path.join(ndkDir.path, versions.last);
 }
 
 /// Runs the `executable` and waits until the process exits.
 ///
-/// If the process exits with a non-zero exit code and `expectNonZeroExit` is
-/// false, calls foundError (which does not terminate execution!).
+/// Exit code validation is controlled by [expectedExit] (which defaults to
+/// [ExpectedExit.zero]). When the process exits with an unexpected code, a
+/// shard failure is recorded via [foundError] without terminating execution.
+/// Pass [ExpectedExit.any] to skip exit-code validation so callers (such as
+/// retry loops or readiness probes) can inspect [CommandResult.exitCode]
+/// directly.
 ///
 /// `outputListener` is called for every line of standard output from the
-/// process, and is given the [Process] object. This can be used to interrupt
-/// an indefinitely running process, for example, by waiting until the process
-/// emits certain output.
+/// process, and `stderrListener` is called for every line of standard error.
+/// Both are given the [io.Process] object, which can be used to interrupt an
+/// indefinitely running process (for example, after waiting until the process
+/// emits certain output).
 ///
 /// Returns the result of the finished process.
 ///
-/// `outputMode` controls where the standard output from the command process
-/// goes. See [OutputMode].
-Future<CommandResult> runCommand(String executable, List<String> arguments, {
+/// `outputMode` controls where the standard output and standard error from the
+/// command process go. See [OutputMode].
+Future<CommandResult> runCommand(
+  String executable,
+  List<String> arguments, {
   String? workingDirectory,
   Map<String, String>? environment,
-  bool expectNonZeroExit = false,
-  int? expectedExitCode,
+  ExpectedExit expectedExit = ExpectedExit.zero,
   String? failureMessage,
   OutputMode outputMode = OutputMode.print,
   bool Function(String)? removeLine,
   void Function(String, io.Process)? outputListener,
+  void Function(String, io.Process)? stderrListener,
 }) async {
-  final String commandDescription = '${path.relative(executable, from: workingDirectory)} ${arguments.join(' ')}';
-  final String relativeWorkingDir = path.relative(workingDirectory ?? io.Directory.current.path);
+  final commandDescription =
+      '${path.relative(executable, from: workingDirectory)} ${arguments.join(' ')}';
+  final String relativeWorkingDir = workingDirectory ?? path.relative(io.Directory.current.path);
+  if (dryRun) {
+    printProgress(_prettyPrintRunCommand(executable, arguments, workingDirectory));
+    return CommandResult._(
+      0,
+      Duration.zero,
+      '$executable ${arguments.join(' ')}',
+      'Simulated execution due to --dry-run',
+    );
+  }
 
-  final Command command = await startCommand(executable, arguments,
+  final Command command = await startCommand(
+    executable,
+    arguments,
     workingDirectory: workingDirectory,
     environment: environment,
     outputMode: outputMode,
     removeLine: removeLine,
     outputListener: outputListener,
+    stderrListener: stderrListener,
   );
 
-  final CommandResult result = CommandResult._(
+  final result = CommandResult._(
     await command.process.exitCode,
     command._time.elapsed,
     await command._savedStdout,
     await command._savedStderr,
   );
 
-  if ((result.exitCode == 0) == expectNonZeroExit || (expectedExitCode != null && result.exitCode != expectedExitCode)) {
+  if (!expectedExit.matches(result.exitCode)) {
     // Print the output when we get unexpected results (unless output was
     // printed already).
     switch (outputMode) {
@@ -187,45 +267,115 @@ Future<CommandResult> runCommand(String executable, List<String> arguments, {
         print(result.flattenedStdout);
         print(result.flattenedStderr);
     }
-    String allOutput;
-    if (failureMessage == null) {
-      allOutput = '${result.flattenedStdout}\n${result.flattenedStderr}';
-      if (allOutput.split('\n').length > 10) {
-        allOutput = '(stdout/stderr output was more than 10 lines)';
-      }
-    } else {
-      allOutput = '';
-    }
+    final allOutput = '${result.flattenedStdout}\n${result.flattenedStderr}';
     foundError(<String>[
-      if (failureMessage != null)
-        failureMessage,
+      ?failureMessage,
       '${bold}Command: $green$commandDescription$reset',
       if (failureMessage == null)
-        '$bold${red}Command exited with exit code ${result.exitCode} but expected ${expectNonZeroExit ? (expectedExitCode ?? 'non-zero') : 'zero'} exit code.$reset',
+        '$bold${red}Command exited with exit code ${result.exitCode} but expected ${expectedExit.description} exit code.$reset',
       '${bold}Working directory: $cyan${path.absolute(relativeWorkingDir)}$reset',
-      if (allOutput.isNotEmpty)
+      if (allOutput.isNotEmpty && allOutput.length < 512)
         '${bold}stdout and stderr output:\n$allOutput',
     ]);
   } else {
-    print('ELAPSED TIME: ${prettyPrintDuration(result.elapsedTime)} for $green$commandDescription$reset in $cyan$relativeWorkingDir$reset');
+    print(
+      'ELAPSED TIME: ${prettyPrintDuration(result.elapsedTime)} for $green$commandDescription$reset in $cyan$relativeWorkingDir$reset',
+    );
   }
   return result;
 }
 
+final String _flutterRoot = path.dirname(
+  path.dirname(path.dirname(path.fromUri(io.Platform.script))),
+);
+
+String _prettyPrintRunCommand(String executable, List<String> arguments, String? workingDirectory) {
+  final output = StringBuffer();
+
+  // Print CWD relative to the root.
+  output.write('|> ');
+  output.write(path.relative(executable, from: _flutterRoot));
+  if (workingDirectory != null) {
+    output.write(' (${path.relative(workingDirectory, from: _flutterRoot)})');
+  }
+  output.writeln(': ');
+  output.writeAll(arguments.map((String a) => '  $a'), '\n');
+
+  return output.toString();
+}
+
+/// Specifies which process exit codes [runCommand] treats as successful.
+sealed class ExpectedExit {
+  const ExpectedExit();
+
+  /// Expects the process to exit with [exitCode].
+  ///
+  /// Any other exit code records a shard failure via [foundError].
+  const factory ExpectedExit.code(int exitCode) = _ExpectedExitCode;
+
+  /// Expects exit code `0` (the default for [runCommand]).
+  ///
+  /// Any non-zero exit code records a shard failure via [foundError].
+  static const ExpectedExit zero = _ExpectedExitCode(0);
+
+  /// Expects any non-zero exit code.
+  ///
+  /// Exit code `0` records a shard failure via [foundError].
+  static const ExpectedExit nonZero = _ExpectedNonZeroExit();
+
+  /// Accepts any exit code without calling [foundError].
+  ///
+  /// Useful for retry loops or readiness probes that inspect
+  /// [CommandResult.exitCode] directly.
+  static const ExpectedExit any = _ExpectedAnyExit();
+
+  /// Short human-readable label used in unexpected-exit failure messages.
+  String get description;
+
+  /// Whether [actualExitCode] satisfies this expectation.
+  bool matches(int actualExitCode);
+}
+
+final class _ExpectedExitCode extends ExpectedExit {
+  const _ExpectedExitCode(this.exitCode);
+
+  final int exitCode;
+
+  @override
+  String get description => exitCode == 0 ? 'zero' : '$exitCode';
+
+  @override
+  bool matches(int actualExitCode) => actualExitCode == exitCode;
+}
+
+final class _ExpectedNonZeroExit extends ExpectedExit {
+  const _ExpectedNonZeroExit();
+
+  @override
+  String get description => 'non-zero';
+
+  @override
+  bool matches(int actualExitCode) => actualExitCode != 0;
+}
+
+final class _ExpectedAnyExit extends ExpectedExit {
+  const _ExpectedAnyExit();
+
+  @override
+  String get description => 'any';
+
+  @override
+  bool matches(int actualExitCode) => true;
+}
+
 /// Specifies what to do with the command output from [runCommand] and [startCommand].
 enum OutputMode {
-  /// Forwards standard output and standard error streams to the test process'
-  /// standard output stream (i.e. stderr is redirected to stdout).
-  ///
-  /// Use this mode if all you want is print the output of the command to the
-  /// console. The output is no longer available after the process exits.
+  /// Forwards standard output and standard error lines to [print] while also
+  /// saving them on the returned [CommandResult].
   print,
 
-  /// Saves standard output and standard error streams in memory.
-  ///
-  /// Captured output can be retrieved from the [CommandResult] object.
-  ///
-  /// Use this mode in tests that need to inspect the output of a command, or
-  /// when the output should not be printed to console.
+  /// Saves standard output and standard error in memory on the returned
+  /// [CommandResult] without forwarding lines to [print] (unless [runCommand]
+  /// records an unexpected exit per [ExpectedExit]).
   capture,
 }

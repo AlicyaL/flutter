@@ -5,12 +5,17 @@
 import 'package:flutter_devicelab/framework/framework.dart';
 import 'package:flutter_devicelab/tasks/web_benchmarks.dart';
 
+const String buildMode = String.fromEnvironment('buildMode', defaultValue: 'profile');
+
 /// Runs all Web benchmarks using the CanvasKit rendering backend.
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   await task(() async {
-    return runWebBenchmark((
-      webRenderer: 'canvaskit',
-      useWasm: false
-    ));
+    return runWebBenchmarkFromArgs((
+      useWasm: false,
+      forceSingleThreadedSkwasm: false,
+      useDdc: false,
+      withHotReload: false,
+      buildMode: buildMode,
+    ), args);
   });
 }

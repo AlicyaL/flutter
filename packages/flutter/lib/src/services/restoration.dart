@@ -2,6 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter/widgets.dart';
+///
+/// @docImport 'binding.dart';
+library;
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -92,7 +97,7 @@ typedef _BucketVisitor = void Function(RestorationBucket bucket);
 /// ## State Restoration on iOS
 ///
 /// To enable state restoration on iOS, a restoration identifier has to be
-/// assigned to the [FlutterViewController](https://api.flutter.dev/objcdoc/Classes/FlutterViewController.html).
+/// assigned to the [FlutterViewController](/ios-embedder/interface_flutter_view_controller.html).
 /// If the standard embedding (produced by `flutter create`) is used, this can
 /// be accomplished with the following steps:
 ///
@@ -154,6 +159,9 @@ class RestorationManager extends ChangeNotifier {
   /// Construct the restoration manager and set up the communications channels
   /// with the engine to get restoration messages (by calling [initChannels]).
   RestorationManager() {
+    if (kFlutterMemoryAllocationsEnabled) {
+      ChangeNotifier.maybeDispatchObjectCreation(this);
+    }
     initChannels();
   }
 
@@ -209,6 +217,7 @@ class RestorationManager extends ChangeNotifier {
     }
     return _pendingRootBucket!.future;
   }
+
   RestorationBucket? _rootBucket; // May be null to indicate that restoration is turned off.
   Completer<RestorationBucket?>? _pendingRootBucket;
   bool _rootBucketIsValid = false;
@@ -225,7 +234,8 @@ class RestorationManager extends ChangeNotifier {
   bool _isReplacing = false;
 
   Future<void> _getRootBucketFromEngine() async {
-    final Map<Object?, Object?>? config = await SystemChannels.restoration.invokeMethod<Map<Object?, Object?>>('get');
+    final Map<Object?, Object?>? config = await SystemChannels.restoration
+        .invokeMethod<Map<Object?, Object?>>('get');
     if (_pendingRootBucket == null) {
       // The restoration data was obtained via other means (e.g. by calling
       // [handleRestorationDataUpdate] while the request to the engine was
@@ -265,7 +275,7 @@ class RestorationManager extends ChangeNotifier {
     if (_isReplacing) {
       SchedulerBinding.instance.addPostFrameCallback((Duration _) {
         _isReplacing = false;
-      });
+      }, debugLabel: 'RestorationManager.resetIsReplacing');
     }
 
     final RestorationBucket? oldRoot = _rootBucket;
@@ -296,10 +306,7 @@ class RestorationManager extends ChangeNotifier {
   /// by the data.
   @protected
   Future<void> sendToEngine(Uint8List encodedData) {
-    return SystemChannels.restoration.invokeMethod<void>(
-      'put',
-      encodedData,
-    );
+    return SystemChannels.restoration.invokeMethod<void>('put', encodedData);
   }
 
   Future<void> _methodHandler(MethodCall call) async {
@@ -307,7 +314,9 @@ class RestorationManager extends ChangeNotifier {
       case 'push':
         _parseAndHandleRestorationUpdateFromEngine(call.arguments as Map<Object?, Object?>);
       default:
-        throw UnimplementedError("${call.method} was invoked but isn't implemented by $runtimeType");
+        throw UnimplementedError(
+          "${call.method} was invoked but isn't implemented by $runtimeType",
+        );
     }
   }
 
@@ -346,7 +355,10 @@ class RestorationManager extends ChangeNotifier {
     _bucketsNeedingSerialization.add(bucket);
     if (!_serializationScheduled) {
       _serializationScheduled = true;
-      SchedulerBinding.instance.addPostFrameCallback((Duration _) => _doSerialization());
+      SchedulerBinding.instance.addPostFrameCallback(
+        (Duration _) => _doSerialization(),
+        debugLabel: 'RestorationManager.doSerialization',
+      );
     }
   }
 
@@ -413,6 +425,12 @@ class RestorationManager extends ChangeNotifier {
     }
     _doSerialization();
     assert(!_serializationScheduled);
+  }
+
+  @override
+  void dispose() {
+    _rootBucket?.dispose();
+    super.dispose();
   }
 }
 
@@ -492,17 +510,13 @@ class RestorationBucket {
   /// claiming a child from a parent via [claimChild]. If no parent bucket is
   /// available, [RestorationManager.rootBucket] may be used as a parent.
   /// {@endtemplate}
-  ///
-  /// The `restorationId` must not be null.
-  RestorationBucket.empty({
-    required String restorationId,
-    required Object? debugOwner,
-  }) : _restorationId = restorationId,
-       _rawData = <String, Object?>{} {
+  RestorationBucket.empty({required this._restorationId, required Object? debugOwner})
+    : _rawData = <String, Object?>{} {
     assert(() {
       _debugOwner = debugOwner;
       return true;
     }());
+    assert(debugMaybeDispatchCreated('services', 'RestorationBucket', this));
   }
 
   /// Creates the root [RestorationBucket] for the provided restoration
@@ -526,8 +540,6 @@ class RestorationBucket {
   /// ```
   ///
   /// {@macro flutter.services.RestorationBucket.empty.bucketCreation}
-  ///
-  /// The `manager` argument must not be null.
   RestorationBucket.root({
     required RestorationManager manager,
     required Map<Object?, Object?>? rawData,
@@ -538,6 +550,7 @@ class RestorationBucket {
       _debugOwner = manager;
       return true;
     }());
+    assert(debugMaybeDispatchCreated('services', 'RestorationBucket', this));
   }
 
   /// Creates a child bucket initialized with the data that the provided
@@ -548,8 +561,6 @@ class RestorationBucket {
   /// [RestorationBucket.empty] and have the parent adopt it via [adoptChild].
   ///
   /// {@macro flutter.services.RestorationBucket.empty.bucketCreation}
-  ///
-  /// The `restorationId` and `parent` argument must not be null.
   RestorationBucket.child({
     required String restorationId,
     required RestorationBucket parent,
@@ -563,6 +574,7 @@ class RestorationBucket {
       _debugOwner = debugOwner;
       return true;
     }());
+    assert(debugMaybeDispatchCreated('services', 'RestorationBucket', this));
   }
 
   static const String _childrenMapKey = 'c';
@@ -579,6 +591,7 @@ class RestorationBucket {
     assert(_debugAssertNotDisposed());
     return _debugOwner;
   }
+
   Object? _debugOwner;
 
   RestorationManager? _manager;
@@ -603,12 +616,15 @@ class RestorationBucket {
     assert(_debugAssertNotDisposed());
     return _restorationId;
   }
+
   String _restorationId;
 
   // Maps a restoration ID to the raw map representation of a child bucket.
-  Map<Object?, Object?> get _rawChildren => _rawData.putIfAbsent(_childrenMapKey, () => <Object?, Object?>{})! as Map<Object?, Object?>;
+  Map<Object?, Object?> get _rawChildren =>
+      _rawData.putIfAbsent(_childrenMapKey, () => <Object?, Object?>{})! as Map<Object?, Object?>;
   // Maps a restoration ID to a value that is stored in this bucket.
-  Map<Object?, Object?> get _rawValues => _rawData.putIfAbsent(_valuesMapKey, () => <Object?, Object?>{})! as Map<Object?, Object?>;
+  Map<Object?, Object?> get _rawValues =>
+      _rawData.putIfAbsent(_valuesMapKey, () => <Object?, Object?>{})! as Map<Object?, Object?>;
 
   // Get and store values.
 
@@ -669,7 +685,7 @@ class RestorationBucket {
   P? remove<P>(String restorationId) {
     assert(_debugAssertNotDisposed());
     final bool needsUpdate = _rawValues.containsKey(restorationId);
-    final P? result = _rawValues.remove(restorationId) as P?;
+    final result = _rawValues.remove(restorationId) as P?;
     if (_rawValues.isEmpty) {
       _rawData.remove(_valuesMapKey);
     }
@@ -740,17 +756,14 @@ class RestorationBucket {
 
     // Case 1+2: Adopt and return an empty bucket.
     if (_claimedChildren.containsKey(restorationId) || !_rawChildren.containsKey(restorationId)) {
-      final RestorationBucket child = RestorationBucket.empty(
-        debugOwner: debugOwner,
-        restorationId: restorationId,
-      );
+      final child = RestorationBucket.empty(debugOwner: debugOwner, restorationId: restorationId);
       adoptChild(child);
       return child;
     }
 
     // Case 3: Return bucket wrapping the existing data.
     assert(_rawChildren[restorationId] != null);
-    final RestorationBucket child = RestorationBucket.child(
+    final child = RestorationBucket.child(
       restorationId: restorationId,
       parent: this,
       debugOwner: debugOwner,
@@ -839,7 +852,7 @@ class RestorationBucket {
       if (_childrenToAdd.isEmpty) {
         return true;
       }
-      final List<DiagnosticsNode> error = <DiagnosticsNode>[
+      final error = <DiagnosticsNode>[
         ErrorSummary('Multiple owners claimed child RestorationBuckets with the same IDs.'),
         ErrorDescription('The following IDs were claimed multiple times from the parent $this:'),
       ];
@@ -850,7 +863,9 @@ class RestorationBucket {
         assert(_claimedChildren.containsKey(id));
         error.addAll(<DiagnosticsNode>[
           ErrorDescription(' * "$id" was claimed by:'),
-          ...buckets.map((RestorationBucket bucket) => ErrorDescription('   * ${bucket.debugOwner}')),
+          ...buckets.map(
+            (RestorationBucket bucket) => ErrorDescription('   * ${bucket.debugOwner}'),
+          ),
           ErrorDescription('   * ${_claimedChildren[id]!.debugOwner} (current owner)'),
         ]);
       }
@@ -905,8 +920,9 @@ class RestorationBucket {
   }
 
   void _visitChildren(_BucketVisitor visitor, {bool concurrentModification = false}) {
-    Iterable<RestorationBucket> children = _claimedChildren.values
-        .followedBy(_childrenToAdd.values.expand((List<RestorationBucket> buckets) => buckets));
+    Iterable<RestorationBucket> children = _claimedChildren.values.followedBy(
+      _childrenToAdd.values.expand((List<RestorationBucket> buckets) => buckets),
+    );
     if (concurrentModification) {
       children = children.toList(growable: false);
     }
@@ -948,6 +964,7 @@ class RestorationBucket {
   /// This method must only be called by the object's owner.
   void dispose() {
     assert(_debugAssertNotDisposed());
+    assert(debugMaybeDispatchDisposed(this));
     _visitChildren(_dropChild, concurrentModification: true);
     _claimedChildren.clear();
     _childrenToAdd.clear();
@@ -958,15 +975,16 @@ class RestorationBucket {
   }
 
   @override
-  String toString() => '${objectRuntimeType(this, 'RestorationBucket')}(restorationId: $restorationId, owner: $debugOwner)';
+  String toString() =>
+      '${objectRuntimeType(this, 'RestorationBucket')}(restorationId: $restorationId, owner: $debugOwner)';
 
   bool _debugDisposed = false;
   bool _debugAssertNotDisposed() {
     assert(() {
       if (_debugDisposed) {
         throw FlutterError(
-            'A $runtimeType was used after being disposed.\n'
-            'Once you have called dispose() on a $runtimeType, it can no longer be used.',
+          'A $runtimeType was used after being disposed.\n'
+          'Once you have called dispose() on a $runtimeType, it can no longer be used.',
         );
       }
       return true;
@@ -981,7 +999,7 @@ class RestorationBucket {
 /// Should only be called from within asserts. Always returns false outside
 /// of debug builds.
 bool debugIsSerializableForRestoration(Object? object) {
-  bool result = false;
+  var result = false;
 
   assert(() {
     try {

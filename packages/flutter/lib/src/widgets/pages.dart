@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'navigator.dart';
+library;
+
 import 'basic.dart';
 import 'framework.dart';
 import 'routes.dart';
@@ -11,6 +14,9 @@ import 'routes.dart';
 /// The [PageRouteBuilder] subclass provides a way to create a [PageRoute] using
 /// callbacks rather than by defining a new class via subclassing.
 ///
+/// If `barrierDismissible` is true, then pressing the escape key on the keyboard
+/// will cause the current route to be popped with null as the value.
+///
 /// See also:
 ///
 ///  * [Route], which documents the meaning of the `T` generic type argument.
@@ -18,8 +24,12 @@ abstract class PageRoute<T> extends ModalRoute<T> {
   /// Creates a modal route that replaces the entire screen.
   PageRoute({
     super.settings,
+    super.requestFocus,
+    super.traversalEdgeBehavior,
+    super.directionalTraversalEdgeBehavior,
     this.fullscreenDialog = false,
     this.allowSnapshotting = true,
+    this._barrierDismissible = false,
   });
 
   /// {@template flutter.widgets.PageRoute.fullscreenDialog}
@@ -30,6 +40,7 @@ abstract class PageRoute<T> extends ModalRoute<T> {
   /// iOS, dialogs transitions animate differently and are also not closeable
   /// with the back swipe gesture.
   /// {@endtemplate}
+  @override
   final bool fullscreenDialog;
 
   @override
@@ -39,16 +50,28 @@ abstract class PageRoute<T> extends ModalRoute<T> {
   bool get opaque => true;
 
   @override
-  bool get barrierDismissible => false;
+  bool get barrierDismissible => _barrierDismissible;
+  final bool _barrierDismissible;
 
   @override
   bool canTransitionTo(TransitionRoute<dynamic> nextRoute) => nextRoute is PageRoute;
 
   @override
   bool canTransitionFrom(TransitionRoute<dynamic> previousRoute) => previousRoute is PageRoute;
+
+  @override
+  bool get popGestureEnabled {
+    // Fullscreen dialogs aren't dismissible by back swipe.
+    return !fullscreenDialog && super.popGestureEnabled;
+  }
 }
 
-Widget _defaultTransitionsBuilder(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+Widget _defaultTransitionsBuilder(
+  BuildContext context,
+  Animation<double> animation,
+  Animation<double> secondaryAnimation,
+  Widget child,
+) {
   return child;
 }
 
@@ -65,11 +88,9 @@ Widget _defaultTransitionsBuilder(BuildContext context, Animation<double> animat
 ///  * [Route], which documents the meaning of the `T` generic type argument.
 class PageRouteBuilder<T> extends PageRoute<T> {
   /// Creates a route that delegates to builder callbacks.
-  ///
-  /// The [pageBuilder], [transitionsBuilder], [opaque], [barrierDismissible],
-  /// [maintainState], and [fullscreenDialog] arguments must not be null.
   PageRouteBuilder({
     super.settings,
+    super.requestFocus,
     required this.pageBuilder,
     this.transitionsBuilder = _defaultTransitionsBuilder,
     this.transitionDuration = const Duration(milliseconds: 300),
@@ -84,7 +105,7 @@ class PageRouteBuilder<T> extends PageRoute<T> {
   });
 
   /// {@template flutter.widgets.pageRouteBuilder.pageBuilder}
-  /// Used build the route's primary contents.
+  /// Used to build the route's primary contents.
   ///
   /// See [ModalRoute.buildPage] for complete definition of the parameters.
   /// {@endtemplate}
@@ -92,6 +113,13 @@ class PageRouteBuilder<T> extends PageRoute<T> {
 
   /// {@template flutter.widgets.pageRouteBuilder.transitionsBuilder}
   /// Used to build the route's transitions.
+  ///
+  /// The [animation] argument drives this route's own entrance and exit
+  /// transition. The [secondaryAnimation] argument drives transitions for this
+  /// route when another route is pushed on top of it or popped from above it, if
+  /// both routes allow transition coordination. See
+  /// [TransitionRoute.canTransitionTo] and
+  /// [TransitionRoute.canTransitionFrom].
   ///
   /// See [ModalRoute.buildTransitions] for complete definition of the parameters.
   /// {@endtemplate}
@@ -121,12 +149,21 @@ class PageRouteBuilder<T> extends PageRoute<T> {
   final bool maintainState;
 
   @override
-  Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
     return pageBuilder(context, animation, secondaryAnimation);
   }
 
   @override
-  Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
     return transitionsBuilder(context, animation, secondaryAnimation, child);
   }
 }

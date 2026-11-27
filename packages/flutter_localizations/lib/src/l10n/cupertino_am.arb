@@ -22,5 +22,18 @@
   "tabSemanticsLabel": "ትር $tabIndex ከ$tabCount",
   "modalBarrierDismissLabel": "አሰናብት",
   "searchTextFieldPlaceholderLabel": "ፍለጋ",
-  "noSpellCheckReplacementsLabel": "No Replacements Found"
+  "noSpellCheckReplacementsLabel": "ምንም ተተኪዎች አልተገኙም",
+  "menuDismissLabel": "ምናሌን አሰናብት",
+  "lookUpButtonLabel": "ይመልከቱ",
+  "searchWebButtonLabel": "ድርን ፈልግ",
+  "shareButtonLabel": "አጋራ...",
+  "clearButtonLabel": "አጽዳ",
+  "cancelButtonLabel": "ይቅር",
+  "backButtonLabel": "ተመለስ",
+  "expansionTileExpandedHint": "ለመሰብሰብ ሁለቴ መታ ያድርጉ",
+  "expansionTileCollapsedHint": "ለመዘርጋት ድርብ ሁለቴ መታ ያድርጉ",
+  "expansionTileExpandedTapHint": "ሰብስብ",
+  "expansionTileCollapsedTapHint": "ለተጨማሪ ዝርዝሮች ይዘርጉ",
+  "expandedHint": "ተሰብስቧል",
+  "collapsedHint": "ተዘርግቷል"
 }

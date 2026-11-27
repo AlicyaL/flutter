@@ -15,8 +15,8 @@ void main() {
     late FakeAsync fakeAsync;
     late StreamController<Uint8List> source;
     late Stream<Uint8List> output;
-    const Duration debounceDuration = Duration(seconds: 10);
-    const Duration smallDuration = Duration(milliseconds: 10);
+    const debounceDuration = Duration(seconds: 10);
+    const smallDuration = Duration(milliseconds: 10);
 
     void addToSource(int value) {
       source.add(Uint8List.fromList(<int>[value]));
@@ -30,15 +30,15 @@ void main() {
       });
     });
 
-    testWithoutContext('does not listen if returned stream is not listened to', () {
+    test('does not listen if returned stream is not listened to', () {
       expect(source.hasListener, false);
       output.listen(dummy);
       expect(source.hasListener, true);
     });
 
-    testWithoutContext('forwards data normally is all data if longer than duration apart', () {
+    test('forwards data normally is all data if longer than duration apart', () {
       fakeAsync.run((FakeAsync time) {
-        final List<Uint8List> outputItems = <Uint8List>[];
+        final outputItems = <Uint8List>[];
         output.listen(outputItems.add);
 
         addToSource(1);
@@ -56,9 +56,9 @@ void main() {
       });
     });
 
-    testWithoutContext('merge data after the first if sent within duration', () {
+    test('merge data after the first if sent within duration', () {
       fakeAsync.run((FakeAsync time) {
-        final List<Uint8List> outputItems = <Uint8List>[];
+        final outputItems = <Uint8List>[];
         output.listen(outputItems.add);
 
         addToSource(1);
@@ -75,9 +75,9 @@ void main() {
       });
     });
 
-    testWithoutContext('output data in separate chunks if time between them is longer than duration', () {
+    test('output data in separate chunks if time between them is longer than duration', () {
       fakeAsync.run((FakeAsync time) {
-        final List<Uint8List> outputItems = <Uint8List>[];
+        final outputItems = <Uint8List>[];
         output.listen(outputItems.add);
 
         addToSource(1);
@@ -99,20 +99,24 @@ void main() {
       });
     });
 
-    testWithoutContext('sends the last chunk after debounce duration', () {
+    test('sends the last chunk after debounce duration', () {
       fakeAsync.run((FakeAsync time) {
-        final List<Uint8List> outputItems = <Uint8List>[];
+        final outputItems = <Uint8List>[];
         output.listen(outputItems.add);
 
         addToSource(1);
         time.flushMicrotasks();
-        expect(outputItems, <List<int>>[<int>[1]]);
+        expect(outputItems, <List<int>>[
+          <int>[1],
+        ]);
 
         time.elapse(smallDuration);
         addToSource(2);
         time.elapse(smallDuration);
         addToSource(3);
-        expect(outputItems, <List<int>>[<int>[1]]);
+        expect(outputItems, <List<int>>[
+          <int>[1],
+        ]);
 
         time.elapse(debounceDuration + smallDuration);
         expect(outputItems, <List<int>>[
@@ -122,9 +126,9 @@ void main() {
       });
     });
 
-    testWithoutContext('close if source stream is closed', () {
+    test('close if source stream is closed', () {
       fakeAsync.run((FakeAsync time) {
-        bool isDone = false;
+        var isDone = false;
         output.listen(dummy, onDone: () => isDone = true);
         expect(isDone, false);
         source.close();
@@ -133,21 +137,25 @@ void main() {
       });
     });
 
-    testWithoutContext('delay close until after last chunk is sent', () {
+    test('delay close until after last chunk is sent', () {
       fakeAsync.run((FakeAsync time) {
-        final List<Uint8List> outputItems = <Uint8List>[];
-        bool isDone = false;
+        final outputItems = <Uint8List>[];
+        var isDone = false;
         output.listen(outputItems.add, onDone: () => isDone = true);
 
         addToSource(1);
         time.flushMicrotasks();
-        expect(outputItems, <List<int>>[<int>[1]]);
+        expect(outputItems, <List<int>>[
+          <int>[1],
+        ]);
 
         addToSource(2);
         source.close();
         time.elapse(smallDuration);
         expect(isDone, false);
-        expect(outputItems, <List<int>>[<int>[1]]);
+        expect(outputItems, <List<int>>[
+          <int>[1],
+        ]);
 
         time.elapse(debounceDuration + smallDuration);
         expect(outputItems, <List<int>>[
@@ -158,9 +166,9 @@ void main() {
       });
     });
 
-    testWithoutContext('close if returned stream is closed', () {
+    test('close if returned stream is closed', () {
       fakeAsync.run((FakeAsync time) {
-        bool isCancelled = false;
+        var isCancelled = false;
         source.onCancel = () => isCancelled = true;
         final StreamSubscription<Uint8List> subscription = output.listen(dummy);
         expect(isCancelled, false);

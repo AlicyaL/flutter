@@ -2,24 +2,55 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter_tools_core/flutter_tools_core.dart';
+
 import '../base/user_messages.dart';
+import '../base/version.dart';
+import '../build_info.dart';
 import '../doctor_validator.dart';
+import '../ios/simulators.dart';
 import 'xcode.dart';
+
+String _iOSSimulatorMissing(String version) =>
+    '''
+iOS $version Simulator not installed; this may be necessary for iOS and macOS development.
+To download and install the platform, open Xcode, select Xcode > Settings > Components,
+and click the GET button for the required platform.
+
+For more information, please visit:
+  https://developer.apple.com/documentation/xcode/installing-additional-simulator-runtimes''';
 
 class XcodeValidator extends DoctorValidator {
   XcodeValidator({
-    required Xcode xcode,
-    required UserMessages userMessages,
-  }) : _xcode = xcode,
-      _userMessages = userMessages,
-      super('Xcode - develop for iOS and macOS');
+    required this._xcode,
+    required this._iosSimulatorUtils,
+    required this._userMessages,
+  }) : super('Xcode - develop for iOS and macOS');
 
   final Xcode _xcode;
+  final IOSSimulatorUtils _iosSimulatorUtils;
   final UserMessages _userMessages;
 
+  String _xcodeRecommended(String recommendedVersion) =>
+      'Flutter recommends a minimum Xcode version of $recommendedVersion.\n'
+      'Download the latest version or update via the Mac App Store.';
+
+  String _xcodeOutdated(String requiredVersion) =>
+      'Flutter requires Xcode $requiredVersion or higher.\n'
+      'Download the latest version or update via the Mac App Store.';
+
+  String _xcodeLocation(String location) => 'Xcode at $location';
+  String get _xcodeEula =>
+      "Xcode end user license agreement not signed; open Xcode or run the command 'sudo xcodebuild -license'.";
+
+  String get _xcodeMissingSimct =>
+      'Xcode requires additional components to be installed in order to run.\n'
+      'Launch Xcode and install additional required components when prompted or run:\n'
+      '  sudo xcodebuild -runFirstLaunch';
+
   @override
-  Future<ValidationResult> validate() async {
-    final List<ValidationMessage> messages = <ValidationMessage>[];
+  Future<ValidationResult> validateImpl() async {
+    final messages = <ValidationMessage>[];
     ValidationType xcodeStatus = ValidationType.missing;
     String? xcodeVersionInfo;
 
@@ -28,7 +59,7 @@ class XcodeValidator extends DoctorValidator {
     if (_xcode.isInstalled) {
       xcodeStatus = ValidationType.success;
       if (xcodeSelectPath != null) {
-        messages.add(ValidationMessage(_userMessages.xcodeLocation(xcodeSelectPath)));
+        messages.add(ValidationMessage(_xcodeLocation(xcodeSelectPath)));
       }
       final String? versionText = _xcode.versionText;
       if (versionText != null) {
@@ -42,21 +73,26 @@ class XcodeValidator extends DoctorValidator {
       }
       if (!_xcode.isInstalledAndMeetsVersionCheck) {
         xcodeStatus = ValidationType.partial;
-        messages.add(ValidationMessage.error(_userMessages.xcodeOutdated(xcodeRequiredVersion.toString())));
+        messages.add(ValidationMessage.error(_xcodeOutdated(xcodeRequiredVersion.toString())));
       } else if (!_xcode.isRecommendedVersionSatisfactory) {
         xcodeStatus = ValidationType.partial;
-        messages.add(ValidationMessage.hint(_userMessages.xcodeRecommended(xcodeRecommendedVersion.toString())));
+        messages.add(ValidationMessage.hint(_xcodeRecommended(xcodeRecommendedVersion.toString())));
       }
 
       if (!_xcode.eulaSigned) {
         xcodeStatus = ValidationType.partial;
-        messages.add(ValidationMessage.error(_userMessages.xcodeEula));
+        messages.add(ValidationMessage.error(_xcodeEula));
       }
       if (!_xcode.isSimctlInstalled) {
         xcodeStatus = ValidationType.partial;
-        messages.add(ValidationMessage.error(_userMessages.xcodeMissingSimct));
+        messages.add(ValidationMessage.error(_xcodeMissingSimct));
       }
 
+      final ValidationMessage? missingSimulatorMessage = await _validateSimulatorRuntimeInstalled();
+      if (missingSimulatorMessage != null) {
+        xcodeStatus = ValidationType.partial;
+        messages.add(missingSimulatorMessage);
+      }
     } else {
       xcodeStatus = ValidationType.missing;
       if (xcodeSelectPath == null || xcodeSelectPath.isEmpty) {
@@ -67,5 +103,44 @@ class XcodeValidator extends DoctorValidator {
     }
 
     return ValidationResult(xcodeStatus, messages, statusInfo: xcodeVersionInfo);
+  }
+
+  /// Validate the Xcode-installed iOS simulator SDK has a corresponding iOS
+  /// simulator runtime installed.
+  ///
+  /// Starting with Xcode 15, the iOS simulator runtime is no longer downloaded
+  /// with Xcode and must be downloaded and installed separately.
+  /// iOS applications cannot be run without it.
+  Future<ValidationMessage?> _validateSimulatorRuntimeInstalled() async {
+    // Skip this validation if Xcode is not installed, simctl is not installed,
+    // or if the EULA is not signed.
+    if (!_xcode.isInstalled ||
+        _xcode.currentVersion == null ||
+        !_xcode.isSimctlInstalled ||
+        !_xcode.eulaSigned) {
+      return null;
+    }
+
+    final Version? platformSDKVersion = await _xcode.sdkPlatformVersion(EnvironmentType.simulator);
+    if (platformSDKVersion == null) {
+      return const ValidationMessage.error('Unable to find the iPhone Simulator SDK.');
+    }
+
+    final List<IOSSimulatorRuntime> runtimes = await _iosSimulatorUtils.getAvailableIOSRuntimes();
+    if (runtimes.isEmpty) {
+      return const ValidationMessage.error('Unable to get list of installed Simulator runtimes.');
+    }
+
+    // Verify there is a simulator runtime installed matching the
+    // iphonesimulator SDK major version.
+    try {
+      runtimes.firstWhere(
+        (IOSSimulatorRuntime runtime) => runtime.version?.major == platformSDKVersion.major,
+      );
+    } on StateError {
+      return ValidationMessage.hint(_iOSSimulatorMissing(platformSDKVersion.toString()));
+    }
+
+    return null;
   }
 }

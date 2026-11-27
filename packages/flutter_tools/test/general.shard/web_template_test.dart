@@ -1,0 +1,612 @@
+// Copyright 2014 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import 'package:file/file.dart';
+import 'package:file/memory.dart';
+
+import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/web_template.dart';
+
+import '../src/common.dart';
+
+const htmlSample1 = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <base href="/foo/222/">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+</head>
+<body>
+  <div></div>
+  <script src="main.dart.js"></script>
+</body>
+</html>
+''';
+
+const htmlSample2 =
+    '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <base href="$kBaseHrefPlaceholder">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+</head>
+<body>
+  <div></div>
+  <script src="main.dart.js"></script>
+  <script>
+    const serviceWorkerVersion = null;
+  </script>
+  <script>
+    navigator.serviceWorker.register('flutter_service_worker.js');
+  </script>
+</body>
+</html>
+''';
+
+const htmlSampleInlineFlutterJsBootstrap = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <base href="/foo/222/">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+</head>
+<body>
+  <div></div>
+  <script>
+    {{flutter_js}}
+    {{flutter_build_config}}
+    _flutter.loader.load({
+      serviceWorker: {
+        serviceWorkerVersion: {{flutter_service_worker_version}},
+      },
+    });
+  </script>
+</body>
+</html>
+''';
+
+const htmlSampleInlineFlutterJsBootstrapOutput = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <base href="/foo/222/">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+</head>
+<body>
+  <div></div>
+  <script>
+    (flutter.js content)
+    (build config)
+    _flutter.loader.load({
+      serviceWorker: {
+        serviceWorkerVersion: null /* Flutter's service worker is deprecated and has been removed. */,
+      },
+    });
+  </script>
+</body>
+</html>
+''';
+
+const htmlSampleFullFlutterBootstrapReplacement = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <base href="/foo/222/">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+</head>
+<body>
+  <div></div>
+  <script>
+    {{flutter_bootstrap_js}}
+  </script>
+</body>
+</html>
+''';
+
+const htmlSampleFullFlutterBootstrapReplacementOutput = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <base href="/foo/222/">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+</head>
+<body>
+  <div></div>
+  <script>
+    (flutter bootstrap script)
+  </script>
+</body>
+</html>
+''';
+
+const htmlSampleLegacyVar =
+    '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <base href="$kBaseHrefPlaceholder">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+</head>
+<body>
+  <div></div>
+  <script src="main.dart.js"></script>
+  <script>
+    var serviceWorkerVersion = null;
+  </script>
+  <script>
+    navigator.serviceWorker.register('flutter_service_worker.js');
+  </script>
+</body>
+</html>
+''';
+
+const htmlSampleLegacyLoadEntrypoint =
+    '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <base href="$kBaseHrefPlaceholder">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <script src="flutter.js" defer></script>
+</head>
+<body>
+  <div></div>
+  <script>
+    window.addEventListener('load', function(ev) {
+      _flutter.loader.loadEntrypoint({
+        onEntrypointLoaded: function(engineInitializer) {
+          engineInitializer.initializeEngine().then(function(appRunner) {
+            appRunner.runApp();
+          });
+      });
+    });
+  </script>
+</body>
+</html>
+''';
+
+String htmlSample2Replaced({required String baseHref}) =>
+    '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <base href="$baseHref">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+</head>
+<body>
+  <div></div>
+  <script src="main.dart.js"></script>
+  <script>
+    const serviceWorkerVersion = null;
+  </script>
+  <script>
+    navigator.serviceWorker.register('flutter_service_worker.js');
+  </script>
+</body>
+</html>
+''';
+
+const htmlSample3 = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+</head>
+<body>
+  <div></div>
+  <script src="main.dart.js"></script>
+</body>
+</html>
+''';
+
+const htmlSampleStaticAssetsUrl =
+    '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <base href="/">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+</head>
+<body>
+  <div></div>
+  <script>
+    {{flutter_js}}
+    {{flutter_build_config}}
+    _flutter.loader.load({
+      config: {
+        entryPointBaseUrl: "$kStaticAssetsUrlPlaceholder",
+      },
+      onEntrypointLoaded: async function (engineInitializer) {
+        const appRunner = await engineInitializer.initializeEngine({
+          assetBase: "$kStaticAssetsUrlPlaceholder",
+        });
+
+        await appRunner.runApp();
+      },
+    });
+  </script>
+</body>
+</html>
+''';
+
+String htmlSampleStaticAssetsUrlReplaced({required String staticAssetsUrl}) =>
+    '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+  <base href="/">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+</head>
+<body>
+  <div></div>
+  <script>
+    (flutter.js content)
+    {{flutter_build_config}}
+    _flutter.loader.load({
+      config: {
+        entryPointBaseUrl: "$staticAssetsUrl",
+      },
+      onEntrypointLoaded: async function (engineInitializer) {
+        const appRunner = await engineInitializer.initializeEngine({
+          assetBase: "$staticAssetsUrl",
+        });
+
+        await appRunner.runApp();
+      },
+    });
+  </script>
+</body>
+</html>
+''';
+
+void main() {
+  final fs = MemoryFileSystem();
+  final logger = BufferLogger.test();
+  final File flutterJs = fs.file('flutter.js');
+  flutterJs.writeAsStringSync('(flutter.js content)');
+
+  test('can parse baseHref', () {
+    expect(WebTemplate.baseHref('<base href="/foo/111/">'), 'foo/111');
+    expect(WebTemplate.baseHref(htmlSample1), 'foo/222');
+    expect(WebTemplate.baseHref(htmlSample2), ''); // Placeholder base href.
+  });
+
+  test('handles missing baseHref', () {
+    expect(WebTemplate.baseHref(''), '');
+    expect(WebTemplate.baseHref('<base>'), '');
+    expect(WebTemplate.baseHref(htmlSample3), '');
+  });
+
+  test('throws on invalid baseHref', () {
+    expect(() => WebTemplate.baseHref('<base href>'), throwsToolExit());
+    expect(() => WebTemplate.baseHref('<base href="">'), throwsToolExit());
+    expect(() => WebTemplate.baseHref('<base href="foo/111">'), throwsToolExit());
+    expect(() => WebTemplate.baseHref('<base href="foo/111/">'), throwsToolExit());
+    expect(() => WebTemplate.baseHref('<base href="/foo/111">'), throwsToolExit());
+  });
+
+  test('applies substitutions', () {
+    const indexHtml = WebTemplate(htmlSample2);
+
+    expect(
+      indexHtml.withSubstitutions(baseHref: '/foo/333/', flutterJsFile: flutterJs, logger: logger),
+      htmlSample2Replaced(baseHref: '/foo/333/'),
+    );
+  });
+
+  test('applies substitutions to inline flutter.js bootstrap script', () {
+    const indexHtml = WebTemplate(htmlSampleInlineFlutterJsBootstrap);
+    final List<WebTemplateWarning> warnings = indexHtml.getWarnings();
+    expect(warnings, hasLength(1));
+    expect(warnings.single.lineNumber, 16);
+    expect(
+      warnings.single.warningText,
+      contains("Flutter's service worker is deprecated and has been removed."),
+    );
+
+    expect(
+      indexHtml.withSubstitutions(
+        baseHref: '/',
+        flutterJsFile: flutterJs,
+        buildConfig: '(build config)',
+        logger: logger,
+      ),
+      htmlSampleInlineFlutterJsBootstrapOutput,
+    );
+  });
+
+  test('applies substitutions to full flutter_bootstrap.js replacement', () {
+    const indexHtml = WebTemplate(htmlSampleFullFlutterBootstrapReplacement);
+    expect(indexHtml.getWarnings(), isEmpty);
+
+    expect(
+      indexHtml.withSubstitutions(
+        baseHref: '/',
+        flutterJsFile: flutterJs,
+        buildConfig: '(build config)',
+        flutterBootstrapJs: '(flutter bootstrap script)',
+        logger: logger,
+      ),
+      htmlSampleFullFlutterBootstrapReplacementOutput,
+    );
+  });
+
+  test('applies substitutions to static assets url', () {
+    const indexHtml = WebTemplate(htmlSampleStaticAssetsUrl);
+    const expectedStaticAssetsUrl = 'https://static.example.com/my-app/';
+
+    expect(
+      indexHtml.withSubstitutions(
+        baseHref: '/',
+        flutterJsFile: flutterJs,
+        staticAssetsUrl: expectedStaticAssetsUrl,
+        logger: logger,
+      ),
+      htmlSampleStaticAssetsUrlReplaced(staticAssetsUrl: expectedStaticAssetsUrl),
+    );
+  });
+
+  test('re-parses after substitutions', () {
+    const indexHtml = WebTemplate(htmlSample2);
+    expect(WebTemplate.baseHref(htmlSample2), ''); // Placeholder base href.
+
+    final String substituted = indexHtml.withSubstitutions(
+      baseHref: '/foo/333/',
+      flutterJsFile: flutterJs,
+      logger: logger,
+    );
+    // The parsed base href should be updated after substitutions.
+    expect(WebTemplate.baseHref(substituted), 'foo/333');
+  });
+
+  test('warns on legacy service worker patterns', () {
+    const indexHtml = WebTemplate(htmlSampleLegacyVar);
+    final List<WebTemplateWarning> warnings = indexHtml.getWarnings();
+    expect(warnings, hasLength(2));
+
+    final Iterable<WebTemplateWarning> serviceWorkerWarnings = warnings.where(
+      (WebTemplateWarning warning) => warning.lineNumber == 13 || warning.lineNumber == 16,
+    );
+    expect(serviceWorkerWarnings, hasLength(2));
+    expect(
+      serviceWorkerWarnings,
+      everyElement(
+        isA<WebTemplateWarning>().having(
+          (WebTemplateWarning warning) => warning.warningText,
+          'service worker warning message',
+          contains("Flutter's service worker is deprecated and has been removed."),
+        ),
+      ),
+    );
+  });
+
+  test('warns on legacy FlutterLoader.loadEntrypoint', () {
+    const indexHtml = WebTemplate(htmlSampleLegacyLoadEntrypoint);
+    final List<WebTemplateWarning> warnings = indexHtml.getWarnings();
+
+    expect(warnings.length, 1);
+    expect(warnings.single.lineNumber, 14);
+  });
+
+  test('warns on custom serviceWorkerUrl and hardcoded serviceWorkerSettings', () {
+    const bootstrapWithCustomUrl = '''
+{{flutter_js}}
+{{flutter_build_config}}
+_flutter.loader.load({
+  serviceWorkerSettings: {
+    serviceWorkerUrl: 'my_custom_sw.js',
+  },
+});
+''';
+    final List<WebTemplateWarning> urlWarnings = const WebTemplate(bootstrapWithCustomUrl)
+        .getWarnings();
+    expect(urlWarnings, hasLength(1));
+    expect(urlWarnings.single.lineNumber, 5);
+    expect(
+      urlWarnings.single.warningText,
+      contains(
+        'Register custom service workers directly using "navigator.serviceWorker.register(...)"',
+      ),
+    );
+
+    const bootstrapWithHardcodedVersion = '''
+{{flutter_js}}
+{{flutter_build_config}}
+_flutter.loader.load({
+  serviceWorkerSettings: {
+    serviceWorkerVersion: 'v1',
+  },
+});
+''';
+    final List<WebTemplateWarning> settingsWarnings = const WebTemplate(
+      bootstrapWithHardcodedVersion,
+    ).getWarnings();
+    expect(settingsWarnings, hasLength(1));
+    expect(settingsWarnings.single.lineNumber, 4);
+    expect(
+      settingsWarnings.single.warningText,
+      contains("Flutter's service worker is deprecated and has been removed."),
+    );
+  });
+
+  test('applies web-define variable substitutions', () {
+    const htmlWithWebDefines = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test</title>
+  <base href="/">
+</head>
+<body>
+  <script>
+    window.config = {
+      apiUrl: '{{API_URL}}',
+      environment: '{{ENV}}',
+      debugMode: {{DEBUG_MODE}}
+    };
+  </script>
+</body>
+</html>''';
+
+    const indexHtml = WebTemplate(htmlWithWebDefines);
+    final String result = indexHtml.withSubstitutions(
+      baseHref: '/',
+      flutterJsFile: flutterJs,
+      webDefines: <String, String>{
+        'API_URL': 'https://api.example.com',
+        'ENV': 'production',
+        'DEBUG_MODE': 'false',
+      },
+      logger: logger,
+    );
+
+    expect(result, contains("apiUrl: 'https://api.example.com'"));
+    expect(result, contains("environment: 'production'"));
+    expect(result, contains('debugMode: false'));
+  });
+
+  test('logs warning when user defined web-define variable is missing', () {
+    const htmlWithMissingVar = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test</title>
+  <base href="/">
+</head>
+<body>
+  <script>
+    const apiUrl = '{{API_URL}}';
+  </script>
+</body>
+</html>''';
+
+    final logger = BufferLogger.test();
+    const indexHtml = WebTemplate(htmlWithMissingVar);
+    final String result = indexHtml.withSubstitutions(
+      baseHref: '/',
+      flutterJsFile: flutterJs,
+      webDefines: <String, String>{}, // Missing API_URL
+      logger: logger,
+    );
+
+    expect(logger.warningText, contains('Missing web-define variable: API_URL'));
+    // Verify the placeholder is preserved
+    expect(result, contains("const apiUrl = '{{API_URL}}';"));
+  });
+
+  test('logs warning with multiple missing user defined variables', () {
+    const htmlWithMultipleMissingVars = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test</title>
+  <base href="/">
+</head>
+<body>
+  <script>
+    window.config = {
+      api: '{{API_URL}}',
+      env: '{{ENV}}',
+      version: '{{VERSION}}'
+    };
+  </script>
+</body>
+</html>''';
+
+    final logger = BufferLogger.test();
+    const indexHtml = WebTemplate(htmlWithMultipleMissingVars);
+    final String result = indexHtml.withSubstitutions(
+      baseHref: '/',
+      flutterJsFile: flutterJs,
+      webDefines: <String, String>{'API_URL': 'test'}, // Missing ENV, VERSION
+      logger: logger,
+    );
+
+    expect(logger.warningText, contains('Missing web-define variables: ENV, VERSION'));
+    expect(result, contains("env: '{{ENV}}'"));
+    expect(result, contains("version: '{{VERSION}}'"));
+  });
+
+  test('ignores Flutter built-in variables and logs warning for missing user variables', () {
+    const htmlWithBuiltInVars = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test</title>
+  <base href="/">
+</head>
+<body>
+  <script>
+    {{flutter_js}}
+    {{flutter_build_config}}
+    const customVar = '{{CUSTOM_VAR}}';
+  </script>
+</body>
+</html>''';
+
+    final logger = BufferLogger.test();
+    const indexHtml = WebTemplate(htmlWithBuiltInVars);
+    final String result = indexHtml.withSubstitutions(
+      baseHref: '/',
+      flutterJsFile: flutterJs,
+      buildConfig: 'test config',
+      webDefines: <String, String>{}, // Missing CUSTOM_VAR but built-in vars should be ignored
+      logger: logger,
+    );
+
+    expect(logger.warningText, contains('Missing web-define variable: CUSTOM_VAR'));
+    expect(result, contains("const customVar = '{{CUSTOM_VAR}}';"));
+  });
+
+  test('allows empty web-define variables', () {
+    const htmlWithEmptyVar = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test</title>
+  <base href="/">
+</head>
+<body>
+  <script>
+    const value = '{{EMPTY_VAR}}';
+  </script>
+</body>
+</html>''';
+
+    const indexHtml = WebTemplate(htmlWithEmptyVar);
+    final String result = indexHtml.withSubstitutions(
+      baseHref: '/',
+      flutterJsFile: flutterJs,
+      webDefines: <String, String>{'EMPTY_VAR': ''},
+      logger: logger,
+    );
+
+    expect(result, contains("const value = '';"));
+  });
+}

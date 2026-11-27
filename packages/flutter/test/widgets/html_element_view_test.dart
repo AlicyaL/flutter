@@ -6,45 +6,81 @@
 library;
 
 import 'dart:async';
+import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:web/web.dart' as web;
 
-import '../services/fake_platform_views.dart';
+import 'web_platform_view_registry_utils.dart';
+
+final Object _mockHtmlElement = Object();
+Object _mockViewFactory(int id, {Object? params}) {
+  return _mockHtmlElement;
+}
 
 void main() {
+  late FakePlatformViewRegistry fakePlatformViewRegistry;
+
+  setUp(() {
+    fakePlatformViewRegistry = FakePlatformViewRegistry();
+
+    // Simulate the engine registering default factories.
+    fakePlatformViewRegistry.registerViewFactory(
+      ui_web.PlatformViewRegistry.defaultVisibleViewType,
+      (int viewId, {Object? params}) {
+        params!;
+        params as Map<Object?, Object?>;
+        return web.document.createElement(params['tagName']! as String);
+      },
+    );
+    fakePlatformViewRegistry.registerViewFactory(
+      ui_web.PlatformViewRegistry.defaultInvisibleViewType,
+      (int viewId, {Object? params}) {
+        params!;
+        params as Map<Object?, Object?>;
+        return web.document.createElement(params['tagName']! as String);
+      },
+    );
+    fakePlatformViewRegistry.registerViewFactory('Browser__WebContextMenuViewType__', (
+      int viewId, {
+      Object? params,
+    }) {
+      final htmlElement = web.document.createElement('div') as web.HTMLElement;
+      htmlElement
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..classList.add('web-selectable-region-context-menu');
+      return htmlElement;
+    });
+  });
+
   group('HtmlElementView', () {
     testWidgets('Create HTML view', (WidgetTester tester) async {
       final int currentViewId = platformViewsRegistry.getNextPlatformViewId();
-      final FakeHtmlPlatformViewsController viewsController = FakeHtmlPlatformViewsController();
-      viewsController.registerViewType('webview');
+      fakePlatformViewRegistry.registerViewFactory('webview', _mockViewFactory);
 
       await tester.pumpWidget(
         const Center(
-          child: SizedBox(
-            width: 200.0,
-            height: 100.0,
-            child: HtmlElementView(viewType: 'webview'),
-          ),
+          child: SizedBox(width: 200.0, height: 100.0, child: HtmlElementView(viewType: 'webview')),
         ),
       );
 
       expect(
-        viewsController.views,
-        unorderedEquals(<FakeHtmlPlatformView>[
-          FakeHtmlPlatformView(currentViewId + 1, 'webview'),
+        fakePlatformViewRegistry.views,
+        unorderedEquals(<FakePlatformView>[
+          (id: currentViewId + 1, viewType: 'webview', params: null, htmlElement: _mockHtmlElement),
         ]),
       );
     });
 
     testWidgets('Create HTML view with PlatformViewCreatedCallback', (WidgetTester tester) async {
       final int currentViewId = platformViewsRegistry.getNextPlatformViewId();
-      final FakeHtmlPlatformViewsController viewsController = FakeHtmlPlatformViewsController();
-      viewsController.registerViewType('webview');
+      fakePlatformViewRegistry.registerViewFactory('webview', _mockViewFactory);
 
-      bool hasPlatformViewCreated = false;
+      var hasPlatformViewCreated = false;
       void onPlatformViewCreatedCallBack(int id) {
         hasPlatformViewCreated = true;
       }
@@ -66,151 +102,115 @@ void main() {
       expect(hasPlatformViewCreated, true);
 
       expect(
-        viewsController.views,
-        unorderedEquals(<FakeHtmlPlatformView>[
-          FakeHtmlPlatformView(currentViewId + 1, 'webview'),
+        fakePlatformViewRegistry.views,
+        unorderedEquals(<FakePlatformView>[
+          (id: currentViewId + 1, viewType: 'webview', params: null, htmlElement: _mockHtmlElement),
         ]),
       );
     });
 
     testWidgets('Create HTML view with creation params', (WidgetTester tester) async {
       final int currentViewId = platformViewsRegistry.getNextPlatformViewId();
-      final FakeHtmlPlatformViewsController viewsController = FakeHtmlPlatformViewsController();
-      viewsController.registerViewType('webview');
+      fakePlatformViewRegistry.registerViewFactory('webview', _mockViewFactory);
       await tester.pumpWidget(
         const Column(
           children: <Widget>[
             SizedBox(
               width: 200.0,
               height: 100.0,
-              child: HtmlElementView(
-                viewType: 'webview',
-                creationParams: 'foobar',
-              ),
+              child: HtmlElementView(viewType: 'webview', creationParams: 'foobar'),
             ),
             SizedBox(
               width: 200.0,
               height: 100.0,
-              child: HtmlElementView(
-                viewType: 'webview',
-                creationParams: 123,
-              ),
+              child: HtmlElementView(viewType: 'webview', creationParams: 123),
             ),
           ],
         ),
       );
 
       expect(
-        viewsController.views,
-        unorderedEquals(<FakeHtmlPlatformView>[
-          FakeHtmlPlatformView(currentViewId + 1, 'webview', 'foobar'),
-          FakeHtmlPlatformView(currentViewId + 2, 'webview', 123),
+        fakePlatformViewRegistry.views,
+        unorderedEquals(<FakePlatformView>[
+          (
+            id: currentViewId + 1,
+            viewType: 'webview',
+            params: 'foobar',
+            htmlElement: _mockHtmlElement,
+          ),
+          (id: currentViewId + 2, viewType: 'webview', params: 123, htmlElement: _mockHtmlElement),
         ]),
       );
     });
 
     testWidgets('Resize HTML view', (WidgetTester tester) async {
       final int currentViewId = platformViewsRegistry.getNextPlatformViewId();
-      final FakeHtmlPlatformViewsController viewsController = FakeHtmlPlatformViewsController();
-      viewsController.registerViewType('webview');
+      fakePlatformViewRegistry.registerViewFactory('webview', _mockViewFactory);
       await tester.pumpWidget(
         const Center(
-          child: SizedBox(
-            width: 200.0,
-            height: 100.0,
-            child: HtmlElementView(viewType: 'webview'),
-          ),
+          child: SizedBox(width: 200.0, height: 100.0, child: HtmlElementView(viewType: 'webview')),
         ),
       );
 
-      viewsController.resizeCompleter = Completer<void>();
+      final resizeCompleter = Completer<void>();
 
       await tester.pumpWidget(
         const Center(
-          child: SizedBox(
-            width: 100.0,
-            height: 50.0,
-            child: HtmlElementView(viewType: 'webview'),
-          ),
+          child: SizedBox(width: 100.0, height: 50.0, child: HtmlElementView(viewType: 'webview')),
         ),
       );
 
-      viewsController.resizeCompleter.complete();
+      resizeCompleter.complete();
       await tester.pump();
 
       expect(
-        viewsController.views,
-        unorderedEquals(<FakeHtmlPlatformView>[
-          FakeHtmlPlatformView(currentViewId + 1, 'webview'),
+        fakePlatformViewRegistry.views,
+        unorderedEquals(<FakePlatformView>[
+          (id: currentViewId + 1, viewType: 'webview', params: null, htmlElement: _mockHtmlElement),
         ]),
       );
     });
 
     testWidgets('Change HTML view type', (WidgetTester tester) async {
       final int currentViewId = platformViewsRegistry.getNextPlatformViewId();
-      final FakeHtmlPlatformViewsController viewsController = FakeHtmlPlatformViewsController();
-      viewsController.registerViewType('webview');
-      viewsController.registerViewType('maps');
+      fakePlatformViewRegistry.registerViewFactory('webview', _mockViewFactory);
+      fakePlatformViewRegistry.registerViewFactory('maps', _mockViewFactory);
       await tester.pumpWidget(
         const Center(
-          child: SizedBox(
-            width: 200.0,
-            height: 100.0,
-            child: HtmlElementView(viewType: 'webview'),
-          ),
+          child: SizedBox(width: 200.0, height: 100.0, child: HtmlElementView(viewType: 'webview')),
         ),
       );
 
       await tester.pumpWidget(
         const Center(
-          child: SizedBox(
-            width: 200.0,
-            height: 100.0,
-            child: HtmlElementView(viewType: 'maps'),
-          ),
+          child: SizedBox(width: 200.0, height: 100.0, child: HtmlElementView(viewType: 'maps')),
         ),
       );
 
       expect(
-        viewsController.views,
-        unorderedEquals(<FakeHtmlPlatformView>[
-          FakeHtmlPlatformView(currentViewId + 2, 'maps'),
+        fakePlatformViewRegistry.views,
+        unorderedEquals(<FakePlatformView>[
+          (id: currentViewId + 2, viewType: 'maps', params: null, htmlElement: _mockHtmlElement),
         ]),
       );
     });
 
     testWidgets('Dispose HTML view', (WidgetTester tester) async {
-      final FakeHtmlPlatformViewsController viewsController = FakeHtmlPlatformViewsController();
-      viewsController.registerViewType('webview');
+      fakePlatformViewRegistry.registerViewFactory('webview', _mockViewFactory);
       await tester.pumpWidget(
         const Center(
-          child: SizedBox(
-            width: 200.0,
-            height: 100.0,
-            child: HtmlElementView(viewType: 'webview'),
-          ),
+          child: SizedBox(width: 200.0, height: 100.0, child: HtmlElementView(viewType: 'webview')),
         ),
       );
 
-      await tester.pumpWidget(
-        const Center(
-          child: SizedBox(
-            width: 200.0,
-            height: 100.0,
-          ),
-        ),
-      );
+      await tester.pumpWidget(const Center(child: SizedBox(width: 200.0, height: 100.0)));
 
-      expect(
-        viewsController.views,
-        isEmpty,
-      );
+      expect(fakePlatformViewRegistry.views, isEmpty);
     });
 
     testWidgets('HTML view survives widget tree change', (WidgetTester tester) async {
       final int currentViewId = platformViewsRegistry.getNextPlatformViewId();
-      final FakeHtmlPlatformViewsController viewsController = FakeHtmlPlatformViewsController();
-      viewsController.registerViewType('webview');
+      fakePlatformViewRegistry.registerViewFactory('webview', _mockViewFactory);
       final GlobalKey key = GlobalKey();
       await tester.pumpWidget(
         Center(
@@ -233,9 +233,9 @@ void main() {
       );
 
       expect(
-        viewsController.views,
-        unorderedEquals(<FakeHtmlPlatformView>[
-          FakeHtmlPlatformView(currentViewId + 1, 'webview'),
+        fakePlatformViewRegistry.views,
+        unorderedEquals(<FakePlatformView>[
+          (id: currentViewId + 1, viewType: 'webview', params: null, htmlElement: _mockHtmlElement),
         ]),
       );
     });
@@ -244,8 +244,7 @@ void main() {
       final SemanticsHandle handle = tester.ensureSemantics();
       final int currentViewId = platformViewsRegistry.getNextPlatformViewId();
       expect(currentViewId, greaterThanOrEqualTo(0));
-      final FakeHtmlPlatformViewsController viewsController = FakeHtmlPlatformViewsController();
-      viewsController.registerViewType('webview');
+      fakePlatformViewRegistry.registerViewFactory('webview', _mockViewFactory);
 
       await tester.pumpWidget(
         Semantics(
@@ -255,9 +254,7 @@ void main() {
             child: SizedBox(
               width: 200.0,
               height: 100.0,
-              child: HtmlElementView(
-                viewType: 'webview',
-              ),
+              child: HtmlElementView(viewType: 'webview'),
             ),
           ),
         ),
@@ -276,6 +273,159 @@ void main() {
       expect(semantics.childrenCount, 0);
 
       handle.dispose();
+    });
+  });
+
+  group('HtmlElementView.fromTagName', () {
+    setUp(() {
+      ui_web.debugOverridePlatformViewRegistry(fakePlatformViewRegistry);
+    });
+
+    tearDown(() {
+      ui_web.debugOverridePlatformViewRegistry(null);
+    });
+
+    testWidgets('Create platform view from tagName', (WidgetTester tester) async {
+      final int currentViewId = platformViewsRegistry.getNextPlatformViewId();
+
+      await tester.pumpWidget(
+        Center(
+          child: SizedBox(
+            width: 200.0,
+            height: 100.0,
+            child: HtmlElementView.fromTagName(tagName: 'div'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fakePlatformViewRegistry.views, hasLength(1));
+      final FakePlatformView fakePlatformView = fakePlatformViewRegistry.views.single;
+      expect(fakePlatformView.id, currentViewId + 1);
+      expect(fakePlatformView.viewType, ui_web.PlatformViewRegistry.defaultVisibleViewType);
+      expect(fakePlatformView.params, <dynamic, dynamic>{'tagName': 'div'});
+
+      // The HTML element should be a div.
+      final htmlElement = fakePlatformView.htmlElement as web.HTMLElement;
+      expect(htmlElement.tagName, equalsIgnoringCase('div'));
+    });
+
+    testWidgets('Create invisible platform view', (WidgetTester tester) async {
+      final int currentViewId = platformViewsRegistry.getNextPlatformViewId();
+
+      await tester.pumpWidget(
+        Center(
+          child: SizedBox(
+            width: 200.0,
+            height: 100.0,
+            child: HtmlElementView.fromTagName(tagName: 'script', isVisible: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fakePlatformViewRegistry.views, hasLength(1));
+      final FakePlatformView fakePlatformView = fakePlatformViewRegistry.views.single;
+      expect(fakePlatformView.id, currentViewId + 1);
+      // The view should be invisible.
+      expect(fakePlatformView.viewType, ui_web.PlatformViewRegistry.defaultInvisibleViewType);
+      expect(fakePlatformView.params, <dynamic, dynamic>{'tagName': 'script'});
+
+      // The HTML element should be a script.
+      final htmlElement = fakePlatformView.htmlElement as web.HTMLElement;
+      expect(htmlElement.tagName, equalsIgnoringCase('script'));
+    });
+
+    testWidgets('onElementCreated', (WidgetTester tester) async {
+      final createdElements = <Object>[];
+      void onElementCreated(Object element) {
+        createdElements.add(element);
+      }
+
+      await tester.pumpWidget(
+        Center(
+          child: SizedBox(
+            width: 200.0,
+            height: 100.0,
+            child: HtmlElementView.fromTagName(
+              tagName: 'table',
+              onElementCreated: onElementCreated,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fakePlatformViewRegistry.views, hasLength(1));
+      final FakePlatformView fakePlatformView = fakePlatformViewRegistry.views.single;
+
+      expect(createdElements, hasLength(1));
+      final Object createdElement = createdElements.single;
+
+      expect(createdElement, fakePlatformView.htmlElement);
+    });
+
+    group('hitTestBehavior', () {
+      testWidgets('opaque by default', (WidgetTester tester) async {
+        final Key containerKey = UniqueKey();
+        var taps = 0;
+
+        await tester.pumpWidget(
+          GestureDetector(
+            onTap: () => taps++,
+            child: Container(
+              key: containerKey,
+              width: 200,
+              height: 200,
+              // Add a color to make it a visible container. This ensures that
+              // GestureDetector's default hit test behavior works.
+              color: const Color(0xFF00FF00),
+              child: HtmlElementView.fromTagName(tagName: 'div'),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(taps, isZero);
+
+        await tester.tap(find.byKey(containerKey), warnIfMissed: false);
+
+        // Taps are still zero on the container because the HtmlElementView is
+        // opaque and prevents widgets behind it from receiving pointer events.
+        expect(taps, isZero);
+      });
+
+      testWidgets('can be set to transparent', (WidgetTester tester) async {
+        final Key containerKey = UniqueKey();
+        var taps = 0;
+
+        await tester.pumpWidget(
+          GestureDetector(
+            onTap: () => taps++,
+            child: Container(
+              key: containerKey,
+              width: 200,
+              height: 200,
+              // Add a color to make it a visible container. This ensures that
+              // GestureDetector's default hit test behavior works.
+              color: const Color(0xFF00FF00),
+              child: HtmlElementView.fromTagName(
+                tagName: 'div',
+                hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(taps, isZero);
+
+        await tester.tap(find.byKey(containerKey), warnIfMissed: false);
+
+        // The container can receive taps because the HtmlElementView is
+        // transparent from a hit testing perspective.
+        expect(taps, 1);
+      });
     });
   });
 }

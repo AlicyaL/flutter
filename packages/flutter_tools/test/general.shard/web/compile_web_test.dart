@@ -3,51 +3,59 @@
 // found in the LICENSE file.
 
 import 'package:file/memory.dart';
+import 'package:flutter_tools/src/artifacts.dart';
 import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/build_system/build_system.dart';
 import 'package:flutter_tools/src/build_system/targets/web.dart';
+import 'package:flutter_tools/src/isolated/build_targets.dart';
 import 'package:flutter_tools/src/project.dart';
-import 'package:flutter_tools/src/reporting/reporting.dart';
-import 'package:flutter_tools/src/version.dart';
 import 'package:flutter_tools/src/web/compile.dart';
-import 'package:flutter_tools/src/web/file_generators/flutter_service_worker_js.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../../src/common.dart';
-import '../../src/context.dart';
+import '../../src/fake_process_manager.dart';
 import '../../src/fakes.dart';
+import '../../src/package_config.dart';
 import '../../src/test_build_system.dart';
 
 void main() {
   late MemoryFileSystem fileSystem;
-  late TestUsage testUsage;
+  late FakeAnalytics fakeAnalytics;
   late BufferLogger logger;
-  late FlutterVersion flutterVersion;
+  late FakeFlutterVersion flutterVersion;
   late FlutterProject flutterProject;
 
   setUp(() {
     fileSystem = MemoryFileSystem.test();
-    testUsage = TestUsage();
     logger = BufferLogger.test();
     flutterVersion = FakeFlutterVersion(frameworkVersion: '1.0.0', engineRevision: '9.8.7');
+    fakeAnalytics = getInitializedFakeAnalyticsInstance(
+      fs: fileSystem,
+      fakeFlutterVersion: flutterVersion,
+    );
+    fileSystem.currentDirectory.childFile('pubspec.yaml')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('''
+name: my_app
+environement:
+  sdk: '^3.5.0'
+''');
 
     flutterProject = FlutterProject.fromDirectoryTest(fileSystem.currentDirectory);
-    fileSystem.file('.packages').createSync();
+    writePackageConfigFiles(directory: flutterProject.directory, mainLibName: 'my_app');
   });
 
-  testUsingContext('WebBuilder sets environment on success', () async {
-    final TestBuildSystem buildSystem =
-        TestBuildSystem.all(BuildResult(success: true), (Target target, Environment environment) {
-      final WebServiceWorker webServiceWorker = target as WebServiceWorker;
-      expect(webServiceWorker.isWasm, isTrue, reason: 'should be wasm');
-      expect(webServiceWorker.webRenderer, WebRendererMode.auto);
-
+  test('WebBuilder sets environment on success', () async {
+    final buildSystem = TestBuildSystem.all(BuildResult(success: true), (
+      Target target,
+      Environment environment,
+    ) {
+      expect(target, isA<WebServiceWorker>());
       expect(environment.defines, <String, String>{
         'TargetFile': 'target',
         'HasWebPlugins': 'false',
-        'ServiceWorkerStrategy': ServiceWorkerStrategy.offlineFirst.cliName,
-        'WasmOmitTypeChecks': 'false',
-        'RunWasmOpt': 'none',
         'BuildMode': 'debug',
         'DartObfuscation': 'false',
         'TrackWidgetCreation': 'true',
@@ -58,88 +66,257 @@ void main() {
       expect(environment.generateDartPluginRegistry, isFalse);
     });
 
-    final WebBuilder webBuilder = WebBuilder(
-      logger: logger,
-      processManager: FakeProcessManager.any(),
+    final webBuilder = WebBuilder(
+      analytics: fakeAnalytics,
       buildSystem: buildSystem,
-      usage: testUsage,
-      flutterVersion: flutterVersion,
-      fileSystem: fileSystem,
+      buildTargets: const BuildTargetsImpl(),
+      featureFlags: TestFeatureFlags(),
+      toolContext: FakeToolContext(
+        artifacts: FakeArtifacts(fileSystem: fileSystem),
+        cache: FakeCache(fileSystem: fileSystem),
+        config: FakeConfig(),
+        flutterVersion: flutterVersion,
+        fs: fileSystem,
+        logger: logger,
+        platform: FakePlatform(),
+        processManager: FakeProcessManager.any(),
+        terminal: FakeTerminal(),
+      ),
     );
     await webBuilder.buildWeb(
       flutterProject,
       'target',
       BuildInfo.debug,
-      ServiceWorkerStrategy.offlineFirst,
-      compilerConfig: const WasmCompilerConfig(
-        omitTypeChecks: false,
-        wasmOpt: WasmOptLevel.none,
-      ),
+      compilerConfigs: <WebCompilerConfig>[
+        const WasmCompilerConfig(optimizationLevel: 0, stripWasm: false),
+        const JsCompilerConfig.run(nativeNullAssertions: true, renderer: WebRendererMode.canvaskit),
+      ],
     );
 
     expect(logger.statusText, contains('Compiling target for the Web...'));
     expect(logger.errorText, isEmpty);
     // Runs ScrubGeneratedPluginRegistrant migrator.
+    expect(logger.traceText, contains('generated_plugin_registrant.dart not found. Skipping.'));
+
     expect(
-      logger.traceText,
-      contains('generated_plugin_registrant.dart not found. Skipping.'),
+      fakeAnalytics.sentEvents,
+      containsAll(<Event>[
+        Event.flutterBuildInfo(
+          label: 'web-compile',
+          buildType: 'web',
+          settings: 'dryRun: false; optimizationLevel: 0; web-renderer: skwasm,canvaskit; web-target: wasm,js;',
+        ),
+      ]),
     );
 
-    // Sends build config event
     expect(
-      testUsage.events,
-      unorderedEquals(
-        <TestUsageEvent>[
-      const TestUsageEvent(
-        'build',
-        'web',
-        label: 'web-compile',
-            parameters: CustomDimensions(
-              buildEventSettings:
-                  'RunWasmOpt: none; WasmOmitTypeChecks: false; wasm-compile: true; web-renderer: auto;',
+      analyticsTimingEventExists(
+        sentEvents: fakeAnalytics.sentEvents,
+        workflow: 'build',
+        variableName: 'dual-compile',
       ),
+      true,
+    );
+  });
+
+  test('WebBuilder throws tool exit on failure', () async {
+    final buildSystem = TestBuildSystem.all(
+      BuildResult(
+        success: false,
+        exceptions: <String, ExceptionMeasurement>{
+          'hello': ExceptionMeasurement(
+            'hello',
+            const FormatException('illegal character in input string'),
+            StackTrace.current,
+          ),
+        },
+      ),
+    );
+
+    final webBuilder = WebBuilder(
+      analytics: fakeAnalytics,
+      buildSystem: buildSystem,
+      buildTargets: const BuildTargetsImpl(),
+      featureFlags: TestFeatureFlags(),
+      toolContext: FakeToolContext(
+        artifacts: FakeArtifacts(fileSystem: fileSystem),
+        cache: FakeCache(fileSystem: fileSystem),
+        config: FakeConfig(),
+        flutterVersion: flutterVersion,
+        fs: fileSystem,
+        logger: logger,
+        platform: FakePlatform(),
+        processManager: FakeProcessManager.any(),
+        terminal: FakeTerminal(),
+      ),
+    );
+    await expectLater(
+      () async => webBuilder.buildWeb(
+        flutterProject,
+        'target',
+        BuildInfo.debug,
+        compilerConfigs: <WebCompilerConfig>[
+          const JsCompilerConfig.run(
+            nativeNullAssertions: true,
+            renderer: WebRendererMode.canvaskit,
           ),
         ],
       ),
+      throwsToolExit(message: 'Failed to compile application for the Web.'),
     );
 
-    // Sends timing event.
-    final TestTimingEvent timingEvent = testUsage.timings.single;
-    expect(timingEvent.category, 'build');
-    expect(timingEvent.variableName, 'dart2wasm');
+    expect(
+      logger.errorText,
+      contains('Target hello failed: FormatException: illegal character in input string'),
+    );
+    expect(fakeAnalytics.sentEvents, isEmpty);
   });
 
-  testUsingContext('WebBuilder throws tool exit on failure', () async {
-    final TestBuildSystem buildSystem = TestBuildSystem.all(BuildResult(
-      success: false,
-      exceptions: <String, ExceptionMeasurement>{
-        'hello': ExceptionMeasurement(
-          'hello',
-          const FormatException('illegal character in input string'),
-          StackTrace.current,
-        ),
-      },
-    ));
+  for (final deprecatedJsInterop in <bool>[true, false]) {
+    test(
+      'WebBuilder includes deprecatedJsInterop=$deprecatedJsInterop in buildEventAnalyticsValues on success and failure',
+      () async {
+        final buildSystem = TestBuildSystem.list(<BuildResult>[
+          BuildResult(success: true),
+          BuildResult(
+            success: false,
+            exceptions: <String, ExceptionMeasurement>{
+              'dart2js': ExceptionMeasurement(
+                'dart2js',
+                const FormatException('disallowed legacy web import'),
+                StackTrace.current,
+              ),
+            },
+          ),
+        ]);
 
-    final WebBuilder webBuilder = WebBuilder(
-      logger: logger,
-      processManager: FakeProcessManager.any(),
-      buildSystem: buildSystem,
-      usage: testUsage,
-      flutterVersion: flutterVersion,
-      fileSystem: fileSystem,
-    );
-    await expectLater(
-        () async => webBuilder.buildWeb(
-              flutterProject,
-              'target',
-              BuildInfo.debug,
-              ServiceWorkerStrategy.offlineFirst,
-              compilerConfig: const JsCompilerConfig.run(nativeNullAssertions: true),
+        final webBuilder = WebBuilder(
+          analytics: fakeAnalytics,
+          buildSystem: buildSystem,
+          buildTargets: const BuildTargetsImpl(),
+          featureFlags: TestFeatureFlags(),
+          toolContext: FakeToolContext(
+            artifacts: FakeArtifacts(fileSystem: fileSystem),
+            cache: FakeCache(fileSystem: fileSystem),
+            config: FakeConfig(),
+            flutterVersion: flutterVersion,
+            fs: fileSystem,
+            logger: logger,
+            platform: FakePlatform(),
+            processManager: FakeProcessManager.any(),
+            terminal: FakeTerminal(),
+          ),
+        );
+        final compilerConfigs = <WebCompilerConfig>[
+          const WasmCompilerConfig(optimizationLevel: 4, dryRun: true),
+          JsCompilerConfig(optimizationLevel: 4, deprecatedJsInterop: deprecatedJsInterop),
+        ];
+
+        await webBuilder.buildWeb(
+          flutterProject,
+          'target',
+          BuildInfo.release,
+          compilerConfigs: compilerConfigs,
+        );
+
+        await expectLater(
+          () async => webBuilder.buildWeb(
+            flutterProject,
+            'target',
+            BuildInfo.release,
+            compilerConfigs: compilerConfigs,
+          ),
+          throwsToolExit(message: 'Failed to compile application for the Web.'),
+        );
+
+        expect(
+          fakeAnalytics.sentEvents,
+          containsAll(<Event>[
+            Event.flutterBuildInfo(
+              label: 'web-compile',
+              buildType: 'web',
+              settings:
+                  'deprecatedJsInterop: $deprecatedJsInterop; dryRun: true; web-renderer: skwasm,canvaskit; web-target: wasm,js;',
             ),
-        throwsToolExit(message: 'Failed to compile application for the Web.'));
+            Event.flutterBuildInfo(
+              label: 'web-compile',
+              buildType: 'web',
+              settings:
+                  'deprecatedJsInterop: $deprecatedJsInterop; dryRun: true; web-renderer: skwasm,canvaskit; web-target: wasm,js;',
+              error: 'dart2js-failure',
+            ),
+          ]),
+        );
+      },
+    );
+  }
 
-    expect(logger.errorText, contains('Target hello failed: FormatException: illegal character in input string'));
-    expect(testUsage.timings, isEmpty);
-  });
+  Future<void> testRendererModeFromDartDefines(WebRendererMode webRenderer) async {
+    test('WebRendererMode.${webRenderer.name} can be initialized from dart defines', () {
+      final computed = WebRendererMode.fromDartDefines(webRenderer.dartDefines, useWasm: true);
+
+      expect(computed, webRenderer);
+    });
+  }
+
+  WebRendererMode.values.forEach(testRendererModeFromDartDefines);
+
+  test(
+    'WebRendererMode.fromDartDefines sets a wasm-aware default for unknown dart defines.',
+    () async {
+      var computed = WebRendererMode.fromDartDefines(<String>{}, useWasm: false);
+      expect(computed, WebRendererMode.getDefault(useWasm: false));
+
+      computed = WebRendererMode.fromDartDefines(<String>{}, useWasm: true);
+      expect(computed, WebRendererMode.getDefault(useWasm: true));
+    },
+  );
+
+  test(
+    'WebBuilder passes flutterVersion.engineRevision to WebServiceWorker on local engine builds',
+    () async {
+      final buildSystem = TestBuildSystem.all(BuildResult(success: true), (
+        Target target,
+        Environment environment,
+      ) {
+        expect(environment.engineVersion, isNull);
+        expect(
+          target,
+          isA<WebServiceWorker>().having(
+            (WebServiceWorker t) => t.engineRevision,
+            'engineRevision',
+            '9.8.7',
+          ),
+        );
+      });
+
+      final webBuilder = WebBuilder(
+        analytics: fakeAnalytics,
+        buildSystem: buildSystem,
+        buildTargets: const BuildTargetsImpl(),
+        featureFlags: TestFeatureFlags(),
+        toolContext: FakeToolContext(
+          artifacts: Artifacts.testLocalEngine(
+            localEngine: 'out/host_debug_unopt',
+            localEngineHost: 'out/host_debug_unopt',
+            fileSystem: fileSystem,
+          ),
+          cache: FakeCache(fileSystem: fileSystem),
+          config: FakeConfig(),
+          flutterVersion: flutterVersion,
+          fs: fileSystem,
+          logger: logger,
+          platform: FakePlatform(),
+          processManager: FakeProcessManager.any(),
+          terminal: FakeTerminal(),
+        ),
+      );
+      await webBuilder.buildWeb(
+        flutterProject,
+        'target',
+        BuildInfo.debug,
+        compilerConfigs: const <WebCompilerConfig>[],
+      );
+    },
+  );
 }

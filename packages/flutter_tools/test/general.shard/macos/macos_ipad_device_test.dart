@@ -13,7 +13,9 @@ import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/ios/application_package.dart';
 import 'package:flutter_tools/src/ios/ios_workflow.dart';
 import 'package:flutter_tools/src/macos/macos_ipad_device.dart';
+import 'package:flutter_tools/src/mdns_discovery.dart';
 import 'package:test/fake.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../../src/common.dart';
 import '../../src/fake_process_manager.dart';
@@ -25,28 +27,42 @@ void main() {
       MacOSDesignedForIPadDevices.allowDiscovery = false;
     });
 
-    testWithoutContext('does not support non-macOS platforms', () async {
+    test('does not support non-macOS platforms', () async {
       MacOSDesignedForIPadDevices.allowDiscovery = true;
-      final MacOSDesignedForIPadDevices discoverer = MacOSDesignedForIPadDevices(
-        platform: FakePlatform(operatingSystem: 'windows'),
-        logger: BufferLogger.test(),
-        processManager: FakeProcessManager.any(),
-        fileSystem: MemoryFileSystem.test(),
-        operatingSystemUtils: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+      final discoverer = MacOSDesignedForIPadDevices(
         iosWorkflow: FakeIOSWorkflow(canListDevices: true),
+        mdnsVmServiceDiscovery: MDnsVmServiceDiscovery(
+          analytics: const NoOpAnalytics(),
+          logger: BufferLogger.test(),
+          platform: FakePlatform(operatingSystem: 'macos'),
+        ),
+        toolContext: FakeToolContext(
+          fs: MemoryFileSystem.test(),
+          logger: BufferLogger.test(),
+          os: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+          platform: FakePlatform(operatingSystem: 'windows'),
+          processManager: FakeProcessManager.any(),
+        ),
       );
 
       expect(discoverer.supportsPlatform, isFalse);
     });
 
-    testWithoutContext('discovery not allowed', () async {
-      final MacOSDesignedForIPadDevices discoverer = MacOSDesignedForIPadDevices(
-        platform: FakePlatform(operatingSystem: 'macos'),
-        logger: BufferLogger.test(),
-        processManager: FakeProcessManager.any(),
-        fileSystem: MemoryFileSystem.test(),
-        operatingSystemUtils: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+    test('discovery not allowed', () async {
+      final discoverer = MacOSDesignedForIPadDevices(
         iosWorkflow: FakeIOSWorkflow(canListDevices: true),
+        mdnsVmServiceDiscovery: MDnsVmServiceDiscovery(
+          analytics: const NoOpAnalytics(),
+          logger: BufferLogger.test(),
+          platform: FakePlatform(operatingSystem: 'macos'),
+        ),
+        toolContext: FakeToolContext(
+          fs: MemoryFileSystem.test(),
+          logger: BufferLogger.test(),
+          os: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+          platform: FakePlatform(operatingSystem: 'macos'),
+          processManager: FakeProcessManager.any(),
+        ),
       );
       expect(discoverer.supportsPlatform, isTrue);
 
@@ -54,15 +70,22 @@ void main() {
       expect(devices, isEmpty);
     });
 
-    testWithoutContext('no device on x86', () async {
+    test('no device on x86', () async {
       MacOSDesignedForIPadDevices.allowDiscovery = true;
-      final MacOSDesignedForIPadDevices discoverer = MacOSDesignedForIPadDevices(
-        platform: FakePlatform(operatingSystem: 'macos'),
-        logger: BufferLogger.test(),
-        processManager: FakeProcessManager.any(),
-        fileSystem: MemoryFileSystem.test(),
-        operatingSystemUtils: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
+      final discoverer = MacOSDesignedForIPadDevices(
         iosWorkflow: FakeIOSWorkflow(canListDevices: true),
+        mdnsVmServiceDiscovery: MDnsVmServiceDiscovery(
+          analytics: const NoOpAnalytics(),
+          logger: BufferLogger.test(),
+          platform: FakePlatform(operatingSystem: 'macos'),
+        ),
+        toolContext: FakeToolContext(
+          fs: MemoryFileSystem.test(),
+          logger: BufferLogger.test(),
+          os: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_x64),
+          platform: FakePlatform(operatingSystem: 'macos'),
+          processManager: FakeProcessManager.any(),
+        ),
       );
       expect(discoverer.supportsPlatform, isTrue);
 
@@ -70,15 +93,22 @@ void main() {
       expect(devices, isEmpty);
     });
 
-    testWithoutContext('no device on when iOS development off', () async {
+    test('no device on when iOS development off', () async {
       MacOSDesignedForIPadDevices.allowDiscovery = true;
-      final MacOSDesignedForIPadDevices discoverer = MacOSDesignedForIPadDevices(
-        platform: FakePlatform(operatingSystem: 'macos'),
-        logger: BufferLogger.test(),
-        processManager: FakeProcessManager.any(),
-        fileSystem: MemoryFileSystem.test(),
-        operatingSystemUtils: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+      final discoverer = MacOSDesignedForIPadDevices(
         iosWorkflow: FakeIOSWorkflow(canListDevices: false),
+        mdnsVmServiceDiscovery: MDnsVmServiceDiscovery(
+          analytics: const NoOpAnalytics(),
+          logger: BufferLogger.test(),
+          platform: FakePlatform(operatingSystem: 'macos'),
+        ),
+        toolContext: FakeToolContext(
+          fs: MemoryFileSystem.test(),
+          logger: BufferLogger.test(),
+          os: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+          platform: FakePlatform(operatingSystem: 'macos'),
+          processManager: FakeProcessManager.any(),
+        ),
       );
       expect(discoverer.supportsPlatform, isTrue);
 
@@ -86,15 +116,22 @@ void main() {
       expect(devices, isEmpty);
     });
 
-    testWithoutContext('device discovery on arm', () async {
+    test('device discovery on arm', () async {
       MacOSDesignedForIPadDevices.allowDiscovery = true;
-      final MacOSDesignedForIPadDevices discoverer = MacOSDesignedForIPadDevices(
-        platform: FakePlatform(operatingSystem: 'macos'),
-        logger: BufferLogger.test(),
-        processManager: FakeProcessManager.any(),
-        fileSystem: MemoryFileSystem.test(),
-        operatingSystemUtils: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+      final discoverer = MacOSDesignedForIPadDevices(
         iosWorkflow: FakeIOSWorkflow(canListDevices: true),
+        mdnsVmServiceDiscovery: MDnsVmServiceDiscovery(
+          analytics: const NoOpAnalytics(),
+          logger: BufferLogger.test(),
+          platform: FakePlatform(operatingSystem: 'macos'),
+        ),
+        toolContext: FakeToolContext(
+          fs: MemoryFileSystem.test(),
+          logger: BufferLogger.test(),
+          os: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+          platform: FakePlatform(operatingSystem: 'macos'),
+          processManager: FakeProcessManager.any(),
+        ),
       );
       expect(discoverer.supportsPlatform, isTrue);
 
@@ -103,7 +140,7 @@ void main() {
 
       final Device device = devices.single;
       expect(device, isA<MacOSDesignedForIPadDevice>());
-      expect(device.id, 'designed-for-ipad');
+      expect(device.id, 'mac-designed-for-ipad');
 
       // Timeout ignored.
       devices = await discoverer.discoverDevices(timeout: const Duration(seconds: 10));
@@ -111,14 +148,21 @@ void main() {
     });
   });
 
-  testWithoutContext('MacOSDesignedForIPadDevice properties', () async {
-    final MacOSDesignedForIPadDevice device = MacOSDesignedForIPadDevice(
-      logger: BufferLogger.test(),
-      processManager: FakeProcessManager.any(),
-      fileSystem: MemoryFileSystem.test(),
-      operatingSystemUtils: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+  test('MacOSDesignedForIPadDevice properties', () async {
+    final device = MacOSDesignedForIPadDevice(
+      mdnsVmServiceDiscovery: MDnsVmServiceDiscovery(
+        analytics: const NoOpAnalytics(),
+        logger: BufferLogger.test(),
+        platform: FakePlatform(operatingSystem: 'macos'),
+      ),
+      toolContext: FakeToolContext(
+        fs: MemoryFileSystem.test(),
+        logger: BufferLogger.test(),
+        os: FakeOperatingSystemUtils(hostPlatform: HostPlatform.darwin_arm64),
+        processManager: FakeProcessManager.any(),
+      ),
     );
-    expect(device.id, 'designed-for-ipad');
+    expect(device.id, 'mac-designed-for-ipad');
     expect(await device.isLocalEmulator, isFalse);
     expect(device.name, 'Mac Designed for iPad');
     expect(device.portForwarder, isNot(isNull));
@@ -129,19 +173,22 @@ void main() {
     expect(await device.isLatestBuildInstalled(FakeApplicationPackage()), isTrue);
     expect(await device.uninstallApp(FakeApplicationPackage()), isTrue);
 
-    expect(device.isSupported(), isTrue);
+    expect(await device.isSupported(), isTrue);
     expect(device.getLogReader(), isA<DesktopLogReader>());
 
-     expect(await device.stopApp(FakeIOSApp()), isFalse);
+    expect(await device.stopApp(FakeIOSApp()), isFalse);
 
     await expectLater(
-          () => device.startApp(
+      () => device.startApp(
         FakeIOSApp(),
         debuggingOptions: DebuggingOptions.disabled(BuildInfo.debug),
       ),
       throwsA(isA<UnimplementedError>()),
     );
-    await expectLater(() => device.buildForDevice(buildInfo: BuildInfo.debug), throwsA(isA<UnimplementedError>()));
+    await expectLater(
+      () => device.buildForDevice(buildInfo: BuildInfo.debug),
+      throwsA(isA<UnimplementedError>()),
+    );
     expect(device.executablePathForDevice(FakeIOSApp(), BuildInfo.debug), null);
   });
 }
@@ -154,4 +201,5 @@ class FakeIOSWorkflow extends Fake implements IOSWorkflow {
 }
 
 class FakeApplicationPackage extends Fake implements ApplicationPackage {}
+
 class FakeIOSApp extends Fake implements IOSApp {}

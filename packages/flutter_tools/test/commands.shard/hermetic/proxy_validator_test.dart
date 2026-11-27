@@ -7,29 +7,24 @@ import 'dart:typed_data';
 
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/platform.dart';
-import 'package:flutter_tools/src/doctor_validator.dart';
 import 'package:flutter_tools/src/proxy_validator.dart';
+import 'package:flutter_tools_core/flutter_tools_core.dart';
 
 import '../../src/common.dart';
 
 void main() {
   setUp(() {
-    setNetworkInterfaceLister(
-      ({
-        bool includeLoopback = true,
-        bool includeLinkLocal = true,
-        InternetAddressType type = InternetAddressType.any,
-      }) async {
-        final List<FakeNetworkInterface> interfaces = <FakeNetworkInterface>[
-          FakeNetworkInterface(<FakeInternetAddress>[
-            const FakeInternetAddress('127.0.0.1'),
-          ]),
-          FakeNetworkInterface(<FakeInternetAddress>[
-            const FakeInternetAddress('::1'),
-          ]),
-        ];
+    setNetworkInterfaceLister(({
+      bool includeLoopback = true,
+      bool includeLinkLocal = true,
+      InternetAddressType type = InternetAddressType.any,
+    }) async {
+      final interfaces = <FakeNetworkInterface>[
+        FakeNetworkInterface(<FakeInterfaceAddress>[const FakeInterfaceAddress('127.0.0.1')]),
+        FakeNetworkInterface(<FakeInterfaceAddress>[const FakeInterfaceAddress('::1')]),
+      ];
 
-        return Future<List<NetworkInterface>>.value(interfaces);
+      return Future<List<NetworkInterface>>.value(interfaces);
     });
   });
 
@@ -37,31 +32,35 @@ void main() {
     resetNetworkInterfaceLister();
   });
 
-  testWithoutContext('ProxyValidator does not show if HTTP_PROXY is not set', () {
+  test('ProxyValidator does not show if HTTP_PROXY is not set', () {
     final Platform platform = FakePlatform(environment: <String, String>{});
 
     expect(ProxyValidator(platform: platform).shouldShow, isFalse);
   });
 
-  testWithoutContext('ProxyValidator does not show if HTTP_PROXY is only whitespace', () {
+  test('ProxyValidator does not show if HTTP_PROXY is only whitespace', () {
     final Platform platform = FakePlatform(environment: <String, String>{'HTTP_PROXY': ' '});
 
     expect(ProxyValidator(platform: platform).shouldShow, isFalse);
   });
 
-  testWithoutContext('ProxyValidator shows when HTTP_PROXY is set', () {
-    final Platform platform = FakePlatform(environment: <String, String>{'HTTP_PROXY': 'fakeproxy.local'});
+  test('ProxyValidator shows when HTTP_PROXY is set', () {
+    final Platform platform = FakePlatform(
+      environment: <String, String>{'HTTP_PROXY': 'fakeproxy.local'},
+    );
 
     expect(ProxyValidator(platform: platform).shouldShow, isTrue);
   });
 
-  testWithoutContext('ProxyValidator shows when http_proxy is set', () {
-    final Platform platform = FakePlatform(environment: <String, String>{'http_proxy': 'fakeproxy.local'});
+  test('ProxyValidator shows when http_proxy is set', () {
+    final Platform platform = FakePlatform(
+      environment: <String, String>{'http_proxy': 'fakeproxy.local'},
+    );
 
     expect(ProxyValidator(platform: platform).shouldShow, isTrue);
   });
 
-  testWithoutContext('ProxyValidator reports success when NO_PROXY is configured correctly', () async {
+  test('ProxyValidator reports success when NO_PROXY is configured correctly', () async {
     final Platform platform = FakePlatform(
       environment: <String, String>{
         'HTTP_PROXY': 'fakeproxy.local',
@@ -79,7 +78,7 @@ void main() {
     ]);
   });
 
-  testWithoutContext('ProxyValidator reports success when no_proxy is configured correctly', () async {
+  test('ProxyValidator reports success when no_proxy is configured correctly', () async {
     final Platform platform = FakePlatform(
       environment: <String, String>{
         'http_proxy': 'fakeproxy.local',
@@ -97,12 +96,9 @@ void main() {
     ]);
   });
 
-  testWithoutContext('ProxyValidator reports issues when NO_PROXY is missing localhost', () async {
+  test('ProxyValidator reports issues when NO_PROXY is missing localhost', () async {
     final Platform platform = FakePlatform(
-      environment: <String, String>{
-        'HTTP_PROXY': 'fakeproxy.local',
-        'NO_PROXY': '127.0.0.1,::1',
-      },
+      environment: <String, String>{'HTTP_PROXY': 'fakeproxy.local', 'NO_PROXY': '127.0.0.1,::1'},
     );
     final ValidationResult results = await ProxyValidator(platform: platform).validate();
 
@@ -115,11 +111,10 @@ void main() {
     ]);
   });
 
-  testWithoutContext('ProxyValidator reports issues when NO_PROXY is missing 127.0.0.1', () async {
-    final Platform platform =  FakePlatform(environment: <String, String>{
-      'HTTP_PROXY': 'fakeproxy.local',
-      'NO_PROXY': 'localhost,::1',
-    });
+  test('ProxyValidator reports issues when NO_PROXY is missing 127.0.0.1', () async {
+    final Platform platform = FakePlatform(
+      environment: <String, String>{'HTTP_PROXY': 'fakeproxy.local', 'NO_PROXY': 'localhost,::1'},
+    );
     final ValidationResult results = await ProxyValidator(platform: platform).validate();
 
     expect(results.messages, const <ValidationMessage>[
@@ -131,11 +126,13 @@ void main() {
     ]);
   });
 
-  testWithoutContext('ProxyValidator reports issues when NO_PROXY is missing ::1', () async {
-    final Platform platform =  FakePlatform(environment: <String, String>{
-      'HTTP_PROXY': 'fakeproxy.local',
-      'NO_PROXY': 'localhost,127.0.0.1',
-    });
+  test('ProxyValidator reports issues when NO_PROXY is missing ::1', () async {
+    final Platform platform = FakePlatform(
+      environment: <String, String>{
+        'HTTP_PROXY': 'fakeproxy.local',
+        'NO_PROXY': 'localhost,127.0.0.1',
+      },
+    );
     final ValidationResult results = await ProxyValidator(platform: platform).validate();
 
     expect(results.messages, const <ValidationMessage>[
@@ -147,12 +144,9 @@ void main() {
     ]);
   });
 
-  testWithoutContext('ProxyValidator reports issues when NO_PROXY is missing localhost, 127.0.0.1', () async {
+  test('ProxyValidator reports issues when NO_PROXY is missing localhost, 127.0.0.1', () async {
     final Platform platform = FakePlatform(
-      environment: <String, String>{
-        'HTTP_PROXY': 'fakeproxy.local',
-        'NO_PROXY': '::1',
-      },
+      environment: <String, String>{'HTTP_PROXY': 'fakeproxy.local', 'NO_PROXY': '::1'},
     );
     final ValidationResult results = await ProxyValidator(platform: platform).validate();
 
@@ -165,12 +159,9 @@ void main() {
     ]);
   });
 
-  testWithoutContext('ProxyValidator reports issues when NO_PROXY is missing localhost, ::1', () async {
+  test('ProxyValidator reports issues when NO_PROXY is missing localhost, ::1', () async {
     final Platform platform = FakePlatform(
-      environment: <String, String>{
-        'HTTP_PROXY': 'fakeproxy.local',
-        'NO_PROXY': '127.0.0.1',
-      },
+      environment: <String, String>{'HTTP_PROXY': 'fakeproxy.local', 'NO_PROXY': '127.0.0.1'},
     );
     final ValidationResult results = await ProxyValidator(platform: platform).validate();
 
@@ -183,12 +174,9 @@ void main() {
     ]);
   });
 
-  testWithoutContext('ProxyValidator reports issues when NO_PROXY is missing 127.0.0.1, ::1', () async {
+  test('ProxyValidator reports issues when NO_PROXY is missing 127.0.0.1, ::1', () async {
     final Platform platform = FakePlatform(
-      environment: <String, String>{
-        'HTTP_PROXY': 'fakeproxy.local',
-        'NO_PROXY': 'localhost',
-      },
+      environment: <String, String>{'HTTP_PROXY': 'fakeproxy.local', 'NO_PROXY': 'localhost'},
     );
     final ValidationResult results = await ProxyValidator(platform: platform).validate();
 
@@ -200,11 +188,30 @@ void main() {
       ValidationMessage.hint('NO_PROXY does not contain ::1'),
     ]);
   });
+
+  // Regression test for https://github.com/flutter/flutter/issues/35598
+  test('ProxyValidator reports issues when NO_PROXY is malformed', () async {
+    final Platform platform = FakePlatform(
+      environment: <String, String>{
+        'HTTP_PROXY': 'fakeproxy.local',
+        'NO_PROXY': 'localhost;127.0.0.1',
+      },
+    );
+    final ValidationResult results = await ProxyValidator(platform: platform).validate();
+
+    expect(results.messages, const <ValidationMessage>[
+      ValidationMessage('HTTP_PROXY is set'),
+      ValidationMessage('NO_PROXY is localhost;127.0.0.1'),
+      ValidationMessage.hint('NO_PROXY does not contain localhost'),
+      ValidationMessage.hint('NO_PROXY does not contain 127.0.0.1'),
+      ValidationMessage.hint('NO_PROXY does not contain ::1'),
+    ]);
+  });
 }
 
 class FakeNetworkInterface extends NetworkInterface {
-  FakeNetworkInterface(List<FakeInternetAddress> addresses):
-        super(FakeNetworkInterfaceDelegate(addresses));
+  FakeNetworkInterface(List<FakeInterfaceAddress> addresses)
+    : super(FakeNetworkInterfaceDelegate(addresses));
 
   @override
   String get name => 'FakeNetworkInterface$index';
@@ -213,10 +220,10 @@ class FakeNetworkInterface extends NetworkInterface {
 class FakeNetworkInterfaceDelegate implements io.NetworkInterface {
   FakeNetworkInterfaceDelegate(this._fakeAddresses);
 
-  final List<FakeInternetAddress> _fakeAddresses;
+  final List<FakeInterfaceAddress> _fakeAddresses;
 
   @override
-  List<io.InternetAddress> get addresses => _fakeAddresses;
+  List<io.InterfaceAddress> get addresses => _fakeAddresses;
 
   @override
   int get index => addresses.length;
@@ -225,8 +232,8 @@ class FakeNetworkInterfaceDelegate implements io.NetworkInterface {
   String get name => 'FakeNetworkInterfaceDelegate$index';
 }
 
-class FakeInternetAddress implements io.InternetAddress {
-  const FakeInternetAddress(this._fakeAddress);
+class FakeInterfaceAddress implements io.InterfaceAddress {
+  const FakeInterfaceAddress(this._fakeAddress);
 
   final String _fakeAddress;
 
@@ -249,9 +256,14 @@ class FakeInternetAddress implements io.InternetAddress {
   Uint8List get rawAddress => throw UnimplementedError();
 
   @override
-  Future<io.InternetAddress> reverse() =>
-    throw UnimplementedError();
+  Future<io.InternetAddress> reverse() => throw UnimplementedError();
 
   @override
   io.InternetAddressType get type => throw UnimplementedError();
+
+  @override
+  int get prefixLength => 24;
+
+  @override
+  InternetAddress? get broadcast => null;
 }

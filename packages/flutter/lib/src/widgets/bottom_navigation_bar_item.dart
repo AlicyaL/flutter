@@ -2,6 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter/cupertino.dart';
+/// @docImport 'package:flutter/material.dart';
+///
+/// @docImport 'icon.dart';
+/// @docImport 'icon_theme.dart';
+/// @docImport 'image_icon.dart';
+/// @docImport 'text.dart';
+library;
+
 import 'dart:ui' show Color;
 
 import 'framework.dart';
@@ -17,18 +26,28 @@ import 'framework.dart';
 ///  * [BottomNavigationBar]
 ///  * <https://material.io/design/components/bottom-navigation.html>
 ///  * [CupertinoTabBar]
-///  * <https://developer.apple.com/ios/human-interface-guidelines/bars/tab-bars>
+///  * <https://developer.apple.com/design/human-interface-guidelines/tab-bars/>
 class BottomNavigationBarItem {
   /// Creates an item that is used with [BottomNavigationBar.items].
   ///
   /// The argument [icon] should not be null and the argument [label] should not be null when used in a Material Design's [BottomNavigationBar].
   const BottomNavigationBarItem({
+    this.key,
     required this.icon,
     this.label,
     Widget? activeIcon,
     this.backgroundColor,
     this.tooltip,
+    this.semanticsLabel,
   }) : activeIcon = activeIcon ?? icon;
+
+  /// A key to be passed through to the resultant widget.
+  ///
+  /// This allows the identification of different [BottomNavigationBarItem]s through their keys.
+  ///
+  /// When changing the number of bar items in response to a bar item being tapped, giving
+  /// each item a key will allow the inkwell / splash animation to be correctly positioned.
+  final Key? key;
 
   /// The icon of the item.
   ///
@@ -86,4 +105,16 @@ class BottomNavigationBarItem {
   ///
   /// Defaults to null, in which case the tooltip is not shown.
   final String? tooltip;
+
+  /// The semantic label for this [BottomNavigationBarItem].
+  ///
+  /// This is used by accessibility tools to describe the item. When provided,
+  /// it overrides the default [label] String when read by accessibility tools.
+  ///
+  /// This is useful when the visual label does not fully describe the action
+  /// or destination, or when you want to provide additional context for
+  /// screen reader users.
+  ///
+  /// If null, the default semantic description is used.
+  final String? semanticsLabel;
 }

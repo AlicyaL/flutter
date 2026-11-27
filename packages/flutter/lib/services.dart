@@ -10,6 +10,7 @@
 /// library.
 library services;
 
+export 'src/services/app_version.dart';
 export 'src/services/asset_bundle.dart';
 export 'src/services/asset_manifest.dart';
 export 'src/services/autofill.dart';
@@ -19,6 +20,8 @@ export 'src/services/browser_context_menu.dart';
 export 'src/services/clipboard.dart';
 export 'src/services/debug.dart';
 export 'src/services/deferred_component.dart';
+export 'src/services/flavor.dart';
+export 'src/services/flutter_version.dart';
 export 'src/services/font_loader.dart';
 export 'src/services/haptic_feedback.dart';
 export 'src/services/hardware_keyboard.dart';
@@ -32,6 +35,8 @@ export 'src/services/mouse_cursor.dart';
 export 'src/services/mouse_tracking.dart';
 export 'src/services/platform_channel.dart';
 export 'src/services/platform_views.dart';
+export 'src/services/predictive_back_event.dart';
+export 'src/services/process_text.dart';
 export 'src/services/raw_keyboard.dart';
 export 'src/services/raw_keyboard_android.dart';
 export 'src/services/raw_keyboard_fuchsia.dart';
@@ -41,6 +46,8 @@ export 'src/services/raw_keyboard_macos.dart';
 export 'src/services/raw_keyboard_web.dart';
 export 'src/services/raw_keyboard_windows.dart';
 export 'src/services/restoration.dart';
+export 'src/services/scribe.dart';
+export 'src/services/sensitive_content.dart';
 export 'src/services/service_extensions.dart';
 export 'src/services/spell_check.dart';
 export 'src/services/system_channels.dart';

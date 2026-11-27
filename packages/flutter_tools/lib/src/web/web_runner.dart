@@ -2,17 +2,19 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import '../base/context.dart';
-import '../base/file_system.dart';
-import '../base/logger.dart';
-import '../base/net.dart';
-import '../base/time.dart';
-import '../device.dart';
-import '../project.dart';
-import '../reporting/reporting.dart';
-import '../resident_runner.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
-WebRunnerFactory? get webRunnerFactory => context.get<WebRunnerFactory>();
+import '../application_package.dart';
+import '../asset.dart';
+import '../base/net.dart';
+import '../build_system/build_system.dart';
+import '../build_system/build_targets.dart';
+import '../context/tool_context.dart';
+import '../device.dart';
+import '../features.dart' show FeatureFlags;
+import '../hook_runner.dart';
+import '../project.dart';
+import '../resident_runner.dart';
 
 // Hack to hide web imports for google3.
 abstract class WebRunnerFactory {
@@ -21,16 +23,20 @@ abstract class WebRunnerFactory {
   /// Create a [ResidentRunner] for the web.
   ResidentRunner createWebRunner(
     FlutterDevice device, {
-    String? target,
-    required bool stayResident,
-    required FlutterProject flutterProject,
-    required bool? ipv6,
+    required Analytics analytics,
+    required ApplicationPackageFactory applicationPackageFactory,
+    required AssetBundleFactory assetBundleFactory,
+    required BuildSystem buildSystem,
+    required BuildTargets buildTargets,
     required DebuggingOptions debuggingOptions,
-    UrlTunneller? urlTunneller,
-    required Logger logger,
-    required FileSystem fileSystem,
-    required SystemClock systemClock,
-    required Usage usage,
+    required FeatureFlags featureFlags,
+    required FlutterProject flutterProject,
+    required bool stayResident,
+    required ToolContext toolContext,
+    FlutterHookRunner? flutterHookRunner,
     bool machine = false,
+    Map<String, Object?> platformArgs = const <String, Object?>{},
+    String? target,
+    UrlTunneller? urlTunneller,
   });
 }

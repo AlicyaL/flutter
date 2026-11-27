@@ -1,0 +1,177 @@
+// Copyright 2014 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import 'dart:async';
+
+import 'package:args/command_runner.dart';
+import 'package:file/file.dart';
+import 'package:file/memory.dart';
+import 'package:flutter_tools/src/android/android_builder.dart';
+import 'package:flutter_tools/src/artifacts.dart';
+import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/base/platform.dart';
+import 'package:flutter_tools/src/cache.dart';
+import 'package:flutter_tools/src/commands/analyze.dart';
+import 'package:flutter_tools/src/project.dart';
+import 'package:flutter_tools/src/project_validator.dart';
+import 'package:test/fake.dart';
+
+import '../../src/common.dart';
+import '../../src/fake_process_manager.dart';
+import '../../src/fakes.dart';
+import '../../src/test_flutter_command_runner.dart';
+
+void main() {
+  test('Android analyze command should run pub', () async {
+    final FileSystem fileSystem = MemoryFileSystem.test();
+    final Platform platform = FakePlatform();
+    final logger = BufferLogger.test();
+    final processManager = FakeProcessManager.empty();
+    final AnalyzeCommand command = FakeAndroidAnalyzeCommand(
+      allProjectValidators: <ProjectValidator>[],
+      suppressAnalytics: true,
+      toolContext: FakeToolContext(
+        artifacts: Artifacts.test(),
+        fs: fileSystem,
+        logger: logger,
+        platform: platform,
+        processManager: processManager,
+      ),
+    );
+    fileSystem.currentDirectory.childFile('pubspec.yaml').createSync();
+    expect(command.shouldRunPub, isTrue);
+  });
+
+  group('Android analyze command', () {
+    late FileSystem fileSystem;
+    late Platform platform;
+    late BufferLogger logger;
+    late FakeProcessManager processManager;
+    late AnalyzeCommand command;
+    late CommandRunner<void> runner;
+    late Directory tempDir;
+    late FakeAndroidBuilder builder;
+
+    setUpAll(() {
+      Cache.disableLocking();
+    });
+
+    setUp(() async {
+      fileSystem = MemoryFileSystem.test();
+      platform = FakePlatform();
+      logger = BufferLogger.test();
+      processManager = FakeProcessManager.empty();
+      builder = FakeAndroidBuilder();
+      command = AnalyzeCommand(
+        allProjectValidators: <ProjectValidator>[],
+        androidBuilder: builder,
+        suppressAnalytics: true,
+        toolContext: FakeToolContext(
+          artifacts: Artifacts.test(),
+          fs: fileSystem,
+          logger: logger,
+          platform: platform,
+          processManager: processManager,
+        ),
+      );
+      runner = createTestCommandRunner(command);
+      tempDir = fileSystem.systemTempDirectory.createTempSync('flutter_tools_packages_test.');
+      tempDir.childDirectory('android').createSync();
+    });
+
+    test('can list build variants', () async {
+      builder.variants = <String>['debug', 'release'];
+      await runner.run(<String>['analyze', '--android', '--list-build-variants', tempDir.path]);
+      expect(logger.statusText, contains('["debug","release"]'));
+    });
+
+    test('throw if provide multiple path', () async {
+      final Directory anotherTempDir = fileSystem.systemTempDirectory.createTempSync('another');
+      await expectLater(
+        runner.run(<String>[
+          'analyze',
+          '--android',
+          '--list-build-variants',
+          tempDir.path,
+          anotherTempDir.path,
+        ]),
+        throwsA(
+          isA<Exception>().having(
+            (Exception e) => e.toString(),
+            'description',
+            contains('The Android analyze can process only one directory path'),
+          ),
+        ),
+      );
+    });
+
+    test('can output app link settings', () async {
+      const buildVariant = 'release';
+      await runner.run(<String>[
+        'analyze',
+        '--android',
+        '--output-app-link-settings',
+        '--build-variant=$buildVariant',
+        tempDir.path,
+      ]);
+      expect(builder.outputVariant, buildVariant);
+      expect(logger.statusText, contains(builder.outputPath));
+    });
+
+    test('output app link settings throws if no build variant', () async {
+      await expectLater(
+        runner.run(<String>['analyze', '--android', '--output-app-link-settings', tempDir.path]),
+        throwsA(
+          isA<Exception>().having(
+            (Exception e) => e.toString(),
+            'description',
+            contains('"--build-variant" must be provided'),
+          ),
+        ),
+      );
+    });
+  });
+}
+
+class FakeAndroidBuilder extends Fake implements AndroidBuilder {
+  List<String> variants = const <String>[];
+  String? outputVariant;
+  final outputPath = '/';
+
+  @override
+  Future<List<String>> getBuildVariants({required FlutterProject project}) async {
+    return variants;
+  }
+
+  @override
+  Future<String> outputsAppLinkSettings(
+    String buildVariant, {
+    required FlutterProject project,
+  }) async {
+    outputVariant = buildVariant;
+    return outputPath;
+  }
+}
+
+class FakeAndroidAnalyzeCommand extends AnalyzeCommand {
+  FakeAndroidAnalyzeCommand({
+    required super.allProjectValidators,
+    required super.suppressAnalytics,
+    required super.toolContext,
+  });
+
+  @override
+  bool boolArg(String arg, {bool global = false}) {
+    switch (arg) {
+      case 'current-package':
+        return true;
+      case 'android':
+        return true;
+      case 'pub':
+        return true;
+      default:
+        return false;
+    }
+  }
+}

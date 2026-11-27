@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'base/context.dart';
+/// @docImport 'flutter_application_package.dart';
+library;
+
 import 'base/file_system.dart';
 import 'build_info.dart';
 
 abstract class ApplicationPackageFactory {
-  static ApplicationPackageFactory? get instance => context.get<ApplicationPackageFactory>();
-
   /// Create an [ApplicationPackage] for the given platform.
   Future<ApplicationPackage?> getPackageForPlatform(
     TargetPlatform platform, {
@@ -18,7 +18,7 @@ abstract class ApplicationPackageFactory {
 }
 
 abstract class ApplicationPackage {
-  ApplicationPackage({ required this.id });
+  ApplicationPackage({required this.id});
 
   /// Package ID from the Android Manifest or equivalent.
   final String id;

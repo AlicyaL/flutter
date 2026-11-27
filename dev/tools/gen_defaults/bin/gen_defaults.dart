@@ -37,12 +37,14 @@ import 'package:gen_defaults/input_chip_template.dart';
 import 'package:gen_defaults/input_decorator_template.dart';
 import 'package:gen_defaults/list_tile_template.dart';
 import 'package:gen_defaults/menu_template.dart';
+import 'package:gen_defaults/motion_template.dart';
 import 'package:gen_defaults/navigation_bar_template.dart';
 import 'package:gen_defaults/navigation_drawer_template.dart';
 import 'package:gen_defaults/navigation_rail_template.dart';
 import 'package:gen_defaults/popup_menu_template.dart';
 import 'package:gen_defaults/progress_indicator_template.dart';
 import 'package:gen_defaults/radio_template.dart';
+import 'package:gen_defaults/range_slider_template.dart';
 import 'package:gen_defaults/search_bar_template.dart';
 import 'package:gen_defaults/search_view_template.dart';
 import 'package:gen_defaults/segmented_button_template.dart';
@@ -65,29 +67,22 @@ const String dataDir = 'dev/tools/gen_defaults/data';
 
 Future<void> main(List<String> args) async {
   // Parse arguments
-  final ArgParser parser = ArgParser();
-  parser.addFlag(
-    'verbose',
-    abbr: 'v',
-    help: 'Enable verbose output',
-    negatable: false,
-  );
+  final parser = ArgParser();
+  parser.addFlag('verbose', abbr: 'v', help: 'Enable verbose output', negatable: false);
   final ArgResults argResults = parser.parse(args);
-  final bool verbose = argResults['verbose'] as bool;
+  final verbose = argResults['verbose'] as bool;
 
   // Map of version number to list of data files that use that version.
-  final Map<String, List<String>> versionMap = <String, List<String>>{};
+  final versionMap = <String, List<String>>{};
   // Map of all tokens to their values.
-  final Map<String, dynamic> tokens = <String, dynamic>{};
+  final tokens = <String, dynamic>{};
 
   // Initialize.
   for (final FileSystemEntity tokenFile in Directory(dataDir).listSync()) {
     final Map<String, dynamic> tokenFileTokens = _readTokenFile(tokenFile as File);
-    final String version = tokenFileTokens['version'] as String;
+    final version = tokenFileTokens['version'] as String;
     tokenFileTokens.remove('version');
-    if (versionMap[version] == null) {
-      versionMap[version] = List<String>.empty(growable: true);
-    }
+    versionMap[version] ??= <String>[];
     versionMap[version]!.add(tokenFile.uri.pathSegments.last);
 
     tokens.addAll(tokenFileTokens);
@@ -97,6 +92,7 @@ Future<void> main(List<String> args) async {
   final Map<String, dynamic> colorLightTokens = _readTokenFile(File('$dataDir/color_light.json'));
   final Map<String, dynamic> colorDarkTokens = _readTokenFile(File('$dataDir/color_dark.json'));
 
+  // dart format off
   // Generate tokens files.
   ChipTemplate('Chip', '$materialLib/chip.dart', tokens).updateFile();
   ActionChipTemplate('ActionChip', '$materialLib/action_chip.dart', tokens).updateFile();
@@ -111,7 +107,9 @@ Future<void> main(List<String> args) async {
   ButtonTemplate('md.comp.filled-tonal-button', 'FilledTonalButton', '$materialLib/filled_button.dart', tokens).updateFile();
   ButtonTemplate('md.comp.outlined-button', 'OutlinedButton', '$materialLib/outlined_button.dart', tokens).updateFile();
   ButtonTemplate('md.comp.text-button', 'TextButton', '$materialLib/text_button.dart', tokens).updateFile();
-  CardTemplate('Card', '$materialLib/card.dart', tokens).updateFile();
+  CardTemplate('md.comp.elevated-card', 'Card', '$materialLib/card.dart', tokens).updateFile();
+  CardTemplate('md.comp.filled-card', 'FilledCard', '$materialLib/card.dart', tokens).updateFile();
+  CardTemplate('md.comp.outlined-card', 'OutlinedCard', '$materialLib/card.dart', tokens).updateFile();
   CheckboxTemplate('Checkbox', '$materialLib/checkbox.dart', tokens).updateFile();
   ColorSchemeTemplate(colorLightTokens, colorDarkTokens, 'ColorScheme', '$materialLib/theme_data.dart', tokens).updateFile();
   DatePickerTemplate('DatePicker', '$materialLib/date_picker_theme.dart', tokens).updateFile();
@@ -131,12 +129,14 @@ Future<void> main(List<String> args) async {
   ListTileTemplate('LisTile', '$materialLib/list_tile.dart', tokens).updateFile();
   InputDecoratorTemplate('InputDecorator', '$materialLib/input_decorator.dart', tokens).updateFile();
   MenuTemplate('Menu', '$materialLib/menu_anchor.dart', tokens).updateFile();
+  MotionTemplate('Motion', '$materialLib/motion.dart', tokens, tokenLogger).updateFile();
   NavigationBarTemplate('NavigationBar', '$materialLib/navigation_bar.dart', tokens).updateFile();
   NavigationDrawerTemplate('NavigationDrawer', '$materialLib/navigation_drawer.dart', tokens).updateFile();
   NavigationRailTemplate('NavigationRail', '$materialLib/navigation_rail.dart', tokens).updateFile();
   PopupMenuTemplate('PopupMenu', '$materialLib/popup_menu.dart', tokens).updateFile();
   ProgressIndicatorTemplate('ProgressIndicator', '$materialLib/progress_indicator.dart', tokens).updateFile();
   RadioTemplate('Radio<T>', '$materialLib/radio.dart', tokens).updateFile();
+  RangeSliderTemplate('md.comp.slider', 'RangeSlider', '$materialLib/range_slider.dart', tokens).updateFile();
   SearchBarTemplate('SearchBar', '$materialLib/search_anchor.dart', tokens).updateFile();
   SearchViewTemplate('SearchView', '$materialLib/search_anchor.dart', tokens).updateFile();
   SegmentedButtonTemplate('md.comp.outlined-segmented-button', 'SegmentedButton', '$materialLib/segmented_button.dart', tokens).updateFile();
@@ -148,6 +148,7 @@ Future<void> main(List<String> args) async {
   TextFieldTemplate('TextField', '$materialLib/text_field.dart', tokens).updateFile();
   TabsTemplate('Tabs', '$materialLib/tabs.dart', tokens).updateFile();
   TypographyTemplate('Typography', '$materialLib/typography.dart', tokens).updateFile();
+  // dart format on
 
   tokenLogger.printVersionUsage(verbose: verbose);
   tokenLogger.printTokensUsage(verbose: verbose);

@@ -2,21 +2,36 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
+
+import 'package:flutter_tools/src/context/tool_context.dart';
 import 'package:flutter_tools/src/runner/flutter_command.dart';
+import 'package:flutter_tools/src/runner/flutter_command_runner.dart';
+
+import '../../src/fakes.dart';
+import '../../src/test_flutter_command_runner.dart';
 
 typedef CommandFunction = Future<FlutterCommandResult> Function();
 
 class DummyFlutterCommand extends FlutterCommand {
-
   DummyFlutterCommand({
     this.shouldUpdateCache = false,
-    this.noUsagePath  = false,
+    this.noUsagePath = false,
     this.name = 'dummy',
     this.commandFunction,
     this.packagesPath,
     this.fileSystemScheme,
     this.fileSystemRoots = const <String>[],
-  });
+    ToolContext? toolContext,
+    super.deviceManager,
+    super.doctor,
+  }) : super(toolContext: toolContext ?? FakeToolContext());
+
+  @override
+  FlutterCommandRunner? get runner => super.runner ?? _fallbackRunner;
+  late final FlutterCommandRunner _fallbackRunner = TestFlutterCommandRunner(
+    toolContext: toolContext,
+  );
 
   final bool noUsagePath;
   final CommandFunction? commandFunction;

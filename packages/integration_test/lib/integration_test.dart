@@ -2,6 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter_driver/flutter_driver.dart';
+/// @docImport 'package:flutter_driver/flutter_driver.dart' as flutter_driver;
+///
+/// @docImport 'integration_test_driver_extended.dart';
+library;
+
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io' show HttpClient, SocketException, WebSocket;
@@ -14,10 +20,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vm_service/vm_service.dart' as vm;
 
-import '_callback_io.dart' if (dart.library.html) '_callback_web.dart' as driver_actions;
-import '_extension_io.dart' if (dart.library.html) '_extension_web.dart';
 import 'common.dart';
+import 'src/callback.dart' as driver_actions;
 import 'src/channel.dart';
+import 'src/extension.dart';
+
+export 'src/vm_service_golden_client.dart';
 
 const String _success = 'success';
 
@@ -35,7 +43,8 @@ const bool _shouldReportResultsToNative = bool.fromEnvironment(
 
 /// A subclass of [LiveTestWidgetsFlutterBinding] that reports tests results
 /// on a channel to adapt them to native instrumentation test format.
-class IntegrationTestWidgetsFlutterBinding extends LiveTestWidgetsFlutterBinding implements IntegrationTestResults {
+class IntegrationTestWidgetsFlutterBinding extends LiveTestWidgetsFlutterBinding
+    implements IntegrationTestResults {
   /// Sets up a listener to report that the tests are finished when everything is
   /// torn down.
   IntegrationTestWidgetsFlutterBinding() {
@@ -52,17 +61,14 @@ class IntegrationTestWidgetsFlutterBinding extends LiveTestWidgetsFlutterBinding
       }
 
       try {
-        await integrationTestChannel.invokeMethod<void>(
-          'allTestsFinished',
-          <String, dynamic>{
-            'results': results.map<String, dynamic>((String name, Object result) {
-              if (result is Failure) {
-                return MapEntry<String, dynamic>(name, result.details);
-              }
-              return MapEntry<String, Object>(name, result);
-            }),
-          },
-        );
+        await integrationTestChannel.invokeMethod<void>('allTestsFinished', <String, dynamic>{
+          'results': results.map<String, dynamic>((String name, Object result) {
+            if (result is Failure) {
+              return MapEntry<String, dynamic>(name, result.details);
+            }
+            return MapEntry<String, Object>(name, result);
+          }),
+        });
       } on MissingPluginException {
         debugPrint(r'''
 Warning: integration_test plugin was not detected.
@@ -75,14 +81,13 @@ If you're running the tests with Android instrumentation or XCTest, this means
 that you are not capturing test results properly! See the following link for
 how to set up the integration_test plugin:
 
-https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
+https://docs.flutter.dev/testing/integration-tests
 ''');
       }
     });
 
     final TestExceptionReporter oldTestExceptionReporter = reportTestException;
-    reportTestException =
-        (FlutterErrorDetails details, String testDescription) {
+    reportTestException = (FlutterErrorDetails details, String testDescription) {
       results[testDescription] = Failure(testDescription, details.toString());
       oldTestExceptionReporter(details, testDescription);
     };
@@ -100,10 +105,6 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
   // under debug mode.
   static bool _firstRun = false;
 
-  /// Artificially changes the surface size to `size` on the Widget binding,
-  /// then flushes microtasks.
-  ///
-  /// Set to null to use the default surface size.
   @override
   Future<void> setSurfaceSize(Size? size) {
     return TestAsyncUtils.guard<void>(() async {
@@ -117,12 +118,11 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
   }
 
   @override
-  ViewConfiguration createViewConfiguration() {
-    final FlutterView view = platformDispatcher.implicitView!;
-    final double devicePixelRatio = view.devicePixelRatio;
-    final Size size = _surfaceSize ?? view.physicalSize / devicePixelRatio;
+  ViewConfiguration createViewConfigurationFor(RenderView renderView) {
+    final FlutterView view = renderView.flutterView;
+    final Size? surfaceSize = view == platformDispatcher.implicitView ? _surfaceSize : null;
     return TestViewConfiguration.fromView(
-      size: size,
+      size: surfaceSize ?? view.physicalSize / view.devicePixelRatio,
       view: view,
     );
   }
@@ -195,6 +195,169 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
     return data['bytes']! as List<int>;
   }
 
+  /// Web only. Performs [actions] in order as a single real browser pointer
+  /// sequence using WebDriver, and completes once the browser has dispatched
+  /// every event in the sequence.
+  ///
+  /// Each [WebDriverPointerAction.move] position in [actions] is a logical
+  /// position in [view], such as the one returned by [WidgetTester.getCenter].
+  /// If [view] is null, the implicit view is used. During a move with a
+  /// non-zero `duration`, the browser dispatches intermediate `pointermove`
+  /// events along the way. See [WebDriverPointerMove].
+  ///
+  /// Mouse buttons pressed with [WebDriverPointerAction.down] remain pressed
+  /// across calls until released with [WebDriverPointerAction.up], so a test
+  /// can split a drag across multiple calls to assert on intermediate state.
+  ///
+  /// ```dart
+  /// import 'package:flutter/widgets.dart';
+  /// import 'package:flutter_test/flutter_test.dart';
+  /// import 'package:integration_test/common.dart';
+  /// import 'package:integration_test/integration_test.dart';
+  ///
+  /// void main() {
+  ///   testWidgets('splits a drag across multiple calls', (WidgetTester tester) async {
+  ///     final IntegrationTestWidgetsFlutterBinding binding =
+  ///         IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  ///     const Key dragHandleKey = Key('drag-handle');
+  ///     final Offset start = tester.getCenter(find.byKey(dragHandleKey));
+  ///     final Offset end = start + const Offset(200, 0);
+  ///     await binding.webDriverPointerActions(<WebDriverPointerAction>[
+  ///       WebDriverPointerAction.move(start.dx, start.dy),
+  ///       const WebDriverPointerAction.down(),
+  ///       WebDriverPointerAction.move(
+  ///         end.dx,
+  ///         end.dy,
+  ///         duration: const Duration(milliseconds: 300),
+  ///       ),
+  ///       const WebDriverPointerAction.up(),
+  ///     ]);
+  ///   });
+  /// }
+  /// ```
+  ///
+  /// Unlike [WidgetTester] gesture helpers, which dispatch synthetic pointer
+  /// events directly to Flutter's gesture system, the pointer sequence goes
+  /// through the browser's own hit testing and event dispatch. This makes it
+  /// possible to test interactions with platform views such as
+  /// [HtmlElementView], for example an `<iframe>`'s mouse listeners, which
+  /// synthetic Flutter pointer events never reach. DOM listeners run before
+  /// the returned future completes, so their effects can be asserted
+  /// immediately after awaiting this method.
+  ///
+  /// {@template flutter.integration_test.webDriverPointerActions.devicePointerEvents}
+  /// This method does not modify [shouldPropagateDevicePointerEvents].
+  /// Browser pointer events arrive in the test binding as
+  /// [TestBindingEventSource.device] events, which the binding ignores by
+  /// default. To assert on Flutter widgets reacting to them (for example a
+  /// [GestureDetector], a [MouseRegion], or a button's `onPressed`), set
+  /// [shouldPropagateDevicePointerEvents] to true before calling this method,
+  /// and [WidgetTester.pump] afterwards to process the resulting frame.
+  ///
+  /// When semantics are enabled, the browser may hit test the semantics DOM
+  /// node of a widget instead of the Flutter view, and the widget may then
+  /// react through a semantics action regardless of
+  /// [shouldPropagateDevicePointerEvents]. To test raw pointer delivery, run
+  /// the test with semantics disabled (for example, `semanticsEnabled: false`
+  /// in [testWidgets]).
+  /// {@endtemplate}
+  ///
+  /// Only works on the web when tests are run via the `flutter drive` command
+  /// with a driver that uses [integrationDriver] from
+  /// `integration_test_driver_extended.dart`. Completes with an
+  /// [UnsupportedError] on other platforms, an [ArgumentError] if [actions] is
+  /// empty, any move coordinate or resulting viewport coordinate is not finite,
+  /// or any duration is negative, a [StateError] if [view] is null and there
+  /// is no implicit view, or an error if the driver fails to perform the
+  /// actions.
+  Future<void> webDriverPointerActions(
+    List<WebDriverPointerAction> actions, {
+    FlutterView? view,
+  }) async {
+    if (actions.isEmpty) {
+      throw ArgumentError.value(actions, 'actions', 'must not be empty');
+    }
+    for (final action in actions) {
+      if (action case WebDriverPointerMove(:final double x, :final double y)
+          when !x.isFinite || !y.isFinite) {
+        throw ArgumentError.value(
+          action,
+          'actions',
+          'move coordinates must be finite positions in the view',
+        );
+      }
+      if (action
+          case WebDriverPointerMove(:final Duration duration) ||
+              WebDriverPointerPause(:final Duration duration)
+          when duration.isNegative) {
+        throw ArgumentError.value(action, 'actions', 'duration must not be negative');
+      }
+    }
+    final FlutterView? targetView = view ?? platformDispatcher.implicitView;
+    if (targetView == null) {
+      throw StateError(
+        'webDriverPointerActions requires a view, but no view was provided and there is no implicit view.',
+      );
+    }
+    final Offset origin = driver_actions.viewportOrigin(targetView);
+    final viewportActions = <WebDriverPointerAction>[
+      for (final WebDriverPointerAction action in actions)
+        switch (action) {
+          WebDriverPointerMove() => _toViewportMove(action, origin),
+          WebDriverPointerDown() || WebDriverPointerUp() || WebDriverPointerPause() => action,
+        },
+    ];
+    await callbackManager.pointerActions(viewportActions);
+  }
+
+  static WebDriverPointerMove _toViewportMove(WebDriverPointerMove action, Offset origin) {
+    final double x = action.x + origin.dx;
+    final double y = action.y + origin.dy;
+    // Non-finite coordinates cannot be encoded for the driver and would leave
+    // the command waiting for a reply forever.
+    if (!x.isFinite || !y.isFinite) {
+      throw ArgumentError.value(action, 'actions', 'resulting viewport position must be finite');
+    }
+    return WebDriverPointerMove(x, y, duration: action.duration);
+  }
+
+  /// Web only. Performs a real browser pointer click at [position] using
+  /// WebDriver, and completes once the browser has dispatched the click.
+  ///
+  /// [position] is a logical position in [view], such as the one returned by
+  /// [WidgetTester.getCenter]. If [view] is null, the implicit view is used.
+  ///
+  /// This is a convenience wrapper around [webDriverPointerActions] that moves
+  /// to [position] and presses and releases [WebDriverMouseButton.primary].
+  /// For hovers, drags, or secondary-button clicks, call
+  /// [webDriverPointerActions] directly.
+  ///
+  /// Unlike [WidgetTester.tap], which dispatches synthetic pointer events
+  /// directly to Flutter's gesture system, the click goes through the
+  /// browser's own hit testing and event dispatch. This makes it possible to
+  /// test interactions with platform views such as [HtmlElementView], for
+  /// example an `<iframe>`'s click listeners, which synthetic Flutter pointer
+  /// events never reach. DOM listeners run before the returned future
+  /// completes, so their effects can be asserted immediately after awaiting
+  /// this method.
+  ///
+  /// {@macro flutter.integration_test.webDriverPointerActions.devicePointerEvents}
+  ///
+  /// Only works on the web when tests are run via the `flutter drive` command
+  /// with a driver that uses [integrationDriver] from
+  /// `integration_test_driver_extended.dart`. Completes with an
+  /// [UnsupportedError] on other platforms, an [ArgumentError] if [position]
+  /// or the resulting viewport position is not finite, a [StateError] if [view]
+  /// is null and there is no implicit view, or an error if the driver fails
+  /// to perform the click.
+  Future<void> webDriverClick(Offset position, {FlutterView? view}) {
+    return webDriverPointerActions(<WebDriverPointerAction>[
+      WebDriverPointerAction.move(position.dx, position.dy),
+      const WebDriverPointerAction.down(),
+      const WebDriverPointerAction.up(),
+    ], view: view);
+  }
+
   /// Android only. Converts the Flutter surface to an image view.
   /// Be aware that if you are conducting a perf test, you may not want to call
   /// this method since the this is an expensive operation that affects the
@@ -209,8 +372,7 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
   /// The callback function to response the driver side input.
   @visibleForTesting
   Future<Map<String, dynamic>> callback(Map<String, String> params) async {
-    return callbackManager.callback(
-        params, this /* as IntegrationTestResults */);
+    return callbackManager.callback(params, this /* as IntegrationTestResults */);
   }
 
   // Emulates the Flutter driver extension, returning 'pass' or 'fail'.
@@ -232,17 +394,18 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
     String description = '',
     @Deprecated(
       'This parameter has no effect. Use the `timeout` parameter on `testWidgets` instead. '
-      'This feature was deprecated after v2.6.0-1.0.pre.'
+      'This feature was deprecated after v2.6.0-1.0.pre.',
     )
     Duration? timeout,
   }) async {
-    await super.runTest(
-      testBody,
-      invariantTester,
-      description: description,
-    );
+    await super.runTest(testBody, invariantTester, description: description);
     results[description] ??= _success;
   }
+
+  // Do not paint a description label because it could show up in screenshots
+  // of the integration test.
+  @override
+  void setLabel(String value) {}
 
   vm.VmService? _vmService;
 
@@ -260,7 +423,7 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
     if (_vmService == null) {
       final developer.ServiceProtocolInfo info = await developer.Service.getInfo();
       assert(info.serverUri != null);
-      final String address = 'ws://localhost:${info.serverUri!.port}${info.serverUri!.path}ws';
+      final address = 'ws://localhost:${info.serverUri!.port}${info.serverUri!.path}ws';
       try {
         _vmService = await _vmServiceConnectUri(address, httpClient: httpClient);
       } on SocketException catch (e, s) {
@@ -317,8 +480,8 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
   /// [reportData] with `reportKey`. The [reportData] contains extra information
   /// from the test other than test success/fail. It will be passed back to the
   /// host and be processed by the [ResponseDataCallback] defined in
-  /// [integration_test_driver.integrationDriver]. By default it will be written
-  /// to `build/integration_response_data.json` with the key `timeline`.
+  /// [integrationDriver]. By default it will be written to
+  /// `build/integration_response_data.json` with the key `timeline`.
   ///
   /// For tests with multiple calls of this method, `reportKey` needs to be a
   /// unique key, otherwise the later result will override earlier one. Tests
@@ -331,9 +494,9 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
   ///
   /// Future<void> main() {
   ///   return integrationDriver(
-  ///     responseDataCallback: (data) async {
+  ///     responseDataCallback: (Map<String, dynamic>? data) async {
   ///       if (data != null) {
-  ///         for (var entry in data.entries) {
+  ///         for (final MapEntry<String, dynamic> entry in data.entries) {
   ///           print('Writing ${entry.key} to the disk.');
   ///           await writeResponseData(
   ///             entry.value as Map<String, dynamic>,
@@ -369,10 +532,7 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
       return const _GarbageCollectionInfo();
     }
 
-    final vm.Timeline timeline = await traceTimeline(
-      action,
-      streams: <String>['GC'],
-    );
+    final vm.Timeline timeline = await traceTimeline(action, streams: <String>['GC']);
 
     final int oldGenGCCount = timeline.traceEvents!.where((vm.TimelineEvent event) {
       return event.json!['cat'] == 'GC' && event.json!['name'] == 'CollectOldGeneration';
@@ -380,10 +540,7 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
     final int newGenGCCount = timeline.traceEvents!.where((vm.TimelineEvent event) {
       return event.json!['cat'] == 'GC' && event.json!['name'] == 'CollectNewGeneration';
     }).length;
-    return _GarbageCollectionInfo(
-      oldCount: oldGenGCCount,
-      newCount: newGenGCCount,
-    );
+    return _GarbageCollectionInfo(oldCount: oldGenGCCount, newCount: newGenGCCount);
   }
 
   /// Watches the [FrameTiming] during `action` and report it to the binding
@@ -409,9 +566,9 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
     // TODO(CareF): remove this when flush FrameTiming is readily in engine.
     //              See https://github.com/flutter/flutter/issues/64808
     //              and https://github.com/flutter/flutter/issues/67593
-    final List<FrameTiming> frameTimings = <FrameTiming>[];
+    final frameTimings = <FrameTiming>[];
     Future<void> delayForFrameTimings() async {
-      int count = 0;
+      var count = 0;
       while (frameTimings.isEmpty) {
         count++;
         await Future<void>.delayed(const Duration(seconds: 2));
@@ -429,7 +586,7 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
     await delayForFrameTimings(); // make sure all FrameTimings are reported
     removeTimingsCallback(watcher);
 
-    final FrameTimingSummarizer frameTimes = FrameTimingSummarizer(
+    final frameTimes = FrameTimingSummarizer(
       frameTimings,
       newGenGCCount: gcInfo.newCount,
       oldGenGCCount: gcInfo.oldCount,
@@ -440,14 +597,6 @@ https://flutter.dev/docs/testing/integration-tests#testing-on-firebase-test-lab
 
   @override
   Timeout defaultTestTimeout = Timeout.none;
-
-  @override
-  void attachRootWidget(Widget rootWidget) {
-    // This is a workaround where screenshots of root widgets have incorrect
-    // bounds.
-    // TODO(jiahaog): Remove when https://github.com/flutter/flutter/issues/66006 is fixed.
-    super.attachRootWidget(RepaintBoundary(child: rootWidget));
-  }
 
   @override
   void reportExceptionNoticed(FlutterErrorDetails exception) {
@@ -478,13 +627,10 @@ class _GarbageCollectionInfo {
 // Copied from vm_service_io so that we can pass a custom [HttpClient] for
 // testing. Currently, the WebSocket API reuses an HttpClient that
 // is created before the test can change the HttpOverrides.
-Future<vm.VmService> _vmServiceConnectUri(
-  String wsUri, {
-  HttpClient? httpClient,
-}) async {
+Future<vm.VmService> _vmServiceConnectUri(String wsUri, {HttpClient? httpClient}) async {
   final WebSocket socket = await WebSocket.connect(wsUri, customClient: httpClient);
-  final StreamController<dynamic> controller = StreamController<dynamic>();
-  final Completer<void> streamClosedCompleter = Completer<void>();
+  final controller = StreamController<dynamic>();
+  final streamClosedCompleter = Completer<void>();
 
   socket.listen(
     (dynamic data) => controller.add(data),

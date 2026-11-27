@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -11,21 +12,17 @@ void main() {
   TestRenderingFlutterBinding.ensureInitialized();
 
   test('RenderSliverFixedExtentList layout test - rounding error', () {
-    final List<RenderBox> children = <RenderBox>[
+    final children = <RenderBox>[
       RenderSizedBox(const Size(400.0, 100.0)),
       RenderSizedBox(const Size(400.0, 100.0)),
       RenderSizedBox(const Size(400.0, 100.0)),
     ];
-    final TestRenderSliverBoxChildManager childManager = TestRenderSliverBoxChildManager(
-      children: children,
-    );
-    final RenderViewport root = RenderViewport(
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+    final root = RenderViewport(
       crossAxisDirection: AxisDirection.right,
       offset: ViewportOffset.zero(),
       cacheExtent: 0,
-      children: <RenderSliver>[
-        childManager.createRenderSliverFillViewport(),
-      ],
+      children: <RenderSliver>[childManager.createRenderSliverFillViewport()],
     );
     layout(root);
     expect(children[0].attached, true);
@@ -46,13 +43,13 @@ void main() {
   group('getMaxChildIndexForScrollOffset', () {
     // Regression test for https://github.com/flutter/flutter/issues/68182
 
-    const double genericItemExtent = 600.0;
-    const double extraValueToNotHaveRoundingIssues = 1e-10;
-    const double extraValueToHaveRoundingIssues = 1e-11;
+    const genericItemExtent = 600.0;
+    const extraValueToNotHaveRoundingIssues = 1e-10;
+    const extraValueToHaveRoundingIssues = 1e-11;
 
     test('should be 0 when item extent is 0', () {
-      const double offsetValueWhichDoesntCare = 1234;
-      final int actual = testGetMaxChildIndexForScrollOffset(offsetValueWhichDoesntCare, 0);
+      const double offsetValueWhichDoesNotCare = 1234;
+      final int actual = testGetMaxChildIndexForScrollOffset(offsetValueWhichDoesNotCare, 0);
       expect(actual, 0);
     });
 
@@ -67,7 +64,10 @@ void main() {
     });
 
     test('should be 1 when offset is greater than item extent', () {
-      final int actual = testGetMaxChildIndexForScrollOffset(genericItemExtent + 1, genericItemExtent);
+      final int actual = testGetMaxChildIndexForScrollOffset(
+        genericItemExtent + 1,
+        genericItemExtent,
+      );
       expect(actual, 1);
     });
 
@@ -80,12 +80,15 @@ void main() {
     });
 
     test('should be 4 when offset is four times and a half greater than item extent', () {
-      final int actual = testGetMaxChildIndexForScrollOffset(genericItemExtent * 4.5, genericItemExtent);
+      final int actual = testGetMaxChildIndexForScrollOffset(
+        genericItemExtent * 4.5,
+        genericItemExtent,
+      );
       expect(actual, 4);
     });
 
     test('should be 5 when offset is 6 times greater than item extent', () {
-      const double anotherGenericItemExtent = 414.0;
+      const anotherGenericItemExtent = 414.0;
       final int actual = testGetMaxChildIndexForScrollOffset(
         anotherGenericItemExtent * 6,
         anotherGenericItemExtent,
@@ -94,7 +97,7 @@ void main() {
     });
 
     test('should be 5 when offset is 6 times greater than a specific item extent where the division will return more than 13 zero decimals', () {
-      const double itemExtentSpecificForAProblematicScreenSize = 411.42857142857144;
+      const itemExtentSpecificForAProblematicScreenSize = 411.42857142857144;
       final int actual = testGetMaxChildIndexForScrollOffset(
         itemExtentSpecificForAProblematicScreenSize * 6 + extraValueToHaveRoundingIssues,
         itemExtentSpecificForAProblematicScreenSize,
@@ -112,26 +115,22 @@ void main() {
   });
 
   test('Implements paintsChild correctly', () {
-    final List<RenderBox> children = <RenderBox>[
+    final children = <RenderBox>[
       RenderSizedBox(const Size(400.0, 100.0)),
       RenderSizedBox(const Size(400.0, 100.0)),
       RenderSizedBox(const Size(400.0, 100.0)),
     ];
-    final TestRenderSliverBoxChildManager childManager = TestRenderSliverBoxChildManager(
-      children: children,
-    );
-    final RenderViewport root = RenderViewport(
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+    final root = RenderViewport(
       crossAxisDirection: AxisDirection.right,
       offset: ViewportOffset.zero(),
       cacheExtent: 0,
-      children: <RenderSliver>[
-        childManager.createRenderSliverFillViewport(),
-      ],
+      children: <RenderSliver>[childManager.createRenderSliverFillViewport()],
     );
     layout(root);
     expect(children.first.parent, isA<RenderSliverMultiBoxAdaptor>());
 
-    final RenderSliverMultiBoxAdaptor parent = children.first.parent! as RenderSliverMultiBoxAdaptor;
+    final parent = children.first.parent! as RenderSliverMultiBoxAdaptor;
     expect(parent.paintsChild(children[0]), true);
     expect(parent.paintsChild(children[1]), false);
     expect(parent.paintsChild(children[2]), false);
@@ -148,33 +147,790 @@ void main() {
     expect(parent.paintsChild(children[1]), false);
     expect(parent.paintsChild(children[2]), true);
   });
+
+  test('RenderSliverFillViewport correctly references itemExtent, non-zero offset', () {
+    final children = <RenderBox>[
+      RenderSizedBox(const Size(400.0, 100.0)),
+      RenderSizedBox(const Size(400.0, 100.0)),
+      RenderSizedBox(const Size(400.0, 100.0)),
+    ];
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+    final RenderSliverFillViewport sliver = childManager.createRenderSliverFillViewport();
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.fixed(1200.0),
+      cacheExtent: 100,
+      children: <RenderSliver>[sliver],
+    );
+    layout(root);
+    // These are a bogus itemExtents, and motivate the deprecation. The sliver
+    // knows its itemExtent, and should use its configured extent rather than
+    // whatever is provided through these methods.
+    // Also, the API is a bit redundant, so we clean!
+    // In this case, the true item extent is 600 to fill the viewport.
+    expect(sliver.constraints.scrollOffset, 1200.0);
+    expect(sliver.itemExtent, 600.0);
+    final double layoutOffset = sliver.indexToLayoutOffset(
+      150.0, // itemExtent
+      10,
+    );
+    expect(layoutOffset, 6000.0);
+    final int minIndex = sliver.getMinChildIndexForScrollOffset(
+      sliver.constraints.scrollOffset,
+      150.0, // itemExtent
+    );
+    expect(minIndex, 2);
+    final int maxIndex = sliver.getMaxChildIndexForScrollOffset(
+      sliver.constraints.scrollOffset,
+      150, // itemExtent
+    );
+    expect(maxIndex, 1);
+    final double maxScrollOffset = sliver.computeMaxScrollOffset(
+      sliver.constraints,
+      150, // itemExtent
+    );
+    expect(maxScrollOffset, 1800.0);
+  });
+
+  test('RenderSliverFillViewport correctly references itemExtent, zero offset', () {
+    final children = <RenderBox>[
+      RenderSizedBox(const Size(400.0, 100.0)),
+      RenderSizedBox(const Size(400.0, 100.0)),
+      RenderSizedBox(const Size(400.0, 100.0)),
+    ];
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+    final RenderSliverFillViewport sliver = childManager.createRenderSliverFillViewport();
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 100,
+      children: <RenderSliver>[sliver],
+    );
+    layout(root);
+    // These are a bogus itemExtents, and motivate the deprecation. The sliver
+    // knows its itemExtent, and should use its configured extent rather than
+    // whatever is provided through these methods.
+    // Also, the API is a bit redundant, so we clean!
+    // In this case, the true item extent is 600 to fill the viewport.
+    expect(sliver.constraints.scrollOffset, 0.0);
+    expect(sliver.itemExtent, 600.0);
+    final double layoutOffset = sliver.indexToLayoutOffset(
+      150.0, // itemExtent
+      10,
+    );
+    expect(layoutOffset, 6000.0);
+    final int minIndex = sliver.getMinChildIndexForScrollOffset(
+      sliver.constraints.scrollOffset,
+      150.0, // itemExtent
+    );
+    expect(minIndex, 0);
+    final int maxIndex = sliver.getMaxChildIndexForScrollOffset(
+      sliver.constraints.scrollOffset,
+      150, // itemExtent
+    );
+    expect(maxIndex, 0);
+    final double maxScrollOffset = sliver.computeMaxScrollOffset(
+      sliver.constraints,
+      150, // itemExtent
+    );
+    expect(maxScrollOffset, 1800.0);
+  });
+
+  test('RenderSliverFixedExtentList correctly references itemExtent, non-zero offset', () {
+    final children = <RenderBox>[
+      RenderSizedBox(const Size(400.0, 100.0)),
+      RenderSizedBox(const Size(400.0, 100.0)),
+      RenderSizedBox(const Size(400.0, 100.0)),
+    ];
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+    final RenderSliverFixedExtentList sliver = childManager.createRenderSliverFixedExtentList(30.0);
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.fixed(45.0),
+      cacheExtent: 100,
+      children: <RenderSliver>[sliver],
+    );
+    layout(root);
+    // These are a bogus itemExtents, and motivate the deprecation. The sliver
+    // knows its itemExtent, and should use its configured extent rather than
+    // whatever is provided through these methods.
+    // Also, the API is a bit redundant, so we clean!
+    // In this case, the true item extent is 30.0.
+    expect(sliver.constraints.scrollOffset, 45.0);
+    expect(sliver.constraints.viewportMainAxisExtent, 600.0);
+    expect(sliver.itemExtent, 30.0);
+    final double layoutOffset = sliver.indexToLayoutOffset(
+      150.0, // itemExtent
+      10,
+    );
+    expect(layoutOffset, 300.0);
+    final int minIndex = sliver.getMinChildIndexForScrollOffset(
+      sliver.constraints.scrollOffset,
+      150.0, // itemExtent
+    );
+    expect(minIndex, 1);
+    final int maxIndex = sliver.getMaxChildIndexForScrollOffset(
+      sliver.constraints.scrollOffset,
+      150, // itemExtent
+    );
+    expect(maxIndex, 1);
+    final double maxScrollOffset = sliver.computeMaxScrollOffset(
+      sliver.constraints,
+      150, // itemExtent
+    );
+    expect(maxScrollOffset, 90.0);
+  });
+
+  test('RenderSliverFixedExtentList correctly references itemExtent, zero offset', () {
+    final children = <RenderBox>[
+      RenderSizedBox(const Size(400.0, 100.0)),
+      RenderSizedBox(const Size(400.0, 100.0)),
+      RenderSizedBox(const Size(400.0, 100.0)),
+    ];
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+    final RenderSliverFixedExtentList sliver = childManager.createRenderSliverFixedExtentList(30.0);
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 100,
+      children: <RenderSliver>[sliver],
+    );
+    layout(root);
+    // These are a bogus itemExtents, and motivate the deprecation. The sliver
+    // knows its itemExtent, and should use its configured extent rather than
+    // whatever is provided through these methods.
+    // Also, the API is a bit redundant, so we clean!
+    // In this case, the true item extent is 30.0.
+    expect(sliver.constraints.scrollOffset, 0.0);
+    expect(sliver.constraints.viewportMainAxisExtent, 600.0);
+    expect(sliver.itemExtent, 30.0);
+    final double layoutOffset = sliver.indexToLayoutOffset(
+      150.0, // itemExtent
+      10,
+    );
+    expect(layoutOffset, 300.0);
+    final int minIndex = sliver.getMinChildIndexForScrollOffset(
+      sliver.constraints.scrollOffset,
+      150.0, // itemExtent
+    );
+    expect(minIndex, 0);
+    final int maxIndex = sliver.getMaxChildIndexForScrollOffset(
+      sliver.constraints.scrollOffset,
+      150, // itemExtent
+    );
+    expect(maxIndex, 0);
+    final double maxScrollOffset = sliver.computeMaxScrollOffset(
+      sliver.constraints,
+      150, // itemExtent
+    );
+    expect(maxScrollOffset, 90.0);
+  });
+
+  test('RenderSliverMultiBoxAdaptor has calculate leading and trailing garbage', () {
+    final children = <RenderBox>[
+      RenderSizedBox(const Size(400.0, 100.0)),
+      RenderSizedBox(const Size(400.0, 100.0)),
+      RenderSizedBox(const Size(400.0, 100.0)),
+    ];
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+    final RenderSliverFixedExtentList sliver = childManager.createRenderSliverFixedExtentList(30.0);
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 100,
+      children: <RenderSliver>[sliver],
+    );
+    layout(root);
+    // There are 3 children. If I want to garbage collect based on keeping only
+    // the middle child, then I should get 1 for leading and 1 for trailing.
+    expect(sliver.calculateLeadingGarbage(firstIndex: 1), 1);
+    expect(sliver.calculateTrailingGarbage(lastIndex: 1), 1);
+  });
+
+  test('RenderSliverFixedExtentBoxAdaptor assertion test', () {
+    final childManager = TestChildManagerSimple();
+    final sliver = NonMultipleFixedExtentList(
+      childManager: childManager,
+      itemExtent: 100.0,
+      totalExtent: 250.0, // Not a multiple of 100.0
+    );
+    final child = RenderSizedBox(const Size(400.0, 100.0));
+    childManager.setup(sliver, child);
+
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      children: <RenderSliver>[sliver],
+    );
+
+    late FlutterError error;
+    layout(
+      root,
+      onErrors: () {
+        final FlutterErrorDetails? details = TestRenderingFlutterBinding.instance
+            .takeFlutterErrorDetails();
+        error = details!.exception as FlutterError;
+      },
+    );
+
+    expect(
+      error.message,
+      contains('returned a value that is not an even multiple of its itemExtent'),
+    );
+  });
+
+  test('RenderSliverFixedExtentBoxAdaptor rounding tolerance test', () {
+    final childManager = TestChildManagerSimple();
+    final sliver = NonMultipleFixedExtentList(
+      childManager: childManager,
+      itemExtent: 100.0,
+      totalExtent: 200.0000000000001,
+    );
+    final child = RenderSizedBox(const Size(400.0, 100.0));
+    childManager.setup(sliver, child);
+
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      children: <RenderSliver>[sliver],
+    );
+
+    layout(
+      root,
+      onErrors: () {
+        fail('Should not have errors');
+      },
+    );
+    expect(TestRenderingFlutterBinding.instance.takeFlutterErrorDetails(), isNull);
+  });
+
+  test('RenderSliverVariedExtentList memoizes itemExtentBuilder calls within each layout pass', () {
+    final children = List<RenderBox>.generate(
+      100,
+      (index) => RenderSizedBox(const Size(400.0, 100.0)),
+    );
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+
+    final calledIndices = <int>[];
+    final RenderSliverVariedExtentList list = childManager.createRenderSliverVariedExtentList((
+      index,
+      layoutDimensions,
+    ) {
+      calledIndices.add(index);
+      return 100.0;
+    });
+
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 0,
+      children: <RenderSliver>[list],
+    );
+    layout(root);
+
+    // Within a single layout pass, each evaluated index is called at most once.
+    expect(calledIndices.toSet().length, calledIndices.length);
+    // Viewport is 600px high, so exactly items 0..5 (6 items) are evaluated.
+    expect(calledIndices.length, 6);
+
+    // Reset calls.
+    calledIndices.clear();
+
+    // Scroll to item 45 (offset 4500).
+    root.offset = ViewportOffset.fixed(4500.0);
+    pumpFrame();
+
+    // Verify each evaluated index in this layout pass was called at most once
+    // (i.e. indexToLayoutOffset and _getChildConstraints reuse the memoized extents).
+    expect(calledIndices.toSet().length, calledIndices.length);
+    // Indices from 0 up to the last visible item (item 50) are computed once: 51 calls.
+    expect(calledIndices.length, 51);
+  });
+
+  test('RenderSliverVariedExtentList per-layout memoization across itemExtentBuilder reassignment and markNeedsLayout', () {
+    final children = List<RenderBox>.generate(
+      100,
+      (index) => RenderSizedBox(const Size(400.0, 100.0)),
+    );
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+
+    final calledIndices = <int>[];
+    var currentExtent = 100.0;
+    double? builder(int index, SliverLayoutDimensions dimensions) {
+      calledIndices.add(index);
+      return currentExtent;
+    }
+
+    final RenderSliverVariedExtentList list = childManager.createRenderSliverVariedExtentList(
+      builder,
+    );
+
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 0,
+      children: <RenderSliver>[list],
+    );
+    layout(root);
+
+    expect(calledIndices.isNotEmpty, isTrue);
+    expect(calledIndices.toSet().length, calledIndices.length);
+
+    final child0 = children[0].parentData! as SliverMultiBoxAdaptorParentData;
+    final child1 = children[1].parentData! as SliverMultiBoxAdaptorParentData;
+    expect(child0.layoutOffset, 0.0);
+    expect(child1.layoutOffset, 100.0);
+
+    // Re-assigning itemExtentBuilder with same identity should not trigger layout.
+    calledIndices.clear();
+    currentExtent = 200.0;
+    list.itemExtentBuilder = builder;
+    pumpFrame();
+
+    expect(calledIndices.isEmpty, isTrue);
+    expect(child0.layoutOffset, 0.0);
+    expect(child1.layoutOffset, 100.0);
+
+    // Assigning a new itemExtentBuilder triggers layout and re-evaluates memoized extents.
+    calledIndices.clear();
+    list.itemExtentBuilder = (int index, SliverLayoutDimensions dimensions) =>
+        builder(index, dimensions);
+    pumpFrame();
+
+    expect(calledIndices.isNotEmpty, isTrue);
+    expect(calledIndices.toSet().length, calledIndices.length);
+    expect(child0.layoutOffset, 0.0);
+    expect(child1.layoutOffset, 200.0);
+
+    // Explicitly marking needs layout also re-layouts and re-evaluates memoized extents.
+    calledIndices.clear();
+    currentExtent = 50.0;
+    list.markNeedsLayout();
+    pumpFrame();
+
+    expect(calledIndices.isNotEmpty, isTrue);
+    expect(calledIndices.toSet().length, calledIndices.length);
+    expect(child0.layoutOffset, 0.0);
+    expect(child1.layoutOffset, 50.0);
+  });
+
+  test(
+    'RenderSliverVariedExtentList lays out first visible child at exact scroll offset boundary',
+    () {
+      final children = List<RenderBox>.generate(
+        10,
+        (index) => RenderSizedBox(const Size(400.0, 100.0)),
+      );
+      final childManager = TestRenderSliverBoxChildManager(children: children);
+
+      final RenderSliverVariedExtentList list = childManager.createRenderSliverVariedExtentList(
+        (index, dimensions) => 100.0,
+      );
+
+      final root = RenderViewport(
+        crossAxisDirection: AxisDirection.right,
+        offset: ViewportOffset.fixed(300.0),
+        cacheExtent: 0,
+        children: <RenderSliver>[list],
+      );
+      layout(root);
+
+      final child3 = children[3].parentData! as SliverMultiBoxAdaptorParentData;
+      expect(child3.layoutOffset, 300.0);
+
+      expect(children[2].parentData, isNull);
+    },
+  );
+
+  test('RenderSliverVariedExtentList invalidation on resize', () {
+    final children = List<RenderBox>.generate(
+      100,
+      (index) => RenderSizedBox(const Size(400.0, 100.0)),
+    );
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+
+    final calledIndices = <int>[];
+    SliverLayoutDimensions? lastDimensions;
+    final RenderSliverVariedExtentList list = childManager.createRenderSliverVariedExtentList((
+      index,
+      layoutDimensions,
+    ) {
+      lastDimensions = layoutDimensions;
+      calledIndices.add(index);
+      return 100.0;
+    });
+
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 0,
+      children: <RenderSliver>[list],
+    );
+
+    final box = RenderConstrainedBox(
+      additionalConstraints: const BoxConstraints.tightFor(width: 800.0, height: 600.0),
+      child: root,
+    );
+    final align = RenderPositionedBox(alignment: Alignment.topLeft, child: box);
+    layout(align);
+
+    expect(calledIndices.toSet().length, calledIndices.length);
+    expect(calledIndices.length, greaterThan(1));
+    expect(lastDimensions!.viewportMainAxisExtent, 600.0);
+    expect(lastDimensions!.crossAxisExtent, 800.0);
+    calledIndices.clear();
+
+    // Resize viewport main axis.
+    box.additionalConstraints = const BoxConstraints.tightFor(width: 800.0, height: 400.0);
+    pumpFrame();
+    expect(calledIndices.toSet().length, calledIndices.length);
+    expect(calledIndices.length, greaterThan(1));
+    expect(lastDimensions!.viewportMainAxisExtent, 400.0);
+    expect(lastDimensions!.crossAxisExtent, 800.0);
+
+    calledIndices.clear();
+    // Resize viewport cross axis.
+    box.additionalConstraints = const BoxConstraints.tightFor(width: 400.0, height: 400.0);
+    pumpFrame();
+    expect(calledIndices.toSet().length, calledIndices.length);
+    expect(calledIndices.length, greaterThan(1));
+    expect(lastDimensions!.viewportMainAxisExtent, 400.0);
+    expect(lastDimensions!.crossAxisExtent, 400.0);
+  });
+
+  test('RenderSliverVariedExtentList reverse: true', () {
+    final children = List<RenderBox>.generate(
+      10,
+      (index) => RenderSizedBox(const Size(400.0, 100.0)),
+    );
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+
+    final calledIndices = <int>[];
+    final RenderSliverVariedExtentList list = childManager.createRenderSliverVariedExtentList((
+      index,
+      dimensions,
+    ) {
+      calledIndices.add(index);
+      return index.isEven ? 100.0 : 200.0;
+    });
+
+    final root = RenderViewport(
+      axisDirection: AxisDirection.up,
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 0,
+      children: <RenderSliver>[list],
+    );
+    layout(root);
+
+    expect(calledIndices.toSet().length, calledIndices.length);
+
+    final child0 = children[0].parentData! as SliverMultiBoxAdaptorParentData;
+    final child1 = children[1].parentData! as SliverMultiBoxAdaptorParentData;
+
+    expect(child0.layoutOffset, 0.0);
+    expect(child1.layoutOffset, 100.0);
+  });
+
+  test('RenderSliverVariedExtentList expand/collapse with mixed row heights', () {
+    final children = List<RenderBox>.generate(
+      10,
+      (index) => RenderSizedBox(const Size(400.0, 100.0)),
+    );
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+
+    final calledIndices = <int>[];
+    final RenderSliverVariedExtentList list = childManager.createRenderSliverVariedExtentList((
+      index,
+      dimensions,
+    ) {
+      calledIndices.add(index);
+      return index.isEven ? 100.0 : 50.0;
+    });
+
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 0,
+      children: <RenderSliver>[list],
+    );
+    layout(root);
+
+    // Max scroll offset should be 5 * 100 + 5 * 50 = 750.
+    expect(list.computeMaxScrollOffset(list.constraints, 0.0), 750.0);
+    expect(calledIndices.toSet().length, calledIndices.length);
+
+    calledIndices.clear();
+    // Expand: add 2 children.
+    children.add(RenderSizedBox(const Size(400.0, 100.0)));
+    children.add(RenderSizedBox(const Size(400.0, 100.0)));
+
+    list.itemExtentBuilder = (index, dimensions) {
+      calledIndices.add(index);
+      return index.isEven ? 100.0 : 50.0;
+    };
+    pumpFrame();
+
+    // Max scroll offset should be 6 * 100 + 6 * 50 = 900.
+    expect(list.computeMaxScrollOffset(list.constraints, 0.0), 900.0);
+    expect(calledIndices.toSet().length, calledIndices.length);
+
+    calledIndices.clear();
+    // Collapse: remove 4 children.
+    children.removeLast();
+    children.removeLast();
+    children.removeLast();
+    children.removeLast();
+
+    list.itemExtentBuilder = (index, dimensions) {
+      calledIndices.add(index);
+      return index.isEven ? 100.0 : 50.0;
+    };
+    pumpFrame();
+
+    // 8 children: 4 * 100 + 4 * 50 = 600.
+    expect(list.computeMaxScrollOffset(list.constraints, 0.0), 600.0);
+    expect(calledIndices.toSet().length, calledIndices.length);
+  });
+
+  test('RenderSliverFixedExtentBoxAdaptor delegates extent queries to itemExtentOf', () {
+    final children = List<RenderBox>.generate(
+      10,
+      (index) => RenderSizedBox(const Size(400.0, 100.0)),
+    );
+    final childManager = TestRenderSliverBoxChildManager(children: children);
+    final ExtentOfTrackingSliverFixedExtentBoxAdaptor list = childManager
+        .createExtentOfTrackingSliverFixedExtentBoxAdaptor(
+          (index, dimensions) => (index + 1) * 10.0,
+        );
+    final root = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 0,
+      children: <RenderSliver>[list],
+    );
+    layout(root);
+
+    list.itemExtentOfCalls.clear();
+    // indexToLayoutOffset should call itemExtentOf for each index prior to index.
+    final double offset = list.indexToLayoutOffset(0.0, 3);
+    // Extents: index 0: 10, index 1: 20, index 2: 30 -> offset = 60.
+    expect(offset, 60.0);
+    expect(list.itemExtentOfCalls, <int>[0, 1, 2]);
+
+    list.itemExtentOfCalls.clear();
+    // computeMaxScrollOffset should call itemExtentOf for each child.
+    final double maxScrollOffset = list.computeMaxScrollOffset(list.constraints, 0.0);
+    // Sum from index 0 to 9: 10 + 20 + ... + 100 = 550.
+    expect(maxScrollOffset, 550.0);
+    expect(list.itemExtentOfCalls, List<int>.generate(10, (int i) => i));
+
+    list.itemExtentOfCalls.clear();
+    // getMinChildIndexForScrollOffset should call itemExtentOf via _getChildIndexForScrollOffset.
+    final int minIndex = list.getMinChildIndexForScrollOffset(25.0, 0.0);
+    // index 0: 10, index 1: 20 (cumulative 30 >= 25.0) -> index = 1.
+    expect(minIndex, 1);
+    expect(list.itemExtentOfCalls, <int>[0, 1]);
+
+    list.itemExtentOfCalls.clear();
+    // getMaxChildIndexForScrollOffset should call itemExtentOf via _getChildIndexForScrollOffset.
+    final int maxIndex = list.getMaxChildIndexForScrollOffset(35.0, 0.0);
+    // index 0: 10, index 1: 20, index 2: 30 (cumulative 60 >= 35.0) -> index = 2.
+    expect(maxIndex, 2);
+    expect(list.itemExtentOfCalls, <int>[0, 1, 2]);
+  });
+
+  test(
+    'RenderSliverVariedExtentList memoizes terminal index when itemExtentBuilder returns null',
+    () {
+      final children = List<RenderBox>.generate(
+        10,
+        (index) => RenderSizedBox(const Size(400.0, 100.0)),
+      );
+      final childManager = TestRenderSliverBoxChildManager(children: children);
+
+      final calledIndices = <int>[];
+      final RenderSliverVariedExtentList list = childManager.createRenderSliverVariedExtentList((
+        int index,
+        SliverLayoutDimensions dimensions,
+      ) {
+        calledIndices.add(index);
+        if (index >= 5) {
+          return null;
+        }
+        return 100.0;
+      });
+
+      final root = RenderViewport(
+        crossAxisDirection: AxisDirection.right,
+        offset: ViewportOffset.zero(),
+        cacheExtent: 0,
+        children: <RenderSliver>[list],
+      );
+      layout(root);
+
+      // Queries beyond the terminal index within the same layout pass
+      // should short-circuit and not invoke the builder again.
+      expect(list.indexToLayoutOffset(100.0, 8), 500.0);
+      expect(list.indexToLayoutOffset(100.0, 10), 500.0);
+      expect(list.itemExtentOf(5), isNull);
+      expect(list.itemExtentOf(8), isNull);
+      expect(list.itemExtentOf(10), isNull);
+
+      // Each evaluated index, including the terminal index 5, must be called at most once.
+      expect(calledIndices.toSet().length, calledIndices.length);
+      expect(calledIndices, <int>[0, 1, 2, 3, 4, 5]);
+    },
+  );
+
+  test('RenderSliverFixedExtentBoxAdaptor and RenderSliverVariedExtentList out-of-bounds and boundary queries', () {
+    final heights = <double>[100.0, 100.0, 100.0, 100.0, 100.0];
+    final fixedChildren = List<RenderBox>.generate(
+      heights.length,
+      (int index) => RenderSizedBox(Size(400.0, heights[index])),
+    );
+
+    // Fixed extent list out-of-bounds checks (5 * 100.0 = 500.0 < 600.0 viewport).
+    final fixedChildManager = TestRenderSliverBoxChildManager(
+      children: fixedChildren,
+      estimatedChildCount: heights.length,
+    );
+    final RenderSliverFixedExtentList fixedList = fixedChildManager
+        .createRenderSliverFixedExtentList(100.0);
+    final fixedRoot = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 0,
+      children: <RenderSliver>[fixedList],
+    );
+    layout(fixedRoot);
+    expect(fixedList.itemExtentOf(-1), isNull);
+    expect(fixedList.itemExtentOf(heights.length), isNull);
+    expect(fixedList.itemExtentOf(0), 100.0);
+    expect(fixedList.itemExtentOf(heights.length - 1), 100.0);
+
+    // Base adaptor with itemExtentBuilder out-of-bounds checks.
+    final baseChildren = List<RenderBox>.generate(
+      heights.length,
+      (int index) => RenderSizedBox(Size(400.0, heights[index])),
+    );
+    final baseCalls = <int>[];
+    final baseChildManager = TestRenderSliverBoxChildManager(
+      children: baseChildren,
+      estimatedChildCount: heights.length,
+    );
+    final ExtentOfTrackingSliverFixedExtentBoxAdaptor baseList = baseChildManager
+        .createExtentOfTrackingSliverFixedExtentBoxAdaptor((
+          int index,
+          SliverLayoutDimensions dimensions,
+        ) {
+          baseCalls.add(index);
+          return heights[index];
+        });
+    final baseRoot = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 0,
+      children: <RenderSliver>[baseList],
+    );
+    layout(baseRoot);
+    baseCalls.clear();
+    expect(baseList.itemExtentOf(-1), isNull);
+    expect(baseList.itemExtentOf(heights.length), isNull);
+    expect(baseCalls, isEmpty);
+
+    // Varied extent list out-of-bounds and exact viewport-end boundary checks.
+    final variedChildren = List<RenderBox>.generate(
+      10,
+      (int index) => RenderSizedBox(const Size(400.0, 100.0)),
+    );
+    final variedHeights = List<double>.filled(10, 100.0);
+    final calledIndices = <int>[];
+    final variedChildManager = TestRenderSliverBoxChildManager(
+      children: variedChildren,
+      estimatedChildCount: variedHeights.length,
+    );
+    final RenderSliverVariedExtentList variedList = variedChildManager
+        .createRenderSliverVariedExtentList((int index, SliverLayoutDimensions dimensions) {
+          calledIndices.add(index);
+          return variedHeights[index];
+        });
+
+    final variedRoot = RenderViewport(
+      crossAxisDirection: AxisDirection.right,
+      offset: ViewportOffset.zero(),
+      cacheExtent: 0,
+      children: <RenderSliver>[variedList],
+    );
+    layout(variedRoot);
+
+    // Exact viewport-end boundary (600px / 100px = 6 items: indices 0..5).
+    expect(calledIndices, <int>[0, 1, 2, 3, 4, 5]);
+
+    // Boundary at itemOffset + precisionErrorTolerance includes trailing child 6.
+    expect(variedList.getMaxChildIndexForScrollOffset(600.0 + precisionErrorTolerance, 0.0), 6);
+
+    // Negative and >= childCount queries return 0.0 / null without invoking builder.
+    calledIndices.clear();
+    expect(variedList.indexToLayoutOffset(0.0, -1), 0.0);
+    expect(variedList.itemExtentOf(-1), isNull);
+    expect(variedList.itemExtentOf(variedHeights.length), isNull);
+    expect(calledIndices, isEmpty);
+  });
 }
 
 int testGetMaxChildIndexForScrollOffset(double scrollOffset, double itemExtent) {
-  final TestRenderSliverFixedExtentBoxAdaptor renderSliver = TestRenderSliverFixedExtentBoxAdaptor();
+  final renderSliver = TestRenderSliverFixedExtentBoxAdaptor(itemExtent: itemExtent);
   return renderSliver.getMaxChildIndexForScrollOffset(scrollOffset, itemExtent);
 }
 
 class TestRenderSliverBoxChildManager extends RenderSliverBoxChildManager {
-  TestRenderSliverBoxChildManager({
-    required this.children,
-  });
+  TestRenderSliverBoxChildManager({required this.children, this.estimatedChildCount});
 
   RenderSliverMultiBoxAdaptor? _renderObject;
   List<RenderBox> children;
 
+  @override
+  final int? estimatedChildCount;
+
   RenderSliverFillViewport createRenderSliverFillViewport() {
     assert(_renderObject == null);
-    _renderObject = RenderSliverFillViewport(
-      childManager: this,
-    );
+    _renderObject = RenderSliverFillViewport(childManager: this);
     return _renderObject! as RenderSliverFillViewport;
+  }
+
+  RenderSliverFixedExtentList createRenderSliverFixedExtentList(double itemExtent) {
+    assert(_renderObject == null);
+    _renderObject = RenderSliverFixedExtentList(childManager: this, itemExtent: itemExtent);
+    return _renderObject! as RenderSliverFixedExtentList;
+  }
+
+  RenderSliverVariedExtentList createRenderSliverVariedExtentList(
+    ItemExtentBuilder itemExtentBuilder,
+  ) {
+    assert(_renderObject == null);
+    _renderObject = RenderSliverVariedExtentList(
+      childManager: this,
+      itemExtentBuilder: itemExtentBuilder,
+    );
+    return _renderObject! as RenderSliverVariedExtentList;
+  }
+
+  ExtentOfTrackingSliverFixedExtentBoxAdaptor createExtentOfTrackingSliverFixedExtentBoxAdaptor(
+    ItemExtentBuilder itemExtentBuilder,
+  ) {
+    assert(_renderObject == null);
+    _renderObject = ExtentOfTrackingSliverFixedExtentBoxAdaptor(
+      childManager: this,
+      builder: itemExtentBuilder,
+    );
+    return _renderObject! as ExtentOfTrackingSliverFixedExtentBoxAdaptor;
   }
 
   int? _currentlyUpdatingChildIndex;
 
   @override
-  void createChild(int index, { required RenderBox? after }) {
+  void createChild(int index, {required RenderBox? after}) {
     if (index < 0 || index >= children.length) {
       return;
     }
@@ -200,7 +956,9 @@ class TestRenderSliverBoxChildManager extends RenderSliverBoxChildManager {
     double? trailingScrollOffset,
   }) {
     assert(lastIndex! >= firstIndex!);
-    return children.length * (trailingScrollOffset! - leadingScrollOffset!) / (lastIndex! - firstIndex! + 1);
+    return children.length *
+        (trailingScrollOffset! - leadingScrollOffset!) /
+        (lastIndex! - firstIndex! + 1);
   }
 
   @override
@@ -209,17 +967,19 @@ class TestRenderSliverBoxChildManager extends RenderSliverBoxChildManager {
   @override
   void didAdoptChild(RenderBox child) {
     assert(_currentlyUpdatingChildIndex != null);
-    final SliverMultiBoxAdaptorParentData childParentData = child.parentData! as SliverMultiBoxAdaptorParentData;
+    final childParentData = child.parentData! as SliverMultiBoxAdaptorParentData;
     childParentData.index = _currentlyUpdatingChildIndex;
   }
 
   @override
-  void setDidUnderflow(bool value) { }
+  void setDidUnderflow(bool value) {}
 }
 
 class TestRenderSliverFixedExtentBoxAdaptor extends RenderSliverFixedExtentBoxAdaptor {
-  TestRenderSliverFixedExtentBoxAdaptor()
-    :super(childManager: TestRenderSliverBoxChildManager(children: <RenderBox>[]));
+  TestRenderSliverFixedExtentBoxAdaptor({required this._itemExtent})
+    : super(childManager: TestRenderSliverBoxChildManager(children: <RenderBox>[]));
+
+  final double _itemExtent;
 
   @override
   int getMaxChildIndexForScrollOffset(double scrollOffset, double itemExtent) {
@@ -227,5 +987,103 @@ class TestRenderSliverFixedExtentBoxAdaptor extends RenderSliverFixedExtentBoxAd
   }
 
   @override
-  double get itemExtent => throw UnimplementedError();
+  double get itemExtent => _itemExtent;
+}
+
+class ExtentOfTrackingSliverFixedExtentBoxAdaptor extends RenderSliverFixedExtentBoxAdaptor {
+  ExtentOfTrackingSliverFixedExtentBoxAdaptor({required super.childManager, required this.builder});
+
+  final ItemExtentBuilder builder;
+  final List<int> itemExtentOfCalls = <int>[];
+
+  @override
+  ItemExtentBuilder? get itemExtentBuilder => builder;
+
+  @override
+  double? get itemExtent => null;
+
+  @override
+  double? itemExtentOf(int index) {
+    itemExtentOfCalls.add(index);
+    return super.itemExtentOf(index);
+  }
+
+  @override
+  double indexToLayoutOffset(double itemExtent, int index) {
+    return super.indexToLayoutOffset(itemExtent, index);
+  }
+
+  @override
+  double computeMaxScrollOffset(SliverConstraints constraints, double itemExtent) {
+    return super.computeMaxScrollOffset(constraints, itemExtent);
+  }
+
+  @override
+  int getMinChildIndexForScrollOffset(double scrollOffset, double itemExtent) {
+    return super.getMinChildIndexForScrollOffset(scrollOffset, itemExtent);
+  }
+
+  @override
+  int getMaxChildIndexForScrollOffset(double scrollOffset, double itemExtent) {
+    return super.getMaxChildIndexForScrollOffset(scrollOffset, itemExtent);
+  }
+}
+
+class NonMultipleFixedExtentList extends RenderSliverFixedExtentList {
+  NonMultipleFixedExtentList({
+    required super.childManager,
+    required super.itemExtent,
+    required this.totalExtent,
+  }) : super();
+
+  final double totalExtent;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    geometry = geometry!.copyWith(scrollExtent: totalExtent, maxPaintExtent: totalExtent);
+  }
+}
+
+class TestChildManagerSimple extends RenderSliverBoxChildManager {
+  TestChildManagerSimple();
+
+  late RenderSliverMultiBoxAdaptor? _renderObject;
+  RenderBox? child;
+
+  void setup(RenderSliverMultiBoxAdaptor renderObject, RenderBox child) {
+    _renderObject = renderObject;
+    this.child = child;
+  }
+
+  @override
+  void createChild(int index, {required RenderBox? after}) {
+    if (index == 0 && child != null) {
+      _renderObject!.insert(child!, after: after);
+    }
+  }
+
+  @override
+  void removeChild(RenderBox child) {}
+
+  @override
+  double estimateMaxScrollOffset(
+    SliverConstraints constraints, {
+    int? firstIndex,
+    int? lastIndex,
+    double? leadingScrollOffset,
+    double? trailingScrollOffset,
+  }) => 0.0;
+
+  @override
+  int get childCount => 1;
+
+  @override
+  void didAdoptChild(RenderBox child) {
+    final childParentData = child.parentData! as SliverMultiBoxAdaptorParentData;
+    childParentData.index = 0;
+  }
+
+  @override
+  void setDidUnderflow(bool value) {}
 }

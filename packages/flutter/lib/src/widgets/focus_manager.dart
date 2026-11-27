@@ -2,12 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter/material.dart';
+/// @docImport 'package:flutter/rendering.dart';
+///
+/// @docImport 'debug.dart';
+library;
+
 import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/painting.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import 'binding.dart';
@@ -20,6 +28,12 @@ import 'framework.dart';
 /// Can be used to debug focus issues: each time the focus changes, the focus
 /// tree will be printed and requests for focus and other focus operations will
 /// be logged.
+///
+/// This has no effect in release builds.
+///
+/// See also:
+///
+/// * [debugPaintFocusBoxes], which draws boxes around focus nodes.
 bool debugFocusChanges = false;
 
 // When using _focusDebug, always call it like so:
@@ -32,15 +46,12 @@ bool debugFocusChanges = false;
 //
 // It will throw a StateError if you try to call it when the app is in release
 // mode.
-bool _focusDebug(
-  String Function() messageFunc, [
-  Iterable<Object> Function()? detailsFunc,
-]) {
+bool _focusDebug(String Function() messageFunc, [Iterable<Object> Function()? detailsFunc]) {
   if (kReleaseMode) {
     throw StateError(
       '_focusDebug was called in Release mode. It should always be wrapped in '
       'an assert. Always call _focusDebug like so:\n'
-      r"  assert(_focusDebug(() => 'Blah $foo'));"
+      r"  assert(_focusDebug(() => 'Blah $foo'));",
     );
   }
   if (!debugFocusChanges) {
@@ -49,7 +60,7 @@ bool _focusDebug(
   debugPrint('FOCUS: ${messageFunc()}');
   final Iterable<Object> details = detailsFunc?.call() ?? const <Object>[];
   if (details.isNotEmpty) {
-    for (final Object detail in details) {
+    for (final detail in details) {
       debugPrint('    $detail');
     }
   }
@@ -63,9 +74,11 @@ enum KeyEventResult {
   /// The key event has been handled, and the event should not be propagated to
   /// other key event handlers.
   handled,
+
   /// The key event has not been handled, and the event should continue to be
   /// propagated to other key event handlers, even non-Flutter ones.
   ignored,
+
   /// The key event has not been handled, but the key event should not be
   /// propagated to other key event handlers.
   ///
@@ -83,8 +96,8 @@ enum KeyEventResult {
 /// handlers without preventing the platform to handle; otherwise the node is
 /// ignored.
 KeyEventResult combineKeyEventResults(Iterable<KeyEventResult> results) {
-  bool hasSkipRemainingHandlers = false;
-  for (final KeyEventResult result in results) {
+  var hasSkipRemainingHandlers = false;
+  for (final result in results) {
     switch (result) {
       case KeyEventResult.handled:
         return KeyEventResult.handled;
@@ -94,18 +107,23 @@ KeyEventResult combineKeyEventResults(Iterable<KeyEventResult> results) {
         break;
     }
   }
-  return hasSkipRemainingHandlers ?
-      KeyEventResult.skipRemainingHandlers :
-      KeyEventResult.ignored;
+  return hasSkipRemainingHandlers ? KeyEventResult.skipRemainingHandlers : KeyEventResult.ignored;
 }
 
 /// Signature of a callback used by [Focus.onKey] and [FocusScope.onKey]
 /// to receive key events.
 ///
+/// This kind of callback is deprecated and will be removed at a future date.
+/// Use [FocusOnKeyEventCallback] and associated APIs instead.
+///
 /// The [node] is the node that received the event.
 ///
 /// Returns a [KeyEventResult] that describes how, and whether, the key event
 /// was handled.
+@Deprecated(
+  'Use FocusOnKeyEventCallback instead. '
+  'This feature was deprecated after v3.18.0-2.0.pre.',
+)
 typedef FocusOnKeyCallback = KeyEventResult Function(FocusNode node, RawKeyEvent event);
 
 /// Signature of a callback used by [Focus.onKeyEvent] and [FocusScope.onKeyEvent]
@@ -117,10 +135,22 @@ typedef FocusOnKeyCallback = KeyEventResult Function(FocusNode node, RawKeyEvent
 /// was handled.
 typedef FocusOnKeyEventCallback = KeyEventResult Function(FocusNode node, KeyEvent event);
 
+/// Signature of a callback used by [FocusManager.addEarlyKeyEventHandler] and
+/// [FocusManager.addLateKeyEventHandler].
+///
+/// The `event` parameter is a [KeyEvent] that is being sent to the callback to
+/// be handled.
+///
+/// The [KeyEventResult] return value indicates whether or not the event will
+/// continue to be propagated. If the value returned is [KeyEventResult.handled]
+/// or [KeyEventResult.skipRemainingHandlers], then the event will not continue
+/// to be propagated.
+typedef OnKeyEventCallback = KeyEventResult Function(KeyEvent event);
+
 // Represents a pending autofocus request.
 @immutable
 class _Autofocus {
-  const _Autofocus({ required this.scope, required this.autofocusNode });
+  const _Autofocus({required this.scope, required this.autofocusNode});
 
   final FocusScopeNode scope;
   final FocusNode autofocusNode;
@@ -134,10 +164,11 @@ class _Autofocus {
   // still attached, and discard the ones which are no longer attached to the
   // original manager.
   void applyIfValid(FocusManager manager) {
-    final bool shouldApply  = (scope.parent != null || identical(scope, manager.rootScope))
-                           && identical(scope._manager, manager)
-                           && scope.focusedChild == null
-                           && autofocusNode.ancestors.contains(scope);
+    final bool shouldApply =
+        (scope.parent != null || identical(scope, manager.rootScope)) &&
+        identical(scope._manager, manager) &&
+        scope.focusedChild == null &&
+        autofocusNode.ancestors.contains(scope);
     if (shouldApply) {
       assert(_focusDebug(() => 'Applying autofocus: $autofocusNode'));
       autofocusNode._doRequestFocus(findFirstFocus: true);
@@ -190,17 +221,29 @@ class FocusAttachment {
   ///
   /// Calling [FocusNode.dispose] will also automatically detach the node.
   void detach() {
-    assert(_focusDebug(() => 'Detaching node:', () => <Object>[_node, 'With enclosing scope ${_node.enclosingScope}']));
+    assert(
+      _focusDebug(
+        () => 'Detaching node:',
+        () => <Object>[_node, 'With enclosing scope ${_node.enclosingScope}'],
+      ),
+    );
     if (isAttached) {
-      if (_node.hasPrimaryFocus || (_node._manager != null && _node._manager!._markedForFocus == _node)) {
+      if (_node.hasPrimaryFocus ||
+          (_node._manager != null && _node._manager!._markedForFocus == _node)) {
         _node.unfocus(disposition: UnfocusDisposition.previouslyFocusedChild);
       }
       // This node is no longer in the tree, so shouldn't send notifications anymore.
       _node._manager?._markDetached(_node);
       _node._parent?._removeChild(_node);
       _node._attachment = null;
-      assert(!_node.hasPrimaryFocus);
-      assert(_node._manager?._markedForFocus != _node);
+      assert(
+        !_node.hasPrimaryFocus,
+        'Node ${_node.debugLabel ?? _node} still has primary focus while being detached.',
+      );
+      assert(
+        _node._manager?._markedForFocus != _node,
+        'Node ${_node.debugLabel ?? _node} still marked for focus while being detached.',
+      );
     }
     assert(!isAttached);
   }
@@ -356,14 +399,13 @@ enum UnfocusDisposition {
 /// {@template flutter.widgets.FocusNode.keyEvents}
 /// ## Key Event Propagation
 ///
-/// The [FocusManager] receives key events from [RawKeyboard] and
-/// [HardwareKeyboard] and will pass them to the focused nodes. It starts with
-/// the node with the primary focus, and will call the [onKey] or [onKeyEvent]
-/// callback for that node. If the callback returns [KeyEventResult.ignored],
-/// indicating that it did not handle the event, the [FocusManager] will move
-/// to the parent of that node and call its [onKey] or [onKeyEvent]. If that
-/// [onKey] or [onKeyEvent] returns [KeyEventResult.handled], then it will stop
-/// propagating the event. If it reaches the root [FocusScopeNode],
+/// The [FocusManager] receives key events from [HardwareKeyboard] and will pass
+/// them to the focused nodes. It starts with the node with the primary focus,
+/// and will call the [onKeyEvent] callback for that node. If the callback
+/// returns [KeyEventResult.ignored], indicating that it did not handle the
+/// event, the [FocusManager] will move to the parent of that node and call its
+/// [onKeyEvent]. If that [onKeyEvent] returns [KeyEventResult.handled], then it
+/// will stop propagating the event. If it reaches the root [FocusScopeNode],
 /// [FocusManager.rootScope], the event is discarded.
 /// {@endtemplate}
 ///
@@ -416,26 +458,27 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   ///
   /// The [debugLabel] is ignored on release builds.
   ///
-  /// The [skipTraversal], [descendantsAreFocusable], and [canRequestFocus]
-  /// arguments must not be null.
-  ///
-  /// To receive key events that focuses on this node, pass a listener to `onKeyEvent`.
-  /// The `onKey` is a legacy API based on [RawKeyEvent] and will be deprecated
-  /// in the future.
+  /// To receive key events that focuses on this node, pass a listener to
+  /// `onKeyEvent`.
   FocusNode({
     String? debugLabel,
+    @Deprecated(
+      'Use onKeyEvent instead. '
+      'This feature was deprecated after v3.18.0-2.0.pre.',
+    )
     this.onKey,
     this.onKeyEvent,
-    bool skipTraversal = false,
-    bool canRequestFocus = true,
-    bool descendantsAreFocusable = true,
-    bool descendantsAreTraversable = true,
-  })  : _skipTraversal = skipTraversal,
-        _canRequestFocus = canRequestFocus,
-        _descendantsAreFocusable = descendantsAreFocusable,
-        _descendantsAreTraversable = descendantsAreTraversable {
+    this._skipTraversal = false,
+    this._canRequestFocus = true,
+    this._descendantsAreFocusable = true,
+    this._descendantsAreTraversable = true,
+  }) {
     // Set it via the setter so that it does nothing on release builds.
     this.debugLabel = debugLabel;
+
+    if (kFlutterMemoryAllocationsEnabled) {
+      ChangeNotifier.maybeDispatchObjectCreation(this);
+    }
   }
 
   /// If true, tells the focus traversal policy to skip over this node for
@@ -459,6 +502,7 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
     }
     return false;
   }
+
   bool _skipTraversal;
   set skipTraversal(bool value) {
     if (value != _skipTraversal) {
@@ -494,21 +538,8 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   ///    focus traversal policy for a widget subtree.
   ///  * [FocusTraversalPolicy], a class that can be extended to describe a
   ///    traversal policy.
-  bool get canRequestFocus {
-    if (!_canRequestFocus) {
-      return false;
-    }
-    final FocusScopeNode? scope = enclosingScope;
-    if (scope != null && !scope.canRequestFocus) {
-      return false;
-    }
-    for (final FocusNode ancestor in ancestors) {
-      if (!ancestor.descendantsAreFocusable) {
-        return false;
-      }
-    }
-    return true;
-  }
+  bool get canRequestFocus => _canRequestFocus && ancestors.every(_allowDescendantsToBeFocused);
+  static bool _allowDescendantsToBeFocused(FocusNode ancestor) => ancestor.descendantsAreFocusable;
 
   bool _canRequestFocus;
   @mustCallSuper
@@ -607,10 +638,17 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   /// Called if this focus node receives a key event while focused (i.e. when
   /// [hasFocus] returns true).
   ///
+  /// This property is deprecated and will be removed at a future date. Use
+  /// [onKeyEvent] instead.
+  ///
   /// This is a legacy API based on [RawKeyEvent] and will be deprecated in the
   /// future. Prefer [onKeyEvent] instead.
   ///
   /// {@macro flutter.widgets.FocusNode.keyEvents}
+  @Deprecated(
+    'Use onKeyEvent instead. '
+    'This feature was deprecated after v3.18.0-2.0.pre.',
+  )
   FocusOnKeyCallback? onKey;
 
   /// Called if this focus node receives a key event while focused (i.e. when
@@ -651,9 +689,7 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
     if (!descendantsAreFocusable) {
       return const Iterable<FocusNode>.empty();
     }
-    return children.where(
-      (FocusNode node) => !node.skipTraversal && node.canRequestFocus,
-    );
+    return children.where((FocusNode node) => !node.skipTraversal && node.canRequestFocus);
   }
 
   /// A debug label that is used for diagnostic output.
@@ -675,7 +711,7 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   /// depth-first order.
   Iterable<FocusNode> get descendants {
     if (_descendants == null) {
-      final List<FocusNode> result = <FocusNode>[];
+      final result = <FocusNode>[];
       for (final FocusNode child in _children) {
         result.addAll(child.descendants);
         result.add(child);
@@ -701,7 +737,7 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   /// [FocusScopeNode] ([FocusManager.rootScope]).
   Iterable<FocusNode> get ancestors {
     if (_ancestors == null) {
-      final List<FocusNode> result = <FocusNode>[];
+      final result = <FocusNode>[];
       FocusNode? parent = _parent;
       while (parent != null) {
         result.add(parent);
@@ -732,7 +768,8 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   ///
   ///  * [Focus.isAt], which is a static method that will return the focus
   ///    state of the nearest ancestor [Focus] widget's focus node.
-  bool get hasFocus => hasPrimaryFocus || (_manager?.primaryFocus?.ancestors.contains(this) ?? false);
+  bool get hasFocus =>
+      hasPrimaryFocus || (_manager?.primaryFocus?.ancestors.contains(this) ?? false);
 
   /// Returns true if this node currently has the application-wide input focus.
   ///
@@ -761,6 +798,22 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   /// Use [enclosingScope] to look for scopes above this node.
   FocusScopeNode? get nearestScope => enclosingScope;
 
+  FocusScopeNode? _enclosingScope;
+  void _clearEnclosingScopeCache() {
+    final FocusScopeNode? cachedScope = _enclosingScope;
+    if (cachedScope == null) {
+      return;
+    }
+    _enclosingScope = null;
+    if (children.isNotEmpty) {
+      for (final FocusNode child in children) {
+        if (identical(cachedScope, child._enclosingScope)) {
+          child._clearEnclosingScopeCache();
+        }
+      }
+    }
+  }
+
   /// Returns the nearest enclosing scope node above this node, or null if the
   /// node has not yet be added to the focus tree.
   ///
@@ -769,12 +822,12 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   ///
   /// Use [nearestScope] to start at this node instead of above it.
   FocusScopeNode? get enclosingScope {
-    for (final FocusNode node in ancestors) {
-      if (node is FocusScopeNode) {
-        return node;
-      }
-    }
-    return null;
+    final FocusScopeNode? enclosingScope = _enclosingScope ??= parent?.nearestScope;
+    assert(
+      enclosingScope == parent?.nearestScope,
+      '$this has invalid scope cache: $_enclosingScope != ${parent?.nearestScope}',
+    );
+    return enclosingScope;
   }
 
   /// Returns the size of the attached widget's [RenderObject], in logical
@@ -810,8 +863,14 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
       'Setting the context is typically done with the attach method.',
     );
     final RenderObject object = context!.findRenderObject()!;
-    final Offset topLeft = MatrixUtils.transformPoint(object.getTransformTo(null), object.semanticBounds.topLeft);
-    final Offset bottomRight = MatrixUtils.transformPoint(object.getTransformTo(null), object.semanticBounds.bottomRight);
+    final Offset topLeft = MatrixUtils.transformPoint(
+      object.getTransformTo(null),
+      object.semanticBounds.topLeft,
+    );
+    final Offset bottomRight = MatrixUtils.transformPoint(
+      object.getTransformTo(null),
+      object.semanticBounds.bottomRight,
+    );
     return Rect.fromLTRB(topLeft.dx, topLeft.dy, bottomRight.dx, bottomRight.dy);
   }
 
@@ -859,9 +918,7 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   ///
   /// ** See code in examples/api/lib/widgets/focus_manager/focus_node.unfocus.0.dart **
   /// {@end-tool}
-  void unfocus({
-    UnfocusDisposition disposition = UnfocusDisposition.scope,
-  }) {
+  void unfocus({UnfocusDisposition disposition = UnfocusDisposition.scope}) {
     if (!hasFocus && (_manager == null || _manager!._markedForFocus != this)) {
       return;
     }
@@ -898,7 +955,15 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
         }
         scope._doRequestFocus(findFirstFocus: true);
     }
-    assert(_focusDebug(() => 'Unfocused node:', () => <Object>['primary focus was $this', 'next focus will be ${_manager?._markedForFocus}']));
+    assert(
+      _focusDebug(
+        () => 'Unfocused node:',
+        () => <Object>[
+          'primary focus was $this',
+          'next focus will be ${_manager?._markedForFocus}',
+        ],
+      ),
+    );
   }
 
   /// Removes the keyboard token from this focus node if it has one.
@@ -950,10 +1015,19 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
     assert(node._manager == _manager);
 
     if (removeScopeFocus) {
-      node.enclosingScope?._focusedChildren.remove(node);
+      final FocusScopeNode? nodeScope = node.enclosingScope;
+      if (nodeScope != null) {
+        nodeScope._focusedChildren.remove(node);
+        node.descendants
+            .where((FocusNode descendant) {
+              return descendant.enclosingScope == nodeScope;
+            })
+            .forEach(nodeScope._focusedChildren.remove);
+      }
     }
 
     node._parent = null;
+    node._clearEnclosingScopeCache();
     _children.remove(node);
     for (final FocusNode ancestor in ancestors) {
       ancestor._descendants = null;
@@ -975,12 +1049,21 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   void _reparent(FocusNode child) {
     assert(child != this, 'Tried to make a child into a parent of itself.');
     if (child._parent == this) {
-      assert(_children.contains(child), "Found a node that says it's a child, but doesn't appear in the child list.");
+      assert(
+        _children.contains(child),
+        "Found a node that says it's a child, but doesn't appear in the child list.",
+      );
       // The child is already a child of this parent.
       return;
     }
-    assert(_manager == null || child != _manager!.rootScope, "Reparenting the root node isn't allowed.");
-    assert(!ancestors.contains(child), 'The supplied child is already an ancestor of this node. Loops are not allowed.');
+    assert(
+      _manager == null || child != _manager!.rootScope,
+      "Reparenting the root node isn't allowed.",
+    );
+    assert(
+      !ancestors.contains(child),
+      'The supplied child is already an ancestor of this node. Loops are not allowed.',
+    );
     final FocusScopeNode? oldScope = child.enclosingScope;
     final bool hadFocus = child.hasFocus;
     child._parent?._removeChild(child, removeScopeFocus: oldScope != nearestScope);
@@ -1015,13 +1098,16 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   /// node, and then [attach] called on the new node. This typically happens in
   /// the [State.didUpdateWidget] method.
   ///
-  /// To receive key events that focuses on this node, pass a listener to `onKeyEvent`.
-  /// The `onKey` is a legacy API based on [RawKeyEvent] and will be deprecated
-  /// in the future.
+  /// To receive key events that focuses on this node, pass a listener to
+  /// `onKeyEvent`.
   @mustCallSuper
   FocusAttachment attach(
     BuildContext? context, {
     FocusOnKeyEventCallback? onKeyEvent,
+    @Deprecated(
+      'Use onKeyEvent instead. '
+      'This feature was deprecated after v3.18.0-2.0.pre.',
+    )
     FocusOnKeyCallback? onKey,
   }) {
     _context = context;
@@ -1074,7 +1160,10 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
       if (node._parent == null) {
         _reparent(node);
       }
-      assert(node.ancestors.contains(this), 'Focus was requested for a node that is not a descendant of the scope from which it was requested.');
+      assert(
+        node.ancestors.contains(this),
+        'Focus was requested for a node that is not a descendant of the scope from which it was requested.',
+      );
       node._doRequestFocus(findFirstFocus: true);
       return;
     }
@@ -1084,7 +1173,9 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   // This is overridden in FocusScopeNode.
   void _doRequestFocus({required bool findFirstFocus}) {
     if (!canRequestFocus) {
-      assert(_focusDebug(() => 'Node NOT requesting focus because canRequestFocus is false: $this'));
+      assert(
+        _focusDebug(() => 'Node NOT requesting focus because canRequestFocus is false: $this'),
+      );
       return;
     }
     // If the node isn't part of the tree, then we just defer the focus request
@@ -1095,7 +1186,8 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
       return;
     }
     _setAsFocusedChildForScope();
-    if (hasPrimaryFocus && (_manager!._markedForFocus == null || _manager!._markedForFocus == this)) {
+    if (hasPrimaryFocus &&
+        (_manager!._markedForFocus == null || _manager!._markedForFocus == this)) {
       return;
     }
     _hasKeyboardToken = true;
@@ -1127,10 +1219,15 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   /// track of previously focused children in that scope, so that if the focused
   /// child in that scope is removed, the previous focus returns.
   void _setAsFocusedChildForScope() {
-    FocusNode scopeFocus = this;
+    var scopeFocus = this;
     for (final FocusScopeNode ancestor in ancestors.whereType<FocusScopeNode>()) {
       assert(scopeFocus != ancestor, 'Somehow made a loop by setting focusedChild to its scope.');
-      assert(_focusDebug(() => 'Setting $scopeFocus as focused child for scope:', () => <Object>[ancestor]));
+      assert(
+        _focusDebug(
+          () => 'Setting $scopeFocus as focused child for scope:',
+          () => <Object>[ancestor],
+        ),
+      );
       // Remove it anywhere in the focused child history.
       ancestor._focusedChildren.remove(scopeFocus);
       // Add it to the end of the list, which is also the top of the queue: The
@@ -1156,22 +1253,58 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   /// direction, by calling the [FocusTraversalPolicy.inDirection] method.
   ///
   /// Returns true if it successfully found a node and requested focus.
-  bool focusInDirection(TraversalDirection direction) => FocusTraversalGroup.of(context!).inDirection(this, direction);
+  bool focusInDirection(TraversalDirection direction) =>
+      FocusTraversalGroup.of(context!).inDirection(this, direction);
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty<BuildContext>('context', context, defaultValue: null));
-    properties.add(FlagProperty('descendantsAreFocusable', value: descendantsAreFocusable, ifFalse: 'DESCENDANTS UNFOCUSABLE', defaultValue: true));
-    properties.add(FlagProperty('descendantsAreTraversable', value: descendantsAreTraversable, ifFalse: 'DESCENDANTS UNTRAVERSABLE', defaultValue: true));
-    properties.add(FlagProperty('canRequestFocus', value: canRequestFocus, ifFalse: 'NOT FOCUSABLE', defaultValue: true));
-    properties.add(FlagProperty('hasFocus', value: hasFocus && !hasPrimaryFocus, ifTrue: 'IN FOCUS PATH', defaultValue: false));
-    properties.add(FlagProperty('hasPrimaryFocus', value: hasPrimaryFocus, ifTrue: 'PRIMARY FOCUS', defaultValue: false));
+    properties.add(
+      FlagProperty(
+        'descendantsAreFocusable',
+        value: descendantsAreFocusable,
+        ifFalse: 'DESCENDANTS UNFOCUSABLE',
+        defaultValue: true,
+      ),
+    );
+    properties.add(
+      FlagProperty(
+        'descendantsAreTraversable',
+        value: descendantsAreTraversable,
+        ifFalse: 'DESCENDANTS UNTRAVERSABLE',
+        defaultValue: true,
+      ),
+    );
+    properties.add(
+      FlagProperty(
+        'canRequestFocus',
+        value: canRequestFocus,
+        ifFalse: 'NOT FOCUSABLE',
+        defaultValue: true,
+      ),
+    );
+    properties.add(
+      FlagProperty(
+        'hasFocus',
+        value: hasFocus && !hasPrimaryFocus,
+        ifTrue: 'IN FOCUS PATH',
+        defaultValue: false,
+      ),
+    );
+    properties.add(
+      FlagProperty(
+        'hasPrimaryFocus',
+        value: hasPrimaryFocus,
+        ifTrue: 'PRIMARY FOCUS',
+        defaultValue: false,
+      ),
+    );
   }
 
   @override
   List<DiagnosticsNode> debugDescribeChildren() {
-    int count = 1;
+    var count = 1;
     return _children.map<DiagnosticsNode>((FocusNode child) {
       return child.toDiagnosticsNode(name: 'Child ${count++}');
     }).toList();
@@ -1180,7 +1313,8 @@ class FocusNode with DiagnosticableTreeMixin, ChangeNotifier {
   @override
   String toStringShort() {
     final bool hasDebugLabel = debugLabel != null && debugLabel!.isNotEmpty;
-    final String extraData = '${hasDebugLabel ? debugLabel : ''}'
+    final extraData =
+        '${hasDebugLabel ? debugLabel : ''}'
         '${hasFocus && hasDebugLabel ? ' ' : ''}'
         '${hasFocus && !hasPrimaryFocus ? '[IN FOCUS PATH]' : ''}'
         '${hasPrimaryFocus ? '[PRIMARY FOCUS]' : ''}';
@@ -1221,16 +1355,22 @@ class FocusScopeNode extends FocusNode {
   FocusScopeNode({
     super.debugLabel,
     super.onKeyEvent,
+    @Deprecated(
+      'Use onKeyEvent instead. '
+      'This feature was deprecated after v3.18.0-2.0.pre.',
+    )
     super.onKey,
     super.skipTraversal,
     super.canRequestFocus,
     this.traversalEdgeBehavior = TraversalEdgeBehavior.closedLoop,
-  })  : super(
-          descendantsAreFocusable: true,
-        );
+    this.directionalTraversalEdgeBehavior = TraversalEdgeBehavior.stop,
+  }) : super(descendantsAreFocusable: true);
 
   @override
   FocusScopeNode get nearestScope => this;
+
+  @override
+  bool get descendantsAreFocusable => _canRequestFocus && super.descendantsAreFocusable;
 
   /// Controls the transfer of focus beyond the first and the last items of a
   /// [FocusScopeNode].
@@ -1239,6 +1379,13 @@ class FocusScopeNode extends FocusNode {
   /// focus traversal takes place [FocusTraversalPolicy] will read this value
   /// and apply the new behavior.
   TraversalEdgeBehavior traversalEdgeBehavior;
+
+  /// Controls the directional transfer of focus when the focus is on the first or last item.
+  ///
+  /// Changing this field value has no immediate effect on the UI. Instead, next time
+  /// focus traversal takes place [FocusTraversalPolicy] will read this value
+  /// and apply the new behavior.
+  TraversalEdgeBehavior directionalTraversalEdgeBehavior;
 
   /// Returns true if this scope is the focused child of its parent scope.
   bool get isFirstFocus => enclosingScope!.focusedChild == this;
@@ -1251,8 +1398,12 @@ class FocusScopeNode extends FocusNode {
   ///
   /// Returns null if there is no currently focused child.
   FocusNode? get focusedChild {
-    assert(_focusedChildren.isEmpty || _focusedChildren.last.enclosingScope == this, 'Focused child does not have the same idea of its enclosing scope as the scope does.');
-    return _focusedChildren.isNotEmpty ? _focusedChildren.last : null;
+    assert(
+      _focusedChildren.isEmpty || _focusedChildren.last.enclosingScope == this,
+      '$debugLabel: Focused child does not have the same idea of its enclosing scope '
+      '(${_focusedChildren.lastOrNull?.enclosingScope}) as the scope does.',
+    );
+    return _focusedChildren.lastOrNull;
   }
 
   // A stack of the children that have been set as the focusedChild, most recent
@@ -1297,11 +1448,16 @@ class FocusScopeNode extends FocusNode {
   /// tree, the given scope must be a descendant of this scope.
   void setFirstFocus(FocusScopeNode scope) {
     assert(scope != this, 'Unexpected self-reference in setFirstFocus.');
-    assert(_focusDebug(() => 'Setting scope as first focus in $this to node:', () => <Object>[scope]));
+    assert(
+      _focusDebug(() => 'Setting scope as first focus in $this to node:', () => <Object>[scope]),
+    );
     if (scope._parent == null) {
       _reparent(scope);
     }
-    assert(scope.ancestors.contains(this), '$FocusScopeNode $scope must be a child of $this to set it as first focus.');
+    assert(
+      scope.ancestors.contains(this),
+      '$FocusScopeNode $scope must be a child of $this to set it as first focus.',
+    );
     if (hasFocus) {
       scope._doRequestFocus(findFirstFocus: true);
     } else {
@@ -1332,11 +1488,20 @@ class FocusScopeNode extends FocusNode {
     _manager?._markNeedsUpdate();
   }
 
+  /// Requests that the scope itself receive focus, without trying to find
+  /// a descendant that should receive focus.
+  ///
+  /// This is used only if you want to park the focus on a scope itself.
+  void requestScopeFocus() {
+    _doRequestFocus(findFirstFocus: false);
+  }
+
   @override
   void _doRequestFocus({required bool findFirstFocus}) {
-
-    // It is possible that a previously focused child is no longer focusable.
-    while (this.focusedChild != null && !this.focusedChild!.canRequestFocus) {
+    // It is possible that a previously focused child is no longer focusable, so
+    // clean out the list if so.
+    while (_focusedChildren.isNotEmpty &&
+        (!_focusedChildren.last.canRequestFocus || _focusedChildren.last.enclosingScope == null)) {
       _focusedChildren.removeLast();
     }
 
@@ -1364,8 +1529,20 @@ class FocusScopeNode extends FocusNode {
     final List<String> childList = _focusedChildren.reversed.map<String>((FocusNode child) {
       return child.toStringShort();
     }).toList();
-    properties.add(IterableProperty<String>('focusedChildren', childList, defaultValue: const Iterable<String>.empty()));
-    properties.add(DiagnosticsProperty<TraversalEdgeBehavior>('traversalEdgeBehavior', traversalEdgeBehavior, defaultValue: TraversalEdgeBehavior.closedLoop));
+    properties.add(
+      IterableProperty<String>(
+        'focusedChildren',
+        childList,
+        defaultValue: const Iterable<String>.empty(),
+      ),
+    );
+    properties.add(
+      DiagnosticsProperty<TraversalEdgeBehavior>(
+        'traversalEdgeBehavior',
+        traversalEdgeBehavior,
+        defaultValue: TraversalEdgeBehavior.closedLoop,
+      ),
+    );
   }
 }
 
@@ -1403,6 +1580,44 @@ enum FocusHighlightStrategy {
   alwaysTraditional,
 }
 
+/// An enum to describe how [FocusManager] responds to [AppLifecycleState]
+/// changes with respect to preserving and restoring the primary focus node.
+///
+/// See also:
+///
+///  * [FocusManager.lifecyclePolicy], which accepts a value of this type.
+enum FocusLifecyclePolicy {
+  /// The behavior is platform-dependent. On desktop and web platforms, where
+  /// [AppLifecycleState] changes reliably reflect the app moving to and from
+  /// the foreground, the behavior matches [FocusLifecyclePolicy.suspendAndRestore].
+  /// On Android and iOS, the behavior matches [FocusLifecyclePolicy.keepFocused]
+  /// due to known issues with keyboard and autofill interactions on those platforms.
+  ///
+  /// This is the default.
+  automatic,
+
+  /// When the app is sent to the background, primary focus is reset to the root
+  /// focus node. When the app returns to the foreground, primary focus is
+  /// restored to the original node that had it before the app was
+  /// backgrounded.
+  suspendAndRestore,
+
+  /// The node with primary focus retains primary focus across the backgrounding
+  /// and foregrounding of the app.
+  keepFocused,
+}
+
+// By extending the WidgetsBindingObserver class,
+// we can add a listener object to FocusManager as a private member.
+class _AppLifecycleListener extends WidgetsBindingObserver {
+  _AppLifecycleListener(this.onLifecycleStateChanged);
+
+  final void Function(AppLifecycleState) onLifecycleStateChanged;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) => onLifecycleStateChanged(state);
+}
+
 /// Manages the focus tree.
 ///
 /// The focus tree is a separate, sparser, tree from the widget tree that
@@ -1412,8 +1627,8 @@ enum FocusHighlightStrategy {
 /// The focus manager is responsible for tracking which [FocusNode] has the
 /// primary input focus (the [primaryFocus]), holding the [FocusScopeNode] that
 /// is the root of the focus tree (the [rootScope]), and what the current
-/// [highlightMode] is. It also distributes key events from [KeyEventManager]
-/// to the nodes in the focus tree.
+/// [highlightMode] is. It also distributes [KeyEvent]s to the nodes in the
+/// focus tree.
 ///
 /// The singleton [FocusManager] instance is held by the [WidgetsBinding] as
 /// [WidgetsBinding.focusManager], and can be conveniently accessed using the
@@ -1462,15 +1677,37 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
   /// handlers, callers must call [registerGlobalHandlers]. See the
   /// documentation in that method for caveats to watch out for.
   FocusManager() {
+    if (kFlutterMemoryAllocationsEnabled) {
+      ChangeNotifier.maybeDispatchObjectCreation(this);
+    }
+    _updateLifecycleListener();
     rootScope._manager = this;
   }
 
+  /// It appears that some Android keyboard implementations can cause
+  /// app lifecycle state changes: adding the app lifecycle listener would
+  /// cause the text field to unfocus as the user is trying to type.
+  ///
+  /// Additionally, on iOS, input fields aren't automatically populated
+  /// with relevant data when using autofill.
+  ///
+  /// Until these are resolved, we won't be adding the listener to mobile platforms.
+  /// https://github.com/flutter/flutter/issues/148475#issuecomment-2118407411
+  /// https://github.com/flutter/flutter/pull/142930#issuecomment-1981750069
+  bool get _respondToLifecycleChange =>
+      kIsWeb ||
+      switch (defaultTargetPlatform) {
+        TargetPlatform.android || TargetPlatform.iOS => false,
+        TargetPlatform.fuchsia || TargetPlatform.linux => true,
+        TargetPlatform.windows || TargetPlatform.macOS => true,
+      };
+
   /// Registers global input event handlers that are needed to manage focus.
   ///
-  /// This sets the [RawKeyboard.keyEventHandler] for the shared instance of
-  /// [RawKeyboard] and adds a route to the global entry in the gesture routing
-  /// table. As such, only one [FocusManager] instance should register its
-  /// global handlers.
+  /// This calls the [HardwareKeyboard.addHandler] on the shared instance of
+  /// [HardwareKeyboard] and adds a route to the global entry in the gesture
+  /// routing table. As such, only one [FocusManager] instance should register
+  /// its global handlers.
   ///
   /// When this focus manager is no longer needed, calling [dispose] on it will
   /// unregister these handlers.
@@ -1478,7 +1715,11 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
 
   @override
   void dispose() {
+    if (_appLifecycleListener != null) {
+      WidgetsBinding.instance.removeObserver(_appLifecycleListener!);
+    }
     _highlightManager.dispose();
+    rootScope.dispose();
     super.dispose();
   }
 
@@ -1519,6 +1760,36 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
     _highlightManager.strategy = value;
   }
 
+  /// Sets the strategy by which [FocusManager] responds to [AppLifecycleState]
+  /// changes with respect to preserving and restoring the primary focus node.
+  ///
+  /// This property can be changed at any time and takes effect immediately.
+  /// It is typically set once during app initialization:
+  ///
+  /// {@tool snippet}
+  /// ```dart
+  /// void main() {
+  ///   WidgetsFlutterBinding.ensureInitialized();
+  ///   WidgetsBinding.instance.focusManager.lifecyclePolicy = .keepFocused;
+  /// }
+  /// ```
+  /// {@end-tool}
+  ///
+  /// Defaults to [FocusLifecyclePolicy.automatic].
+  ///
+  /// See also:
+  ///
+  ///  * [FocusLifecyclePolicy], which describes each policy value.
+  FocusLifecyclePolicy get lifecyclePolicy => _lifecyclePolicy;
+  FocusLifecyclePolicy _lifecyclePolicy = .automatic;
+  set lifecyclePolicy(FocusLifecyclePolicy value) {
+    if (_lifecyclePolicy == value) {
+      return;
+    }
+    _lifecyclePolicy = value;
+    _updateLifecycleListener();
+  }
+
   /// Indicates the current interaction mode for focus highlights.
   ///
   /// The value returned depends upon the [highlightStrategy] used, and possibly
@@ -1536,11 +1807,92 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
 
   /// Register a closure to be called when the [FocusManager] notifies its listeners
   /// that the value of [highlightMode] has changed.
-  void addHighlightModeListener(ValueChanged<FocusHighlightMode> listener) => _highlightManager.addListener(listener);
+  void addHighlightModeListener(ValueChanged<FocusHighlightMode> listener) =>
+      _highlightManager.addListener(listener);
 
   /// Remove a previously registered closure from the list of closures that the
   /// [FocusManager] notifies.
-  void removeHighlightModeListener(ValueChanged<FocusHighlightMode> listener) => _highlightManager.removeListener(listener);
+  void removeHighlightModeListener(ValueChanged<FocusHighlightMode> listener) =>
+      _highlightManager.removeListener(listener);
+
+  /// {@template flutter.widgets.focus_manager.FocusManager.addEarlyKeyEventHandler}
+  /// Adds a key event handler to a set of handlers that are called before any
+  /// key event handlers in the focus tree are called.
+  ///
+  /// All of the handlers in the set will be called for every key event the
+  /// [FocusManager] receives. If any one of the handlers returns
+  /// [KeyEventResult.handled] or [KeyEventResult.skipRemainingHandlers], then
+  /// none of the handlers in the focus tree will be called.
+  ///
+  /// If handlers are added while the existing callbacks are being invoked, they
+  /// will not be called until the next key event occurs.
+  ///
+  /// See also:
+  ///
+  /// * [removeEarlyKeyEventHandler], which removes handlers added by this
+  ///   function.
+  /// * [addLateKeyEventHandler], which is a similar mechanism for adding
+  ///   handlers that are invoked after the focus tree has had a chance to
+  ///   handle an event.
+  /// {@endtemplate}
+  void addEarlyKeyEventHandler(OnKeyEventCallback handler) {
+    _highlightManager.addEarlyKeyEventHandler(handler);
+  }
+
+  /// {@template flutter.widgets.focus_manager.FocusManager.removeEarlyKeyEventHandler}
+  /// Removes a key handler added by calling [addEarlyKeyEventHandler].
+  ///
+  /// If handlers are removed while the existing callbacks are being invoked,
+  /// they will continue to be called until the next key event is received.
+  ///
+  /// See also:
+  ///
+  /// * [addEarlyKeyEventHandler], which adds the handlers removed by this
+  ///   function.
+  /// {@endtemplate}
+  void removeEarlyKeyEventHandler(OnKeyEventCallback handler) {
+    _highlightManager.removeEarlyKeyEventHandler(handler);
+  }
+
+  /// {@template flutter.widgets.focus_manager.FocusManager.addLateKeyEventHandler}
+  /// Adds a key event handler to a set of handlers that are called if none of
+  /// the key event handlers in the focus tree handle the event.
+  ///
+  /// If the event reaches the root of the focus tree without being handled,
+  /// then all of the handlers in the set will be called. If any of them returns
+  /// [KeyEventResult.handled] or [KeyEventResult.skipRemainingHandlers], then
+  /// event propagation to the platform will be stopped.
+  ///
+  /// If handlers are added while the existing callbacks are being invoked, they
+  /// will not be called until the next key event is not handled by the focus
+  /// tree.
+  ///
+  /// See also:
+  ///
+  /// * [removeLateKeyEventHandler], which removes handlers added by this
+  ///   function.
+  /// * [addEarlyKeyEventHandler], which is a similar mechanism for adding
+  ///   handlers that are invoked before the focus tree has had a chance to
+  ///   handle an event.
+  /// {@endtemplate}
+  void addLateKeyEventHandler(OnKeyEventCallback handler) {
+    _highlightManager.addLateKeyEventHandler(handler);
+  }
+
+  /// {@template flutter.widgets.focus_manager.FocusManager.removeLateKeyEventHandler}
+  /// Removes a key handler added by calling [addLateKeyEventHandler].
+  ///
+  /// If handlers are removed while the existing callbacks are being invoked,
+  /// they will continue to be called until the next key event is received.
+  ///
+  /// See also:
+  ///
+  /// * [addLateKeyEventHandler], which adds the handlers removed by this
+  ///   function.
+  /// {@endtemplate}
+  void removeLateKeyEventHandler(OnKeyEventCallback handler) {
+    _highlightManager.removeLateKeyEventHandler(handler);
+  }
 
   /// The root [FocusScopeNode] in the focus tree.
   ///
@@ -1556,6 +1908,61 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
   // update.
   final Set<FocusNode> _dirtyNodes = <FocusNode>{};
 
+  // Allows FocusManager to respond to app lifecycle state changes,
+  // temporarily suspending the primaryFocus when the app is inactive.
+  _AppLifecycleListener? _appLifecycleListener;
+
+  // Stores the node that was focused before the app lifecycle changed.
+  // Will be restored as the primary focus once app is resumed.
+  FocusNode? _suspendedNode;
+
+  // Registers or unregisters _appLifecycleListener based on the current
+  // _lifecyclePolicy and platform.
+  void _updateLifecycleListener() {
+    final bool shouldListen = switch (_lifecyclePolicy) {
+      .automatic => _respondToLifecycleChange,
+      .suspendAndRestore => true,
+      .keepFocused => false,
+    };
+    if (shouldListen && _appLifecycleListener == null) {
+      _appLifecycleListener = _AppLifecycleListener(_appLifecycleChange);
+      WidgetsBinding.instance.addObserver(_appLifecycleListener!);
+    } else if (!shouldListen && _appLifecycleListener != null) {
+      WidgetsBinding.instance.removeObserver(_appLifecycleListener!);
+      _appLifecycleListener = null;
+      // Discard any node that was suspended before the policy changed, since
+      // we will no longer be restoring it.
+      _suspendedNode = null;
+    }
+    assert(shouldListen == (_appLifecycleListener != null));
+  }
+
+  void _appLifecycleChange(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_primaryFocus != rootScope) {
+        assert(_focusDebug(() => 'focus changed while app was paused, ignoring $_suspendedNode'));
+        _suspendedNode = null;
+      } else if (_suspendedNode != null) {
+        // Only restore the focus that was suspended when the app went inactive
+        // if nothing else has requested focus in the meantime. For example,
+        // activating a different window will cause its view to request focus.
+        if (_markedForFocus == null) {
+          assert(_focusDebug(() => 'requesting focus for $_suspendedNode'));
+          _suspendedNode!.requestFocus();
+          _suspendedNode = null;
+        } else {
+          assert(_haveScheduledUpdate);
+          _suspendedNode = null;
+        }
+      }
+    } else if (_primaryFocus != rootScope) {
+      assert(_focusDebug(() => 'suspending $_primaryFocus'));
+      _markedForFocus = rootScope;
+      _suspendedNode = _primaryFocus;
+      applyFocusChangesIfNeeded();
+    }
+  }
+
   // The node that has requested to have the primary focus, but hasn't been
   // given it yet.
   FocusNode? _markedForFocus;
@@ -1566,6 +1973,9 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
     assert(_focusDebug(() => 'Node was detached: $node'));
     if (_primaryFocus == node) {
       _primaryFocus = null;
+    }
+    if (_suspendedNode == node) {
+      _suspendedNode = null;
     }
     _dirtyNodes.remove(node);
   }
@@ -1596,23 +2006,64 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
   // Request that an update be scheduled, optionally requesting focus for the
   // given newFocus node.
   void _markNeedsUpdate() {
-    assert(_focusDebug(() => 'Scheduling update, current focus is $_primaryFocus, next focus will be $_markedForFocus'));
+    assert(
+      _focusDebug(
+        () =>
+            'Scheduling update, current focus is $_primaryFocus, next focus will be $_markedForFocus',
+      ),
+    );
     if (_haveScheduledUpdate) {
       return;
     }
     _haveScheduledUpdate = true;
-    scheduleMicrotask(_applyFocusChange);
+    scheduleMicrotask(applyFocusChangesIfNeeded);
   }
 
-  void _applyFocusChange() {
+  /// Applies any pending focus changes and notifies listeners that the focus
+  /// has changed.
+  ///
+  /// Must not be called during the build phase. This method is meant to be
+  /// called in a post-frame callback or microtask when the pending focus
+  /// changes need to be resolved before something else occurs.
+  ///
+  /// It can't be called during the build phase because not all listeners are
+  /// safe to be called with an update during a build.
+  ///
+  /// Typically, this is called automatically by the [FocusManager], but
+  /// sometimes it is necessary to ensure that no focus changes are pending
+  /// before executing an action. For example, the [MenuAnchor] class uses this
+  /// to make sure that the previous focus has been restored before executing a
+  /// menu callback when a menu item is selected.
+  ///
+  /// It is safe to call this if no focus changes are pending.
+  void applyFocusChangesIfNeeded() {
+    assert(
+      SchedulerBinding.instance.schedulerPhase != SchedulerPhase.persistentCallbacks,
+      'applyFocusChangesIfNeeded() should not be called during the build phase.',
+    );
+
     _haveScheduledUpdate = false;
     final FocusNode? previousFocus = _primaryFocus;
+
+    final FocusNode? marked = _markedForFocus;
+    if (marked != null && !marked.canRequestFocus) {
+      assert(_focusDebug(() => 'Marked node $marked can no longer request focus, unfocusing it.'));
+      // The node was marked for focus but became unfocusable before this
+      // update. Treat it as if it had received focus and then been disabled,
+      // matching FocusAttachment.detach(), so the scope's focus history is
+      // cleaned up and focus lands on a node that can still take it.
+      marked.unfocus(disposition: UnfocusDisposition.previouslyFocusedChild);
+      // A node with no enclosing scope has nowhere to move focus to, so
+      // unfocus() leaves the marker alone.
+      if (_markedForFocus == marked) {
+        _markedForFocus = null;
+      }
+    }
 
     for (final _Autofocus autofocus in _pendingAutofocuses) {
       autofocus.applyIfValid(this);
     }
     _pendingAutofocuses.clear();
-
     if (_primaryFocus == null && _markedForFocus == null) {
       // If we don't have any current focus, and nobody has asked to focus yet,
       // then revert to the root scope.
@@ -1658,21 +2109,53 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
     }());
   }
 
+  /// Enables this [FocusManager] to listen to changes of the application
+  /// lifecycle if it does not already have an application lifecycle listener
+  /// active, and the app isn't running on a native mobile platform.
+  ///
+  /// Typically, the application lifecycle listener for this [FocusManager] is
+  /// setup at construction, but sometimes it is necessary to manually initialize
+  /// it when the [FocusManager] does not have the relevant platform context in
+  /// [defaultTargetPlatform] at the time of construction. This can happen in
+  /// a test environment where the [BuildOwner] which initializes its own
+  /// [FocusManager], may not have the accurate platform context during its
+  /// initialization. In this case it is necessary for the test framework to call
+  /// this method after it has set up the test variant for a given test, so the
+  /// [FocusManager] can accurately listen to application lifecycle changes, if
+  /// supported.
+  @visibleForTesting
+  void listenToApplicationLifecycleChangesIfSupported() {
+    _updateLifecycleListener();
+  }
+
   @override
   List<DiagnosticsNode> debugDescribeChildren() {
-    return <DiagnosticsNode>[
-      rootScope.toDiagnosticsNode(name: 'rootScope'),
-    ];
+    return <DiagnosticsNode>[rootScope.toDiagnosticsNode(name: 'rootScope')];
   }
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    properties.add(FlagProperty('haveScheduledUpdate', value: _haveScheduledUpdate, ifTrue: 'UPDATE SCHEDULED'));
-    properties.add(DiagnosticsProperty<FocusNode>('primaryFocus', primaryFocus, defaultValue: null));
-    properties.add(DiagnosticsProperty<FocusNode>('nextFocus', _markedForFocus, defaultValue: null));
-    final Element? element = primaryFocus?.context as Element?;
+    properties.add(
+      FlagProperty('haveScheduledUpdate', value: _haveScheduledUpdate, ifTrue: 'UPDATE SCHEDULED'),
+    );
+    properties.add(
+      DiagnosticsProperty<FocusNode>('primaryFocus', primaryFocus, defaultValue: null),
+    );
+    properties.add(
+      DiagnosticsProperty<FocusNode>('nextFocus', _markedForFocus, defaultValue: null),
+    );
+    properties.add(
+      EnumProperty<FocusLifecyclePolicy>(
+        'lifecyclePolicy',
+        lifecyclePolicy,
+        defaultValue: FocusLifecyclePolicy.automatic,
+      ),
+    );
+    final element = primaryFocus?.context as Element?;
     if (element != null) {
-      properties.add(DiagnosticsProperty<String>('primaryFocusCreator', element.debugGetCreatorChain(20)));
+      properties.add(
+        DiagnosticsProperty<String>('primaryFocusCreator', element.debugGetCreatorChain(20)),
+      );
     }
   }
 }
@@ -1683,9 +2166,13 @@ class FocusManager with DiagnosticableTreeMixin, ChangeNotifier {
 // This doesn't extend ChangeNotifier because the callback passes the updated
 // value, and ChangeNotifier requires using VoidCallback.
 class _HighlightModeManager {
-  // If set, indicates if the last interaction detected was touch or not. If
-  // null, no interactions have occurred yet.
-  bool? _lastInteractionWasTouch;
+  _HighlightModeManager() {
+    assert(debugMaybeDispatchCreated('widgets', '_HighlightModeManager', this));
+  }
+
+  // If null, no interactions have occurred yet and the default highlight mode for the current
+  // platform applies.
+  bool? _lastInteractionRequiresTraditionalHighlights;
 
   FocusHighlightMode get highlightMode => _highlightMode ?? _defaultModeForPlatform;
   FocusHighlightMode? _highlightMode;
@@ -1700,6 +2187,28 @@ class _HighlightModeManager {
     updateMode();
   }
 
+  /// {@macro flutter.widgets.focus_manager.FocusManager.addEarlyKeyEventHandler}
+  void addEarlyKeyEventHandler(OnKeyEventCallback callback) => _earlyKeyEventHandlers.add(callback);
+
+  /// {@macro flutter.widgets.focus_manager.FocusManager.removeEarlyKeyEventHandler}
+  void removeEarlyKeyEventHandler(OnKeyEventCallback callback) =>
+      _earlyKeyEventHandlers.remove(callback);
+
+  // The list of callbacks for early key handling.
+  final HashedObserverList<OnKeyEventCallback> _earlyKeyEventHandlers =
+      HashedObserverList<OnKeyEventCallback>();
+
+  /// {@macro flutter.widgets.focus_manager.FocusManager.addLateKeyEventHandler}
+  void addLateKeyEventHandler(OnKeyEventCallback callback) => _lateKeyEventHandlers.add(callback);
+
+  /// {@macro flutter.widgets.focus_manager.FocusManager.removeLateKeyEventHandler}
+  void removeLateKeyEventHandler(OnKeyEventCallback callback) =>
+      _lateKeyEventHandlers.remove(callback);
+
+  // The list of callbacks for late key handling.
+  final HashedObserverList<OnKeyEventCallback> _lateKeyEventHandlers =
+      HashedObserverList<OnKeyEventCallback>();
+
   /// Register a closure to be called when the [FocusManager] notifies its
   /// listeners that the value of [highlightMode] has changed.
   void addListener(ValueChanged<FocusHighlightMode> listener) => _listeners.add(listener);
@@ -1709,19 +2218,26 @@ class _HighlightModeManager {
   void removeListener(ValueChanged<FocusHighlightMode> listener) => _listeners.remove(listener);
 
   // The list of listeners for [highlightMode] state changes.
-  HashedObserverList<ValueChanged<FocusHighlightMode>> _listeners = HashedObserverList<ValueChanged<FocusHighlightMode>>();
+  HashedObserverList<ValueChanged<FocusHighlightMode>> _listeners =
+      HashedObserverList<ValueChanged<FocusHighlightMode>>();
 
   void registerGlobalHandlers() {
     assert(ServicesBinding.instance.keyEventManager.keyMessageHandler == null);
+    // TODO(gspencergoog): Remove this when the RawKeyEvent system is
+    // deprecated, and replace it with registering a handler on the
+    // HardwareKeyboard.
     ServicesBinding.instance.keyEventManager.keyMessageHandler = handleKeyMessage;
     GestureBinding.instance.pointerRouter.addGlobalRoute(handlePointerEvent);
+    SemanticsBinding.instance.addSemanticsActionListener(handleSemanticsAction);
   }
 
   @mustCallSuper
   void dispose() {
+    assert(debugMaybeDispatchDisposed(this));
     if (ServicesBinding.instance.keyEventManager.keyMessageHandler == handleKeyMessage) {
       GestureBinding.instance.pointerRouter.removeGlobalRoute(handlePointerEvent);
       ServicesBinding.instance.keyEventManager.keyMessageHandler = null;
+      SemanticsBinding.instance.removeSemanticsActionListener(handleSemanticsAction);
     }
     _listeners = HashedObserverList<ValueChanged<FocusHighlightMode>>();
   }
@@ -1731,8 +2247,8 @@ class _HighlightModeManager {
     if (_listeners.isEmpty) {
       return;
     }
-    final List<ValueChanged<FocusHighlightMode>> localListeners = List<ValueChanged<FocusHighlightMode>>.of(_listeners);
-    for (final ValueChanged<FocusHighlightMode> listener in localListeners) {
+    final localListeners = List<ValueChanged<FocusHighlightMode>>.of(_listeners);
+    for (final listener in localListeners) {
       try {
         if (_listeners.contains(listener)) {
           listener(highlightMode);
@@ -1749,41 +2265,67 @@ class _HighlightModeManager {
           ];
           return true;
         }());
-        FlutterError.reportError(FlutterErrorDetails(
-          exception: exception,
-          stack: stack,
-          library: 'widgets library',
-          context: ErrorDescription('while dispatching notifications for $runtimeType'),
-          informationCollector: collector,
-        ));
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: exception,
+            stack: stack,
+            library: 'widgets library',
+            context: ErrorDescription('while dispatching notifications for $runtimeType'),
+            informationCollector: collector,
+          ),
+        );
       }
     }
   }
 
   void handlePointerEvent(PointerEvent event) {
-    final FocusHighlightMode expectedMode;
     switch (event.kind) {
       case PointerDeviceKind.touch:
       case PointerDeviceKind.stylus:
       case PointerDeviceKind.invertedStylus:
-        _lastInteractionWasTouch = true;
-        expectedMode = FocusHighlightMode.touch;
+        if (_lastInteractionRequiresTraditionalHighlights != true) {
+          _lastInteractionRequiresTraditionalHighlights = true;
+          updateMode();
+        }
       case PointerDeviceKind.mouse:
       case PointerDeviceKind.trackpad:
       case PointerDeviceKind.unknown:
-        _lastInteractionWasTouch = false;
-        expectedMode = FocusHighlightMode.traditional;
     }
-    if (expectedMode != highlightMode) {
-      updateMode();
+  }
+
+  static const int _kAndroidSoftKeyboardFlag = 0x00000002; // KeyEvent.FLAG_SOFT_KEYBOARD
+  static const int _kAndroidVirtualKeyboardDeviceId = -1; // KeyCharacterMap.VIRTUAL_KEYBOARD
+
+  bool _isKeyMessageFromAndroidIME(KeyMessage message) {
+    final RawKeyEvent? rawEvent = message.rawEvent;
+    if (rawEvent == null) {
+      return false;
     }
+    final RawKeyEventData data = rawEvent.data;
+    if (data is! RawKeyEventDataAndroid) {
+      return false;
+    }
+    return (data.flags & _kAndroidSoftKeyboardFlag) != 0 ||
+        data.deviceId == _kAndroidVirtualKeyboardDeviceId;
   }
 
   bool handleKeyMessage(KeyMessage message) {
     // Update highlightMode first, since things responding to the keys might
     // look at the highlight mode, and it should be accurate.
-    _lastInteractionWasTouch = false;
-    updateMode();
+    // ignore: use_if_null_to_convert_nulls_to_bools
+    if (_lastInteractionRequiresTraditionalHighlights != false) {
+      // Android sends raw key events for "Backspace" key events from virtual
+      // keyboards. These shouldn't switch the highlight mode to traditional.
+      // See: https://github.com/flutter/flutter/issues/180746
+      // TODO(team-text-input): Remove this virtual keyboard check when we
+      // migrate to HardwareKeyboard:
+      // https://github.com/flutter/flutter/issues/136419
+      final bool isFromVirtualKeyboard = _isKeyMessageFromAndroidIME(message);
+      if (!isFromVirtualKeyboard) {
+        _lastInteractionRequiresTraditionalHighlights = false;
+        updateMode();
+      }
+    }
 
     assert(_focusDebug(() => 'Received key event $message'));
     if (FocusManager.instance.primaryFocus == null) {
@@ -1791,23 +2333,47 @@ class _HighlightModeManager {
       return false;
     }
 
-    // Walk the current focus from the leaf to the root, calling each one's
-    // onKey on the way up, and if one responds that they handled it or want to
-    // stop propagation, stop.
-    bool handled = false;
-    for (final FocusNode node in <FocusNode>[
+    var handled = false;
+    // Check to see if any of the early handlers handle the key. If so, then
+    // return early.
+    if (_earlyKeyEventHandlers.isNotEmpty) {
+      final results = <KeyEventResult>[
+        // Make a copy to prevent problems if the list is modified during iteration.
+        for (final OnKeyEventCallback callback in _earlyKeyEventHandlers.toList())
+          for (final KeyEvent event in message.events) callback(event),
+      ];
+      final KeyEventResult result = combineKeyEventResults(results);
+      switch (result) {
+        case KeyEventResult.ignored:
+          break;
+        case KeyEventResult.handled:
+          assert(_focusDebug(() => 'Key event $message handled by early key event callback.'));
+          handled = true;
+        case KeyEventResult.skipRemainingHandlers:
+          assert(
+            _focusDebug(
+              () => 'Key event $message propagation stopped by early key event callback.',
+            ),
+          );
+          handled = false;
+      }
+    }
+    if (handled) {
+      return true;
+    }
+
+    // Walk the current focus from the leaf to the root, calling each node's
+    // onKeyEvent on the way up, and if one responds that they handled it or
+    // want to stop propagation, stop.
+    for (final node in <FocusNode>[
       FocusManager.instance.primaryFocus!,
       ...FocusManager.instance.primaryFocus!.ancestors,
     ]) {
-      final List<KeyEventResult> results = <KeyEventResult>[];
-      if (node.onKeyEvent != null) {
-        for (final KeyEvent event in message.events) {
-          results.add(node.onKeyEvent!(node, event));
-        }
-      }
-      if (node.onKey != null && message.rawEvent != null) {
-        results.add(node.onKey!(node, message.rawEvent!));
-      }
+      final results = <KeyEventResult>[
+        if (node.onKeyEvent != null)
+          for (final KeyEvent event in message.events) node.onKeyEvent!(node, event),
+        if (node.onKey != null && message.rawEvent != null) node.onKey!(node, message.rawEvent!),
+      ];
       final KeyEventResult result = combineKeyEventResults(results);
       switch (result) {
         case KeyEventResult.ignored:
@@ -1824,10 +2390,41 @@ class _HighlightModeManager {
       assert(result != KeyEventResult.ignored);
       break;
     }
+
+    // Check to see if any late key event handlers want to handle the event.
+    if (!handled && _lateKeyEventHandlers.isNotEmpty) {
+      final results = <KeyEventResult>[
+        // Make a copy to prevent problems if the list is modified during iteration.
+        for (final OnKeyEventCallback callback in _lateKeyEventHandlers.toList())
+          for (final KeyEvent event in message.events) callback(event),
+      ];
+      final KeyEventResult result = combineKeyEventResults(results);
+      switch (result) {
+        case KeyEventResult.ignored:
+          break;
+        case KeyEventResult.handled:
+          assert(_focusDebug(() => 'Key event $message handled by late key event callback.'));
+          handled = true;
+        case KeyEventResult.skipRemainingHandlers:
+          assert(
+            _focusDebug(() => 'Key event $message propagation stopped by late key event callback.'),
+          );
+          handled = false;
+      }
+    }
     if (!handled) {
-      assert(_focusDebug(() => 'Key event not handled by anyone: $message.'));
+      assert(_focusDebug(() => 'Key event not handled by focus system: $message.'));
     }
     return handled;
+  }
+
+  void handleSemanticsAction(SemanticsActionEvent semanticsActionEvent) {
+    if (kIsWeb &&
+        semanticsActionEvent.type == SemanticsAction.focus &&
+        _lastInteractionRequiresTraditionalHighlights != true) {
+      _lastInteractionRequiresTraditionalHighlights = true;
+      updateMode();
+    }
   }
 
   // Update function to be called whenever the state relating to highlightMode
@@ -1836,14 +2433,14 @@ class _HighlightModeManager {
     final FocusHighlightMode newMode;
     switch (strategy) {
       case FocusHighlightStrategy.automatic:
-        if (_lastInteractionWasTouch == null) {
+        if (_lastInteractionRequiresTraditionalHighlights == null) {
           // If we don't have any information about the last interaction yet,
           // then just rely on the default value for the platform, which will be
           // determined based on the target platform if _highlightMode is not
           // set.
           return;
         }
-        if (_lastInteractionWasTouch!) {
+        if (_lastInteractionRequiresTraditionalHighlights!) {
           newMode = FocusHighlightMode.touch;
         } else {
           newMode = FocusHighlightMode.traditional;

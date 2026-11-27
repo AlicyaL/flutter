@@ -2,12 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'dialog.dart';
+/// @docImport 'ink_well.dart';
+/// @docImport 'list_tile.dart';
+library;
+
 import 'package:flutter/widgets.dart';
 
 import 'card_theme.dart';
 import 'color_scheme.dart';
+import 'colors.dart';
 import 'material.dart';
 import 'theme.dart';
+
+enum _CardVariant { elevated, filled, outlined }
 
 /// A Material Design card: a panel with slightly rounded corners and an
 /// elevation shadow.
@@ -39,9 +47,16 @@ import 'theme.dart';
 /// ** See code in examples/api/lib/material/card/card.1.dart **
 /// {@end-tool}
 ///
-/// Material Design 3 introduced new types of cards. These can
-/// be produced by configuring the [Card] widget's properties.
-/// [Card] widget.
+/// For Material Design 2 (when [ThemeData.useMaterial3] is false), there is a
+/// single card type: the elevated card. In that mode the named constructors
+/// ([Card.filled], [Card.outlined]) behave the same as the default [Card].
+///
+/// For Material Design 3 (when [ThemeData.useMaterial3] is true), three visual
+/// variants are available: the default [Card] (elevated), [Card.filled], and
+/// [Card.outlined]. All variants share the same theme class, [CardThemeData],
+/// so theme properties (for example [CardThemeData.shape]) apply to every card
+/// variant within the theme's scope.
+///
 /// {@tool dartpad}
 /// This sample shows creation of [Card] widgets for elevated, filled and
 /// outlined types, as described in: https://m3.material.io/components/cards/overview
@@ -56,10 +71,12 @@ import 'theme.dart';
 ///  * <https://material.io/design/components/cards.html>
 ///  * <https://m3.material.io/components/cards>
 class Card extends StatelessWidget {
-  /// Creates a Material Design card.
+  /// Creates an elevated variant of Card.
   ///
-  /// The [elevation] must be null or non-negative. The [borderOnForeground]
-  /// must not be null.
+  /// Elevated cards have a drop shadow, providing more separation from the
+  /// background than filled cards, but less than outlined cards.
+  ///
+  /// The [elevation] must be null or non-negative.
   const Card({
     super.key,
     this.color,
@@ -72,31 +89,87 @@ class Card extends StatelessWidget {
     this.clipBehavior,
     this.child,
     this.semanticContainer = true,
-  }) : assert(elevation == null || elevation >= 0.0);
+  }) : assert(elevation == null || elevation >= 0.0),
+       _variant = _CardVariant.elevated;
+
+  /// Create a filled variant of Card.
+  ///
+  /// Filled cards provide subtle separation from the background. This has less
+  /// emphasis than elevated cards (the default) or outlined cards.
+  ///
+  /// If [ThemeData.useMaterial3] is false, this constructor is equivalent to
+  /// the default constructor of [Card].
+  const Card.filled({
+    super.key,
+    this.color,
+    this.shadowColor,
+    this.surfaceTintColor,
+    this.elevation,
+    this.shape,
+    this.borderOnForeground = true,
+    this.margin,
+    this.clipBehavior,
+    this.child,
+    this.semanticContainer = true,
+  }) : assert(elevation == null || elevation >= 0.0),
+       _variant = _CardVariant.filled;
+
+  /// Create an outlined variant of Card.
+  ///
+  /// Outlined cards have a visual boundary around the container. This can
+  /// provide greater emphasis than the other types.
+  ///
+  /// The card's outline is defined by the [shape] property. By default, the
+  /// card uses a [RoundedRectangleBorder] with a 12.0 corner radius, a 1.0
+  /// border width, and the color from [ColorScheme.outlineVariant]. If you
+  /// provide a custom [shape], it is recommended to use an [OutlinedBorder]
+  /// with a non-null [OutlinedBorder.side] to keep a visible outline.
+  ///
+  /// If [ThemeData.useMaterial3] is false, this constructor is equivalent to
+  /// the default constructor of [Card].
+  const Card.outlined({
+    super.key,
+    this.color,
+    this.shadowColor,
+    this.surfaceTintColor,
+    this.elevation,
+    this.shape,
+    this.borderOnForeground = true,
+    this.margin,
+    this.clipBehavior,
+    this.child,
+    this.semanticContainer = true,
+  }) : assert(elevation == null || elevation >= 0.0),
+       _variant = _CardVariant.outlined;
 
   /// The card's background color.
   ///
   /// Defines the card's [Material.color].
   ///
   /// If this property is null then the ambient [CardTheme.color] is used. If that is null,
-  /// and [ThemeData.useMaterial3] is true, then [ColorScheme.surface] of
+  /// and [ThemeData.useMaterial3] is true, then [ColorScheme.surfaceContainerLow] of
   /// [ThemeData.colorScheme] is used. Otherwise, [ThemeData.cardColor] is used.
   final Color? color;
 
   /// The color to paint the shadow below the card.
   ///
-  /// If null then the ambient [CardTheme]'s shadowColor is used.
+  /// If null then the ambient [CardThemeData.shadowColor] is used.
   /// If that's null too, then the overall theme's [ThemeData.shadowColor]
   /// (default black) is used.
   final Color? shadowColor;
 
   /// The color used as an overlay on [color] to indicate elevation.
   ///
+  /// This is not recommended for use. [Material 3 spec](https://m3.material.io/styles/color/the-color-system/color-roles)
+  /// introduced a set of tone-based surfaces and surface containers in its [ColorScheme],
+  /// which provide more flexibility. The intention is to eventually remove surface tint color from
+  /// the framework.
+  ///
   /// If this is null, no overlay will be applied. Otherwise this color
   /// will be composited on top of [color] with an opacity related
   /// to [elevation] and used to paint the background of the card.
   ///
-  /// The default is null.
+  /// The default is [Colors.transparent].
   ///
   /// See [Material.surfaceTintColor] for more details on how this
   /// overlay is applied.
@@ -107,17 +180,19 @@ class Card extends StatelessWidget {
   ///
   /// Defines the card's [Material.elevation].
   ///
-  /// If this property is null then [CardTheme.elevation] of
-  /// [ThemeData.cardTheme] is used. If that's null, the default value is 1.0.
+  /// If this property is null then the ambient [CardThemeData.elevation] is
+  /// used. If that's null, the default value is 1.0.
   final double? elevation;
 
   /// The shape of the card's [Material].
   ///
   /// Defines the card's [Material.shape].
   ///
-  /// If this property is null then [CardTheme.shape] of [ThemeData.cardTheme]
-  /// is used. If that's null then the shape will be a [RoundedRectangleBorder]
-  /// with a circular corner radius of 4.0.
+  /// If null, the ambient [CardTheme.shape] from [ThemeData.cardTheme] is used.
+  /// If that is also null, the shape defaults to a [RoundedRectangleBorder].
+  /// The default corner radius is 12.0 when [ThemeData.useMaterial3] is true,
+  /// and 4.0 otherwise. For Material 3 outlined cards, the default [shape] also
+  /// includes a border side (see [OutlinedBorder.side]).
   final ShapeBorder? shape;
 
   /// Whether to paint the [shape] border in front of the [child].
@@ -128,17 +203,17 @@ class Card extends StatelessWidget {
 
   /// {@macro flutter.material.Material.clipBehavior}
   ///
-  /// If this property is null then [CardTheme.clipBehavior] of
-  /// [ThemeData.cardTheme] is used. If that's null then the behavior will be [Clip.none].
+  /// If this property is null then the ambient [CardThemeData.clipBehavior] is
+  /// used. If that's null then the behavior will be [Clip.none].
   final Clip? clipBehavior;
 
   /// The empty space that surrounds the card.
   ///
   /// Defines the card's outer [Container.margin].
   ///
-  /// If this property is null then [CardTheme.margin] of
-  /// [ThemeData.cardTheme] is used. If that's null, the default margin is 4.0
-  /// logical pixels on all sides: `EdgeInsets.all(4.0)`.
+  /// If this property is null then the ambient [CardThemeData.margin] is used.
+  /// If that's null, the default margin is 4.0 logical pixels on
+  /// all sides: `EdgeInsets.all(4.0)`.
   final EdgeInsetsGeometry? margin;
 
   /// Whether this widget represents a single semantic container, or if false
@@ -159,28 +234,37 @@ class Card extends StatelessWidget {
   /// {@macro flutter.widgets.ProxyWidget.child}
   final Widget? child;
 
+  final _CardVariant _variant;
+
   @override
   Widget build(BuildContext context) {
-    final CardTheme cardTheme = CardTheme.of(context);
-    final CardTheme defaults = Theme.of(context).useMaterial3 ? _CardDefaultsM3(context) : _CardDefaultsM2(context);
+    final CardThemeData cardTheme = CardTheme.of(context);
+    final CardThemeData defaults;
+    if (Theme.of(context).useMaterial3) {
+      defaults = switch (_variant) {
+        _CardVariant.elevated => _CardDefaultsM3(context),
+        _CardVariant.filled => _FilledCardDefaultsM3(context),
+        _CardVariant.outlined => _OutlinedCardDefaultsM3(context),
+      };
+    } else {
+      defaults = _CardDefaultsM2(context);
+    }
 
     return Semantics(
       container: semanticContainer,
-      child: Container(
-        margin: margin ?? cardTheme.margin ?? defaults.margin!,
+      child: Padding(
+        padding: margin ?? cardTheme.margin ?? defaults.margin!,
         child: Material(
           type: MaterialType.card,
           color: color ?? cardTheme.color ?? defaults.color,
           shadowColor: shadowColor ?? cardTheme.shadowColor ?? defaults.shadowColor,
-          surfaceTintColor: surfaceTintColor ?? cardTheme.surfaceTintColor ?? defaults.surfaceTintColor,
+          surfaceTintColor:
+              surfaceTintColor ?? cardTheme.surfaceTintColor ?? defaults.surfaceTintColor,
           elevation: elevation ?? cardTheme.elevation ?? defaults.elevation!,
           shape: shape ?? cardTheme.shape ?? defaults.shape,
           borderOnForeground: borderOnForeground,
           clipBehavior: clipBehavior ?? cardTheme.clipBehavior ?? defaults.clipBehavior!,
-          child: Semantics(
-            explicitChildNodes: !semanticContainer,
-            child: child,
-          ),
+          child: Semantics(explicitChildNodes: !semanticContainer, child: child),
         ),
       ),
     );
@@ -188,16 +272,14 @@ class Card extends StatelessWidget {
 }
 
 // Hand coded defaults based on Material Design 2.
-class _CardDefaultsM2 extends CardTheme {
+class _CardDefaultsM2 extends CardThemeData {
   const _CardDefaultsM2(this.context)
     : super(
         clipBehavior: Clip.none,
         elevation: 1.0,
         margin: const EdgeInsets.all(4.0),
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(4.0)),
-        )
-    );
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(4.0))),
+      );
 
   final BuildContext context;
 
@@ -215,13 +297,83 @@ class _CardDefaultsM2 extends CardTheme {
 // Design token database by the script:
 //   dev/tools/gen_defaults/bin/gen_defaults.dart.
 
-class _CardDefaultsM3 extends CardTheme {
+// dart format off
+class _CardDefaultsM3 extends CardThemeData {
   _CardDefaultsM3(this.context)
     : super(
         clipBehavior: Clip.none,
         elevation: 1.0,
         margin: const EdgeInsets.all(4.0),
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12.0))),
+      );
+
+  final BuildContext context;
+  late final ColorScheme _colors = Theme.of(context).colorScheme;
+
+  @override
+  Color? get color => _colors.surfaceContainerLow;
+
+  @override
+  Color? get shadowColor => _colors.shadow;
+
+  @override
+  Color? get surfaceTintColor => Colors.transparent;
+
+  @override
+  ShapeBorder? get shape =>const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12.0)));
+}
+// dart format on
+
+// END GENERATED TOKEN PROPERTIES - Card
+
+// BEGIN GENERATED TOKEN PROPERTIES - FilledCard
+
+// Do not edit by hand. The code between the "BEGIN GENERATED" and
+// "END GENERATED" comments are generated from data in the Material
+// Design token database by the script:
+//   dev/tools/gen_defaults/bin/gen_defaults.dart.
+
+// dart format off
+class _FilledCardDefaultsM3 extends CardThemeData {
+  _FilledCardDefaultsM3(this.context)
+    : super(
+        clipBehavior: Clip.none,
+        elevation: 0.0,
+        margin: const EdgeInsets.all(4.0),
+      );
+
+  final BuildContext context;
+  late final ColorScheme _colors = Theme.of(context).colorScheme;
+
+  @override
+  Color? get color => _colors.surfaceContainerHighest;
+
+  @override
+  Color? get shadowColor => _colors.shadow;
+
+  @override
+  Color? get surfaceTintColor => Colors.transparent;
+
+  @override
+  ShapeBorder? get shape =>const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12.0)));
+}
+// dart format on
+
+// END GENERATED TOKEN PROPERTIES - FilledCard
+
+// BEGIN GENERATED TOKEN PROPERTIES - OutlinedCard
+
+// Do not edit by hand. The code between the "BEGIN GENERATED" and
+// "END GENERATED" comments are generated from data in the Material
+// Design token database by the script:
+//   dev/tools/gen_defaults/bin/gen_defaults.dart.
+
+// dart format off
+class _OutlinedCardDefaultsM3 extends CardThemeData {
+  _OutlinedCardDefaultsM3(this.context)
+    : super(
+        clipBehavior: Clip.none,
+        elevation: 0.0,
+        margin: const EdgeInsets.all(4.0),
       );
 
   final BuildContext context;
@@ -234,7 +386,14 @@ class _CardDefaultsM3 extends CardTheme {
   Color? get shadowColor => _colors.shadow;
 
   @override
-  Color? get surfaceTintColor => _colors.surfaceTint;
-}
+  Color? get surfaceTintColor => Colors.transparent;
 
-// END GENERATED TOKEN PROPERTIES - Card
+  @override
+  ShapeBorder? get shape =>
+    const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12.0))).copyWith(
+      side: BorderSide(color: _colors.outlineVariant)
+    );
+}
+// dart format on
+
+// END GENERATED TOKEN PROPERTIES - OutlinedCard

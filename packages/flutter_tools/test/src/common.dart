@@ -3,20 +3,25 @@
 // found in the LICENSE file.
 
 import 'dart:async';
+import 'dart:io' as io show IOOverrides;
 
 import 'package:args/command_runner.dart';
+import 'package:collection/collection.dart';
 import 'package:file/memory.dart';
 import 'package:flutter_tools/src/base/common.dart';
-import 'package:flutter_tools/src/base/context.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/platform.dart';
-import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:meta/meta.dart';
 import 'package:path/path.dart' as path; // flutter_ignore: package_path_import
 import 'package:test/test.dart' as test_package show test;
 import 'package:test/test.dart' hide test;
+import 'package:unified_analytics/unified_analytics.dart';
 
+import 'fakes.dart';
+import 'fs_safety.dart';
+
+export 'package:path/path.dart' show Context; // flutter_ignore: package_path_import
 export 'package:test/test.dart' hide isInstanceOf, test;
 
 void tryToDelete(FileSystemEntity fileEntity) {
@@ -46,14 +51,19 @@ String getFlutterRoot() {
     return platform.environment['FLUTTER_ROOT']!;
   }
 
-  Error invalidScript() => StateError('Could not determine flutter_tools/ path from script URL (${globals.platform.script}); consider setting FLUTTER_ROOT explicitly.');
+  Error invalidScript() => StateError(
+    'Could not determine flutter_tools/ path from script URL (${platform.script}); consider setting FLUTTER_ROOT explicitly.',
+  );
 
   Uri scriptUri;
   switch (platform.script.scheme) {
     case 'file':
       scriptUri = platform.script;
     case 'data':
-      final RegExp flutterTools = RegExp(r'(file://[^"]*[/\\]flutter_tools[/\\][^"]+\.dart)', multiLine: true);
+      final flutterTools = RegExp(
+        r'(file://[^"]*[/\\]flutter_tools[/\\][^"]+\.dart)',
+        multiLine: true,
+      );
       final Match? match = flutterTools.firstMatch(Uri.decodeFull(platform.script.path));
       if (match == null) {
         throw invalidScript();
@@ -63,7 +73,7 @@ String getFlutterRoot() {
       throw invalidScript();
   }
 
-  final List<String> parts = path.split(globals.localFileSystem.path.fromUri(scriptUri));
+  final List<String> parts = path.split(path.fromUri(scriptUri));
   final int toolsIndex = parts.indexOf('flutter_tools');
   if (toolsIndex == -1) {
     throw invalidScript();
@@ -74,13 +84,18 @@ String getFlutterRoot() {
 
 /// Capture console print events into a string buffer.
 Future<StringBuffer> capturedConsolePrint(Future<void> Function() body) async {
-  final StringBuffer buffer = StringBuffer();
-  await runZoned<Future<void>>(() async {
-    // Service the event loop.
-    await body();
-  }, zoneSpecification: ZoneSpecification(print: (Zone self, ZoneDelegate parent, Zone zone, String line) {
-    buffer.writeln(line);
-  }));
+  final buffer = StringBuffer();
+  await runZoned<Future<void>>(
+    () async {
+      // Service the event loop.
+      await body();
+    },
+    zoneSpecification: ZoneSpecification(
+      print: (Zone self, ZoneDelegate parent, Zone zone, String line) {
+        buffer.writeln(line);
+      },
+    ),
+  );
   return buffer;
 }
 
@@ -88,22 +103,23 @@ Future<StringBuffer> capturedConsolePrint(Future<void> Function() body) async {
 final Matcher throwsAssertionError = throwsA(isA<AssertionError>());
 
 /// Matcher for functions that throw [ToolExit].
-Matcher throwsToolExit({ int? exitCode, Pattern? message }) {
-  Matcher matcher = _isToolExit;
+///
+/// [message] is matched using the [contains] matcher.
+Matcher throwsToolExit({int? exitCode, Pattern? message}) {
+  var result = const TypeMatcher<ToolExit>();
+
   if (exitCode != null) {
-    matcher = allOf(matcher, (ToolExit e) => e.exitCode == exitCode);
+    result = result.having((ToolExit e) => e.exitCode, 'exitCode', equals(exitCode));
   }
   if (message != null) {
-    matcher = allOf(matcher, (ToolExit e) => e.message?.contains(message) ?? false);
+    result = result.having((ToolExit e) => e.message, 'message', contains(message));
   }
-  return throwsA(matcher);
+
+  return throwsA(result);
 }
 
-/// Matcher for [ToolExit]s.
-final TypeMatcher<ToolExit> _isToolExit = isA<ToolExit>();
-
 /// Matcher for functions that throw [UsageException].
-Matcher throwsUsageException({Pattern? message }) {
+Matcher throwsUsageException({Pattern? message}) {
   Matcher matcher = _isUsageException;
   if (message != null) {
     matcher = allOf(matcher, (UsageException e) => e.message.contains(message));
@@ -115,7 +131,7 @@ Matcher throwsUsageException({Pattern? message }) {
 final TypeMatcher<UsageException> _isUsageException = isA<UsageException>();
 
 /// Matcher for functions that throw [ProcessException].
-Matcher throwsProcessException({ Pattern? message }) {
+Matcher throwsProcessException({Pattern? message}) {
   Matcher matcher = _isProcessException;
   if (message != null) {
     matcher = allOf(matcher, (ProcessException e) => e.message.contains(message));
@@ -132,8 +148,8 @@ Future<void> expectToolExitLater(Future<dynamic> future, Matcher messageMatcher)
     fail('ToolExit expected, but nothing thrown');
   } on ToolExit catch (e) {
     expect(e.message, messageMatcher);
-  // Catch all exceptions to give a better test failure message.
-  } catch (e, trace) { // ignore: avoid_catches_without_on_clauses
+    // Catch all exceptions to give a better test failure message.
+  } catch (e, trace) {
     fail('ToolExit expected, got $e\n$trace');
   }
 }
@@ -141,26 +157,33 @@ Future<void> expectToolExitLater(Future<dynamic> future, Matcher messageMatcher)
 Future<void> expectReturnsNormallyLater(Future<dynamic> future) async {
   try {
     await future;
-  // Catch all exceptions to give a better test failure message.
-  } catch (e, trace) { // ignore: avoid_catches_without_on_clauses
+    // Catch all exceptions to give a better test failure message.
+  } catch (e, trace) {
     fail('Expected to run with no exceptions, got $e\n$trace');
   }
 }
 
 Matcher containsIgnoringWhitespace(String toSearch) {
-  return predicate(
-    (String source) {
-      return collapseWhitespace(source).contains(collapseWhitespace(toSearch));
-    },
-    'contains "$toSearch" ignoring whitespace.',
-  );
+  return predicate((String source) {
+    return collapseWhitespace(source).contains(collapseWhitespace(toSearch));
+  }, 'contains "$toSearch" ignoring whitespace.');
 }
 
-/// The tool overrides `test` to ensure that files created under the
-/// system temporary directory are deleted after each test by calling
-/// `LocalFileSystem.dispose()`.
+/// Expects [command] to accept the `--[no-]deprecated-js-interop` flag, whose
+/// value is `null` unless it is passed.
+void expectAcceptsDeprecatedJsInteropFlag(Command<void> command) {
+  Object? valueFor(List<String> args) => command.argParser.parse(args)['deprecated-js-interop'];
+
+  expect(valueFor(<String>[]), isNull);
+  expect(valueFor(<String>['--deprecated-js-interop']), isTrue);
+  expect(valueFor(<String>['--no-deprecated-js-interop']), isFalse);
+}
+
+/// The tool overrides `test` to wrap execution in [FSGuardIOOverrides].
 @isTest
-void test(String description, FutureOr<void> Function() body, {
+void test(
+  String description,
+  FutureOr<void> Function() body, {
   String? testOn,
   dynamic skip,
   List<String>? tags,
@@ -170,11 +193,7 @@ void test(String description, FutureOr<void> Function() body, {
   test_package.test(
     description,
     () async {
-      addTearDown(() async {
-        await globals.localFileSystem.dispose();
-      });
-
-      return body();
+      return io.IOOverrides.runWithIOOverrides(() => body(), FSGuardIOOverrides());
     },
     skip: skip,
     tags: tags,
@@ -185,71 +204,6 @@ void test(String description, FutureOr<void> Function() body, {
     // configures all tests to have a 15 minute timeout which should
     // definitely be enough.
   );
-}
-
-/// Executes a test body in zone that does not allow context-based injection.
-///
-/// For classes which have been refactored to exclude context-based injection
-/// or globals like [fs] or [platform], prefer using this test method as it
-/// will prevent accidentally including these context getters in future code
-/// changes.
-///
-/// For more information, see https://github.com/flutter/flutter/issues/47161
-@isTest
-void testWithoutContext(String description, FutureOr<void> Function() body, {
-  String? testOn,
-  dynamic skip,
-  List<String>? tags,
-  Map<String, dynamic>? onPlatform,
-  int? retry,
-}) {
-  return test(
-    description, () async {
-      return runZoned(body, zoneValues: <Object, Object>{
-        contextKey: const _NoContext(),
-      });
-    },
-    skip: skip,
-    tags: tags,
-    onPlatform: onPlatform,
-    retry: retry,
-    testOn: testOn,
-    // We don't support "timeout"; see ../../dart_test.yaml which
-    // configures all tests to have a 15 minute timeout which should
-    // definitely be enough.
-  );
-}
-
-/// An implementation of [AppContext] that throws if context.get is called in the test.
-///
-/// The intention of the class is to ensure we do not accidentally regress when
-/// moving towards more explicit dependency injection by accidentally using
-/// a Zone value in place of a constructor parameter.
-class _NoContext implements AppContext {
-  const _NoContext();
-
-  @override
-  T get<T>() {
-    throw UnsupportedError(
-      'context.get<$T> is not supported in test methods. '
-      'Use Testbed or testUsingContext if accessing Zone injected '
-      'values.'
-    );
-  }
-
-  @override
-  String get name => 'No Context';
-
-  @override
-  Future<V> run<V>({
-    required FutureOr<V> Function() body,
-    String? name,
-    Map<Type, Generator>? overrides,
-    Map<Type, Generator>? fallbacks,
-    ZoneSpecification? zoneSpecification,
-  }) async {
-    return body();
-  }
 }
 
 /// Allows inserting file system exceptions into certain
@@ -257,7 +211,7 @@ class _NoContext implements AppContext {
 ///
 /// Example use:
 ///
-/// ```
+/// ```dart
 /// void main() {
 ///   var handler = FileExceptionHandler();
 ///   var fs = MemoryFileSystem(opHandle: handler.opHandle);
@@ -269,9 +223,9 @@ class _NoContext implements AppContext {
 /// }
 /// ```
 class FileExceptionHandler {
-  final Map<String, Map<FileSystemOp, FileSystemException>> _contextErrors = <String, Map<FileSystemOp, FileSystemException>>{};
-  final Map<FileSystemOp, FileSystemException> _tempErrors = <FileSystemOp, FileSystemException>{};
-  static final RegExp _tempDirectoryEnd = RegExp('rand[0-9]+');
+  final _contextErrors = <String, Map<FileSystemOp, FileSystemException>>{};
+  final _tempErrors = <FileSystemOp, FileSystemException>{};
+  static final _tempDirectoryEnd = RegExp('rand[0-9]+');
 
   /// Add an exception that will be thrown whenever the file system attached to this
   /// handler performs the [operation] on the [entity].
@@ -303,4 +257,76 @@ class FileExceptionHandler {
     }
     throw exception;
   }
+}
+
+/// This method is required to fetch an instance of [FakeAnalytics]
+/// because there is initialization logic that is required. An initial
+/// instance will first be created and will let package:unified_analytics
+/// know that the consent message has been shown. After confirming on the first
+/// instance, then a second instance will be generated and returned. This second
+/// instance will be cleared to send events.
+FakeAnalytics getInitializedFakeAnalyticsInstance({
+  required MemoryFileSystem fs,
+  required FakeFlutterVersion fakeFlutterVersion,
+  String? clientIde,
+  String? enabledFeatures,
+  String? agent,
+}) {
+  final Directory homeDirectory = fs.directory('/');
+  final FakeAnalytics initialAnalytics = Analytics.fake(
+    tool: DashTool.flutterTool,
+    homeDirectory: homeDirectory,
+    dartVersion: fakeFlutterVersion.dartSdkVersion,
+    fs: fs,
+    flutterChannel: fakeFlutterVersion.channel,
+    flutterVersion: fakeFlutterVersion.getVersionString(),
+  );
+  initialAnalytics.clientShowedMessage();
+
+  return Analytics.fake(
+    tool: DashTool.flutterTool,
+    homeDirectory: homeDirectory,
+    dartVersion: fakeFlutterVersion.dartSdkVersion,
+    fs: fs,
+    flutterChannel: fakeFlutterVersion.channel,
+    flutterVersion: fakeFlutterVersion.getVersionString(),
+    clientIde: clientIde,
+    enabledFeatures: enabledFeatures,
+    agent: agent,
+  );
+}
+
+/// Returns "true" if the timing event searched for exists in [sentEvents].
+///
+/// This utility function allows us to check for an instance of
+/// [Event.timing] within a [FakeAnalytics] instance. Normally, we can
+/// use the equality operator for [Event] to check if the event exists, but
+/// we are unable to do so for the timing event because the elapsed time
+/// is variable so we cannot predict what that value will be in tests.
+///
+/// This function allows us to check for the other keys that have
+/// string values by removing the `elapsedMilliseconds` from the
+/// [Event.eventData] map and checking for a match.
+bool analyticsTimingEventExists({
+  required List<Event> sentEvents,
+  required String workflow,
+  required String variableName,
+  String? label,
+}) {
+  final lookup = <String, String>{
+    'workflow': workflow,
+    'variableName': variableName,
+    'label': ?label,
+  };
+
+  for (final e in sentEvents) {
+    final eventData = <String, Object?>{...e.eventData};
+    eventData.remove('elapsedMilliseconds');
+
+    if (const DeepCollectionEquality().equals(lookup, eventData)) {
+      return true;
+    }
+  }
+
+  return false;
 }

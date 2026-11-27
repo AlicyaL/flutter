@@ -1,0 +1,464 @@
+// Copyright 2014 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import 'dart:convert';
+
+import 'package:file/file.dart';
+import 'package:file_testing/file_testing.dart';
+import 'package:flutter_tools/src/base/io.dart';
+import 'package:flutter_tools/src/base/version.dart';
+
+import '../src/common.dart';
+import 'test_utils.dart';
+
+/// ABI → index map (same as FlutterPluginConstants.ABI_VERSION)
+const _abiIndexMap = <String, int>{'armeabi-v7a': 1, 'arm64-v8a': 2, 'x86_64': 4};
+
+const _appGradleWithVersionCodeModification = r'''
+import com.android.build.api.variant.FilterConfiguration.FilterType.*
+import java.util.Properties
+import java.io.FileInputStream
+
+plugins {
+    id("com.android.application")
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id("dev.flutter.flutter-gradle-plugin")
+}
+
+android {
+    namespace = "com.example.splitperabi"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        applicationId = "com.example.splitperabi"
+        // You can update the following values to match your application needs.
+        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    buildTypes {
+        release {
+            // TODO: Add your own signing config for the release build.
+            // Signing with the debug keys for now, so `flutter run --release` works.
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+flutter {
+    source = "../.."
+}
+
+val abiCodes = mapOf("x86_64" to 1, "armeabi-v7a" to 2, "arm64-v8a" to 3, "universal" to 4)
+
+androidComponents {
+    onVariants { variant ->
+
+        variant.outputs.forEach { output ->
+            val name = output.filters.find { it.filterType == ABI }?.identifier
+
+            val baseAbiCode = abiCodes[name ?: "universal"]
+            if (baseAbiCode != null) {
+                output.versionCode.set(output.versionCode.get() * 10000)
+            }
+        }
+    }
+}
+
+''';
+
+// Check that `flutter build apk --split-per-abi` sets versionCode to abiIndex * 1000 + buildNumber
+// (times 10000 with [usingCustomAppGradleFile]) and copies each per-ABI APK into flutter-apk.
+// [compatibilityModeOff] sets `android.compatibility.enableLegacyApi=false`.
+Future<void> _assertSplitPerAbiVersionCodes(
+  int? buildNumber,
+  Directory workingDirectory,
+  bool usingCustomAppGradleFile, {
+  bool compatibilityModeOff = false,
+}) async {
+  if (usingCustomAppGradleFile) {
+    // Replace the app level build.gradle with one that modifies the version code.
+    final File appBuildGradle = fileSystem
+        .directory(workingDirectory)
+        .childDirectory('android')
+        .childDirectory('app')
+        .childFile('build.gradle.kts');
+
+    await appBuildGradle.writeAsString(_appGradleWithVersionCodeModification);
+  }
+
+  if (compatibilityModeOff) {
+    final File gradleProperties = fileSystem
+        .directory(workingDirectory)
+        .childDirectory('android')
+        .childFile('gradle.properties');
+    await gradleProperties.writeAsString(
+      '\nandroid.compatibility.enableLegacyApi=false\n',
+      mode: FileMode.append,
+    );
+  }
+
+  final args = <String>[
+    flutterBin,
+    ...getLocalEngineArguments(),
+    'build',
+    'apk',
+    '--debug',
+    '--split-per-abi',
+  ];
+
+  if (buildNumber != null) {
+    args.addAll(<String>['--build-number', buildNumber.toString()]);
+  }
+
+  final ProcessResult result = processManager.runSync(
+    args,
+    workingDirectory: workingDirectory.path,
+  );
+  expect(
+    result.exitCode,
+    0,
+    reason:
+        'Expected flutter build apk --debug --split-per-abi'
+        '${buildNumber != null ? " --build-number $buildNumber" : ""} to succeed.\n'
+        'stdout:\n${result.stdout}\n'
+        'stderr:\n${result.stderr}',
+  );
+
+  final File metadataFile = fileSystem
+      .directory(workingDirectory)
+      .childDirectory('build')
+      .childDirectory('app')
+      .childDirectory('outputs')
+      .childDirectory('apk')
+      .childDirectory('debug')
+      .childFile('output-metadata.json');
+  expect(metadataFile, exists, reason: 'Expected output-metadata.json at ${metadataFile.path}');
+
+  final decodedJson = jsonDecode(await metadataFile.readAsString()) as Map<String, dynamic>;
+  final elements = decodedJson['elements'] as List<dynamic>;
+
+  final actualVersionCodes = <String, int>{};
+  for (final dynamic rawElement in elements) {
+    final element = rawElement as Map<String, dynamic>;
+
+    final filters = element['filters'] as List<dynamic>?;
+    expect(
+      filters,
+      isNotNull,
+      reason: 'No "filters" array for element $element in ${metadataFile.path}',
+    );
+
+    String? abi;
+    for (final Map<String, Object?> filter in filters!.cast<Map<String, Object?>>()) {
+      if (filter['filterType'] == 'ABI') {
+        abi = filter['value'] as String?;
+        break;
+      }
+    }
+    expect(abi, isNotNull, reason: 'Could not find an ABI filter in element $element');
+
+    final versionCode = element['versionCode'] as int?;
+    expect(versionCode, isNotNull, reason: 'No "versionCode" field in element $element');
+
+    actualVersionCodes[abi!] = versionCode!;
+  }
+
+  for (final MapEntry<String, int> kv in _abiIndexMap.entries) {
+    final String abi = kv.key;
+    final int abiIndex = kv.value;
+
+    expect(
+      actualVersionCodes,
+      contains(abi),
+      reason: 'Missing entry for ABI="$abi" in output-metadata.json',
+    );
+
+    final int actual = actualVersionCodes[abi]!;
+    // The custom app build file's onVariants runs after Flutter's and multiplies by 10000.
+    final int baseVersionCode = (abiIndex * 1000) + (buildNumber ?? 1);
+    final int expected = usingCustomAppGradleFile ? baseVersionCode * 10000 : baseVersionCode;
+    expect(
+      actual,
+      expected,
+      reason:
+          'For ABI="$abi" with '
+          '${buildNumber != null ? "buildNumber=$buildNumber" : "no explicit build-number"} '
+          'expected versionCode=$expected but got $actual.',
+    );
+
+    // The Flutter tool reads the APKs from flutter-apk, under per-ABI names.
+    final File flutterApk = fileSystem
+        .directory(workingDirectory)
+        .childDirectory('build')
+        .childDirectory('app')
+        .childDirectory('outputs')
+        .childDirectory('flutter-apk')
+        .childFile('app-$abi-debug.apk');
+    expect(flutterApk, exists, reason: 'Expected the per-ABI APK at ${flutterApk.path}');
+  }
+}
+
+// The helpers below set up the tests in the 'versionCode set only in AndroidManifest.xml' group.
+// Those tests remove versionCode from the android {} block, so for --split-per-abi Flutter reads
+// the versionCode of the main AndroidManifest.xml and gives each split APK
+// abiIndex * 1000 + versionCode.
+
+const _toolsNamespace = 'xmlns:tools="http://schemas.android.com/tools"';
+
+File _appBuildGradle(Directory app) =>
+    app.childDirectory('android').childDirectory('app').childFile('build.gradle.kts');
+
+/// The AndroidManifest.xml of [sourceSet], for example 'main' or 'debug'.
+File _manifest(Directory app, String sourceSet) => app
+    .childDirectory('android')
+    .childDirectory('app')
+    .childDirectory('src')
+    .childDirectory(sourceSet)
+    .childFile('AndroidManifest.xml');
+
+/// Removes `versionCode = flutter.versionCode` from the app's android {} block.
+void _removeDslVersionCode(Directory app) {
+  final File buildGradle = _appBuildGradle(app);
+  const dslVersionCode = 'versionCode = flutter.versionCode';
+  expect(buildGradle.readAsStringSync(), contains(dslVersionCode));
+  buildGradle.writeAsStringSync(buildGradle.readAsStringSync().replaceFirst(dslVersionCode, ''));
+}
+
+/// Adds [attributes] to the root `<manifest>` element of [sourceSet]'s AndroidManifest.xml.
+void _addManifestAttributes(Directory app, String sourceSet, String attributes) {
+  final File manifest = _manifest(app, sourceSet);
+  const manifestTag = '<manifest xmlns:android="http://schemas.android.com/apk/res/android"';
+  expect(manifest.readAsStringSync(), contains(manifestTag));
+  manifest.writeAsStringSync(
+    manifest.readAsStringSync().replaceFirst(manifestTag, '$manifestTag $attributes'),
+  );
+}
+
+/// Appends [properties] to the app's android/gradle.properties.
+void _addGradleProperties(Directory app, String properties) {
+  app
+      .childDirectory('android')
+      .childFile('gradle.properties')
+      .writeAsStringSync('\n$properties\n', mode: FileMode.append);
+}
+
+/// Runs `flutter build apk --debug --split-per-abi` in [app], followed by [extraArgs].
+ProcessResult _buildSplitPerAbiApks(Directory app, [List<String> extraArgs = const <String>[]]) {
+  return processManager.runSync(<String>[
+    flutterBin,
+    ...getLocalEngineArguments(),
+    'build',
+    'apk',
+    '--debug',
+    '--split-per-abi',
+    ...extraArgs,
+  ], workingDirectory: app.path);
+}
+
+/// Expects [build] to have succeeded, and each split APK in build/app/outputs/flutter-apk to have
+/// versionCode abiIndex * 1000 + [base].
+void _expectSplitApkVersionCodes(Directory app, ProcessResult build, {required int base}) {
+  expect(build.exitCode, 0, reason: 'stdout:\n${build.stdout}\nstderr:\n${build.stderr}');
+  for (final MapEntry(key: String abi, value: int abiIndex) in _abiIndexMap.entries) {
+    final File apk = app
+        .childDirectory('build')
+        .childDirectory('app')
+        .childDirectory('outputs')
+        .childDirectory('flutter-apk')
+        .childFile('app-$abi-debug.apk');
+    expect(apk, exists);
+    expect(_apkVersionCode(app, apk), abiIndex * 1000 + base, reason: 'versionCode of ${apk.path}');
+  }
+}
+
+/// Returns the versionCode that `aapt2 dump badging` reports for [apk], using the newest build
+/// tools in the Android SDK that [app] builds with.
+int _apkVersionCode(Directory app, File apk) {
+  final String localProperties = app
+      .childDirectory('android')
+      .childFile('local.properties')
+      .readAsStringSync();
+  final String sdkPath = RegExp(r'sdk\.dir=(.*)').firstMatch(localProperties)!.group(1)!.trim();
+  final List<Directory> buildTools =
+      fileSystem
+          .directory(sdkPath)
+          .childDirectory('build-tools')
+          .listSync()
+          .whereType<Directory>()
+          .where((Directory dir) => Version.parse(dir.basename) != null)
+          .toList()
+        ..sort(
+          (Directory a, Directory b) =>
+              Version.parse(a.basename)!.compareTo(Version.parse(b.basename)!),
+        );
+  final String aapt2 = buildTools.last.childFile(platform.isWindows ? 'aapt2.exe' : 'aapt2').path;
+  final ProcessResult result = processManager.runSync(<String>[aapt2, 'dump', 'badging', apk.path]);
+  expect(result.exitCode, 0, reason: 'aapt2 dump badging ${apk.path} failed:\n${result.stderr}');
+  final String? versionCode = RegExp(r"versionCode='(\d+)'")
+      .firstMatch(result.stdout as String)
+      ?.group(1);
+  expect(versionCode, isNotNull, reason: 'No versionCode in:\n${result.stdout}');
+  return int.parse(versionCode!);
+}
+
+void main() {
+  late Directory tempDir;
+  late Directory appDir;
+  setUp(() async {
+    tempDir = createResolvedTempDirectorySync('flutter_split_per_abi_test.');
+
+    processManager.runSync(<String>[
+      flutterBin,
+      ...getLocalEngineArguments(),
+      'create',
+      '--platforms=android',
+      'splitperabi',
+    ], workingDirectory: tempDir.path);
+    appDir = tempDir.childDirectory('splitperabi');
+  });
+
+  tearDown(() async {
+    tryToDelete(tempDir);
+  });
+
+  // Check with no build-number
+  test('APK versionCodes after --split-per-abi (no explicit build-number) follow "(abiIndex * 1000) + 1"', () async {
+    await _assertSplitPerAbiVersionCodes(null, appDir, false);
+  });
+
+  // Check with custom buildNumber=42
+  test('APK versionCodes after --split-per-abi with custom build-number=42 follow "(abiIndex * 1000) + 42"', () async {
+    await _assertSplitPerAbiVersionCodes(42, appDir, false);
+  });
+
+  // Check with custom buildNumber=42 and custom gradle file which multiplies build number by 10000
+  test('APK versionCodes after --split-per-abi with custom build-number=42 and gradle file follow "((abiIndex * 1000) + 42) * 10000"', () async {
+    await _assertSplitPerAbiVersionCodes(42, appDir, true);
+  });
+
+  // Check with custom buildNumber=42 and AGP's compatibility mode off
+  test('APK versionCodes after --split-per-abi with custom build-number=42 and enableLegacyApi=false follow "(abiIndex * 1000) + 42"', () async {
+    await _assertSplitPerAbiVersionCodes(42, appDir, false, compatibilityModeOff: true);
+  });
+
+  test(
+    '--split-per-abi offsets a versionCode that the app sets in androidComponents.finalizeDsl',
+    () {
+      _removeDslVersionCode(appDir);
+      // The build script applies the Flutter Gradle Plugin first, so AGP runs this callback
+      // after any finalizeDsl callback that Flutter registers.
+      _appBuildGradle(appDir).writeAsStringSync('''
+
+androidComponents {
+    finalizeDsl { extension ->
+        extension.defaultConfig.versionCode = 55
+    }
+}
+''', mode: FileMode.append);
+      _addGradleProperties(
+        appDir,
+        'android.compatibility.enableLegacyApi=false\n'
+        'android.newDsl=true\n'
+        'android.builtInKotlin=true',
+      );
+
+      _expectSplitApkVersionCodes(appDir, _buildSplitPerAbiApks(appDir), base: 55);
+    },
+  );
+
+  group('versionCode set only in AndroidManifest.xml', () {
+    setUp(() {
+      _removeDslVersionCode(appDir);
+    });
+
+    test('--split-per-abi uses the main manifest versionCode, not a debug overlay versionCode', () {
+      _addManifestAttributes(appDir, 'main', 'android:versionCode="7"');
+      // AGP writes the main manifest's versionCode into the merged manifest over this one.
+      _addManifestAttributes(
+        appDir,
+        'debug',
+        '$_toolsNamespace android:versionCode="9" tools:replace="android:versionCode"',
+      );
+      // Adds a manifest that a task writes during the build. Flutter must not read the list of
+      // manifests before that task has run.
+      final String engineShellArgs = base64Encode(
+        utf8.encode(jsonEncode(<String>['--trace-skia'])),
+      );
+
+      final ProcessResult build = _buildSplitPerAbiApks(appDir, <String>[
+        '--android-project-arg=flutter.engineShellArgs=$engineShellArgs',
+      ]);
+
+      _expectSplitApkVersionCodes(appDir, build, base: 7);
+    });
+
+    test('--split-per-abi picks up a manifest edit when Gradle reuses the configuration cache', () {
+      _addManifestAttributes(appDir, 'main', 'android:versionCode="7"');
+      // problems=warn because FlutterTask still reads Task.project at execution time.
+      _addGradleProperties(
+        appDir,
+        'org.gradle.configuration-cache=true\n'
+        'org.gradle.configuration-cache.problems=warn\n'
+        'android.compatibility.enableLegacyApi=false\n'
+        'android.newDsl=true\n'
+        'android.builtInKotlin=true',
+      );
+      // -v prints whether Gradle reused the configuration cache.
+      ProcessResult build() => _buildSplitPerAbiApks(appDir, <String>['-v']);
+
+      // The first build creates flutter_build.d, which Gradle tracks, so the second build stores
+      // the configuration cache entry again. The third build reuses it.
+      _expectSplitApkVersionCodes(appDir, build(), base: 7);
+      _expectSplitApkVersionCodes(appDir, build(), base: 7);
+      ProcessResult result = build();
+      expect(result.stdout, contains('Reusing configuration cache'));
+      _expectSplitApkVersionCodes(appDir, result, base: 7);
+
+      final File mainManifest = _manifest(appDir, 'main');
+      mainManifest.writeAsStringSync(
+        mainManifest.readAsStringSync().replaceFirst(
+          'android:versionCode="7"',
+          'android:versionCode="6"',
+        ),
+      );
+      result = build();
+      expect(result.stdout, contains('Reusing configuration cache'));
+      _expectSplitApkVersionCodes(appDir, result, base: 6);
+    });
+
+    test('--split-per-abi fails without a versionCode, with or without force-version-code-ignoring-abi', () {
+      // Without a versionCode, Android reads each APK as versionCode 0, which Google Play
+      // rejects and which cannot be installed over a build of the app that has a versionCode.
+      for (final extraArgs in <List<String>>[
+        <String>[],
+        <String>['-P', 'force-version-code-ignoring-abi=true'],
+      ]) {
+        final ProcessResult build = _buildSplitPerAbiApks(appDir, extraArgs);
+
+        expect(build.exitCode, isNot(0), reason: 'flutter build apk $extraArgs');
+        expect(
+          '${build.stdout}${build.stderr}',
+          contains("cannot give the split APKs of variant 'debug' a versionCode"),
+        );
+      }
+    });
+  });
+}

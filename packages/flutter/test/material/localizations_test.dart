@@ -6,11 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('English translations exist for all MaterialLocalizations properties', (WidgetTester tester) async {
+  testWidgets('English translations exist for all MaterialLocalizations properties', (
+    WidgetTester tester,
+  ) async {
     const MaterialLocalizations localizations = DefaultMaterialLocalizations();
 
     expect(localizations.openAppDrawerTooltip, isNotNull);
     expect(localizations.backButtonTooltip, isNotNull);
+    expect(localizations.clearButtonTooltip, isNotNull);
     expect(localizations.closeButtonTooltip, isNotNull);
     expect(localizations.deleteButtonTooltip, isNotNull);
     expect(localizations.moreButtonTooltip, isNotNull);
@@ -29,6 +32,9 @@ void main() {
     expect(localizations.copyButtonLabel, isNotNull);
     expect(localizations.cutButtonLabel, isNotNull);
     expect(localizations.scanTextButtonLabel, isNotNull);
+    expect(localizations.lookUpButtonLabel, isNotNull);
+    expect(localizations.searchWebButtonLabel, isNotNull);
+    expect(localizations.shareButtonLabel, isNotNull);
     expect(localizations.okButtonLabel, isNotNull);
     expect(localizations.pasteButtonLabel, isNotNull);
     expect(localizations.selectAllButtonLabel, isNotNull);
@@ -38,6 +44,7 @@ void main() {
     expect(localizations.timePickerHourModeAnnouncement, isNotNull);
     expect(localizations.timePickerMinuteModeAnnouncement, isNotNull);
     expect(localizations.modalBarrierDismissLabel, isNotNull);
+    expect(localizations.menuDismissLabel, isNotNull);
     expect(localizations.drawerLabel, isNotNull);
     expect(localizations.menuBarMenuLabel, isNotNull);
     expect(localizations.popupMenuLabel, isNotNull);
@@ -80,6 +87,8 @@ void main() {
     expect(localizations.collapsedIconTapHint, isNotNull);
     expect(localizations.expansionTileExpandedHint, isNotNull);
     expect(localizations.expansionTileCollapsedHint, isNotNull);
+    expect(localizations.expansionTileExpandedTapHint, isNotNull);
+    expect(localizations.expansionTileCollapsedTapHint, isNotNull);
     expect(localizations.expandedHint, isNotNull);
     expect(localizations.collapsedHint, isNotNull);
     expect(localizations.keyboardKeyAlt, isNotNull);
@@ -132,6 +141,7 @@ void main() {
     expect(localizations.currentDateLabel, isNotNull);
     expect(localizations.scrimLabel, isNotNull);
     expect(localizations.bottomSheetLabel, isNotNull);
+    expect(localizations.selectedDateLabel, isNotNull);
 
     expect(localizations.scrimOnTapHint('FOO'), contains('FOO'));
 
@@ -172,37 +182,42 @@ void main() {
     await tester.pumpWidget(
       Container(
         key: noLocalizationsAvailable,
-        child: MaterialApp(
-          home: Container(
-            key: localizationsAvailable,
-          ),
+        child: MaterialApp(home: Container(key: localizationsAvailable)),
+      ),
+    );
+
+    expect(
+      () => MaterialLocalizations.of(noLocalizationsAvailable.currentContext!),
+      throwsA(
+        isAssertionError.having(
+          (AssertionError e) => e.message,
+          'message',
+          contains('No MaterialLocalizations found'),
         ),
       ),
     );
 
-    expect(() => MaterialLocalizations.of(noLocalizationsAvailable.currentContext!), throwsA(isAssertionError.having(
-      (AssertionError e) => e.message,
-      'message',
-      contains('No MaterialLocalizations found'),
-    )));
-
-    expect(MaterialLocalizations.of(localizationsAvailable.currentContext!), isA<MaterialLocalizations>());
+    expect(
+      MaterialLocalizations.of(localizationsAvailable.currentContext!),
+      isA<MaterialLocalizations>(),
+    );
   });
 
-  testWidgets("parseCompactDate doesn't throw an exception on invalid text", (WidgetTester tester) async {
+  testWidgets("parseCompactDate doesn't throw an exception on invalid text", (
+    WidgetTester tester,
+  ) async {
     // This is a regression test for https://github.com/flutter/flutter/issues/126397.
     final GlobalKey localizations = GlobalKey();
 
     await tester.pumpWidget(
       MaterialApp(
-        home: Material(
-          key: localizations,
-          child: const SizedBox.expand(),
-        ),
+        home: Material(key: localizations, child: const SizedBox.expand()),
       ),
     );
 
-    final MaterialLocalizations materialLocalizations = MaterialLocalizations.of(localizations.currentContext!);
+    final MaterialLocalizations materialLocalizations = MaterialLocalizations.of(
+      localizations.currentContext!,
+    );
     expect(materialLocalizations.parseCompactDate('10/05/2023'), isNotNull);
     expect(tester.takeException(), null);
 

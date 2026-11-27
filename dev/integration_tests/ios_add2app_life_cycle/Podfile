@@ -1,4 +1,4 @@
-platform :ios, '12.0'
+platform :ios, '15.0'
 
 flutter_application_path = 'flutterapp/'
 
@@ -10,7 +10,7 @@ target 'ios_add2app' do
 end
 
 target 'ios_add2appTests' do
-  install_flutter_engine_pod
+  install_flutter_engine_pod(flutter_application_path)
   pod 'EarlGreyTest'
 end
 

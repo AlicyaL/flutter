@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'button_style.dart';
+/// @docImport 'text_selection_toolbar.dart';
+library;
+
 import 'package:flutter/widgets.dart';
 
-import 'colors.dart';
+import 'color_scheme.dart';
 import 'constants.dart';
 import 'text_button.dart';
 import 'theme.dart';
@@ -61,7 +65,7 @@ class TextSelectionToolbarTextButton extends StatelessWidget {
   ///  * [getPadding], which calculates the standard padding based on the
   ///    button's position.
   ///  * [ButtonStyle.padding], which is where this padding is applied.
-  final EdgeInsets padding;
+  final EdgeInsetsGeometry padding;
 
   /// The alignment of the button's child.
   ///
@@ -77,26 +81,26 @@ class TextSelectionToolbarTextButton extends StatelessWidget {
   ///
   /// Standard Material [TextSelectionToolbar]s have buttons with different
   /// padding depending on their position in the toolbar.
-  static EdgeInsets getPadding(int index, int total) {
+  static EdgeInsetsGeometry getPadding(int index, int total) {
     assert(total > 0 && index >= 0 && index < total);
     final _TextSelectionToolbarItemPosition position = _getPosition(index, total);
-    return EdgeInsets.only(
-      left: _getLeftPadding(position),
-      right: _getRightPadding(position),
+    return EdgeInsetsDirectional.only(
+      start: _getStartPadding(position),
+      end: _getEndPadding(position),
     );
   }
 
-  static double _getLeftPadding(_TextSelectionToolbarItemPosition position) {
-    if (position == _TextSelectionToolbarItemPosition.first
-        || position == _TextSelectionToolbarItemPosition.only) {
+  static double _getStartPadding(_TextSelectionToolbarItemPosition position) {
+    if (position == _TextSelectionToolbarItemPosition.first ||
+        position == _TextSelectionToolbarItemPosition.only) {
       return _kEndPadding;
     }
     return _kMiddlePadding;
   }
 
-  static double _getRightPadding(_TextSelectionToolbarItemPosition position) {
-    if (position == _TextSelectionToolbarItemPosition.last
-        || position == _TextSelectionToolbarItemPosition.only) {
+  static double _getEndPadding(_TextSelectionToolbarItemPosition position) {
+    if (position == _TextSelectionToolbarItemPosition.last ||
+        position == _TextSelectionToolbarItemPosition.only) {
       return _kEndPadding;
     }
     return _kMiddlePadding;
@@ -119,7 +123,7 @@ class TextSelectionToolbarTextButton extends StatelessWidget {
   TextSelectionToolbarTextButton copyWith({
     Widget? child,
     VoidCallback? onPressed,
-    EdgeInsets? padding,
+    EdgeInsetsGeometry? padding,
     AlignmentGeometry? alignment,
   }) {
     return TextSelectionToolbarTextButton(
@@ -130,20 +134,47 @@ class TextSelectionToolbarTextButton extends StatelessWidget {
     );
   }
 
+  // These colors were taken from a screenshot of a Pixel 6 emulator running
+  // Android API level 34.
+  static const Color _defaultForegroundColorLight = Color(0xff000000);
+  static const Color _defaultForegroundColorDark = Color(0xffffffff);
+
+  // The background color is hardcoded to transparent by default so the buttons
+  // are the color of the container behind them. For example TextSelectionToolbar
+  // hardcodes the color value, and TextSelectionToolbarTextButtons that are its
+  // children become that color.
+  static const Color _defaultBackgroundColorTransparent = Color(0x00000000);
+
+  static Color _getForegroundColor(ColorScheme colorScheme) {
+    final bool isDefaultOnSurface = switch (colorScheme.brightness) {
+      Brightness.light => identical(ThemeData().colorScheme.onSurface, colorScheme.onSurface),
+      Brightness.dark => identical(ThemeData.dark().colorScheme.onSurface, colorScheme.onSurface),
+    };
+    if (!isDefaultOnSurface) {
+      return colorScheme.onSurface;
+    }
+    return switch (colorScheme.brightness) {
+      Brightness.light => _defaultForegroundColorLight,
+      Brightness.dark => _defaultForegroundColorDark,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    // TODO(hansmuller): Should be colorScheme.onSurface
-    final ThemeData theme = Theme.of(context);
-    final bool isDark = theme.colorScheme.brightness == Brightness.dark;
-    final Color foregroundColor = isDark ? Colors.white : Colors.black87;
-
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
     return TextButton(
       style: TextButton.styleFrom(
-        foregroundColor: foregroundColor,
+        backgroundColor: _defaultBackgroundColorTransparent,
+        foregroundColor: _getForegroundColor(colorScheme),
         shape: const RoundedRectangleBorder(),
         minimumSize: const Size(kMinInteractiveDimension, kMinInteractiveDimension),
         padding: padding,
         alignment: alignment,
+        textStyle: const TextStyle(
+          // This value was eyeballed from a screenshot of a Pixel 6 emulator
+          // running Android API level 34.
+          fontWeight: FontWeight.w400,
+        ),
       ),
       onPressed: onPressed,
       child: child,

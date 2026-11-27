@@ -13,8 +13,8 @@ class TokenLogger {
 
   void init({
     required Map<String, dynamic> allTokens,
-    required Map<String, List<String>> versionMap
-  }){
+    required Map<String, List<String>> versionMap,
+  }) {
     _allTokens = allTokens;
     _versionMap = versionMap;
   }
@@ -28,16 +28,20 @@ class TokenLogger {
   // Sorted set of used tokens.
   final SplayTreeSet<String> _usedTokens = SplayTreeSet<String>();
 
+  // Set of tokens that were referenced on some templates, but do not exist.
+  final Set<String> _unavailableTokens = <String>{};
+
   void clear() {
     _allTokens.clear();
     _versionMap.clear();
     _usedTokens.clear();
+    _unavailableTokens.clear();
   }
 
   /// Logs a token.
   void log(String token) {
     if (!_allTokens.containsKey(token)) {
-      print('\x1B[31m' 'Token unavailable: $token' '\x1B[0m');
+      _unavailableTokens.add(token);
       return;
     }
     _usedTokens.add(token);
@@ -45,14 +49,14 @@ class TokenLogger {
 
   /// Prints version usage to the console.
   void printVersionUsage({required bool verbose}) {
-    final String versionsString = 'Versions used: ${_versionMap.keys.join(', ')}';
+    final versionsString = 'Versions used: ${_versionMap.keys.join(', ')}';
     print(versionsString);
     if (verbose) {
       for (final String version in _versionMap.keys) {
         print('  $version:');
-        final List<String> files = List<String>.from(_versionMap[version]!);
+        final files = List<String>.from(_versionMap[version]!);
         files.sort();
-        for (final String file in files) {
+        for (final file in files) {
           print('    $file');
         }
       }
@@ -76,13 +80,25 @@ class TokenLogger {
     }
 
     print('Tokens used: ${_usedTokens.length}/${_allTokens.length}');
+
+    if (_unavailableTokens.isNotEmpty) {
+      print('');
+      print(
+        '\x1B[31m'
+        'Some referenced tokens do not exist: ${_unavailableTokens.length}'
+        '\x1B[0m',
+      );
+      for (final String token in _unavailableTokens) {
+        print('  $token');
+      }
+    }
   }
 
   /// Dumps version and tokens usage to a file.
   void dumpToFile(String path) {
-    final File file = File(path);
+    final file = File(path);
     file.createSync(recursive: true);
-    final String versionsString = 'Versions used, ${_versionMap.keys.join(', ')}';
+    final versionsString = 'Versions used, ${_versionMap.keys.join(', ')}';
     file.writeAsStringSync('$versionsString\n${_usedTokens.join(',\n')}\n');
   }
 }

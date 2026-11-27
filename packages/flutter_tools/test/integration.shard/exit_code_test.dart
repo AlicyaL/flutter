@@ -20,9 +20,8 @@ void main() {
     tryToDelete(tempDir);
   });
 
-  testWithoutContext('dart.sh/bat can return a zero exit code', () async {
-    tempDir.childFile('main.dart')
-      .writeAsStringSync('''
+  test('dart.sh/bat can return a zero exit code', () async {
+    tempDir.childFile('main.dart').writeAsStringSync('''
 import 'dart:io';
 void main() {
   exit(0);
@@ -37,9 +36,8 @@ void main() {
     expect(result, const ProcessResultMatcher());
   });
 
-  testWithoutContext('dart.sh/bat can return a non-zero exit code', () async {
-    tempDir.childFile('main.dart')
-      .writeAsStringSync('''
+  test('dart.sh/bat can return a non-zero exit code', () async {
+    tempDir.childFile('main.dart').writeAsStringSync('''
 import 'dart:io';
 void main() {
   exit(1);

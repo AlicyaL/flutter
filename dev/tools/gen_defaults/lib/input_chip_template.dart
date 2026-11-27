@@ -5,16 +5,20 @@
 import 'template.dart';
 
 class InputChipTemplate extends TokenTemplate {
-  const InputChipTemplate(super.blockName, super.fileName, super.tokens, {
+  const InputChipTemplate(
+    super.blockName,
+    super.fileName,
+    super.tokens, {
     super.colorSchemePrefix = '_colors.',
-    super.textThemePrefix = '_textTheme.'
+    super.textThemePrefix = '_textTheme.',
   });
 
   static const String tokenGroup = 'md.comp.input-chip';
   static const String variant = '';
 
   @override
-  String generate() => '''
+  String generate() =>
+      '''
 class _${blockName}DefaultsM3 extends ChipThemeData {
   _${blockName}DefaultsM3(this.context, this.isEnabled, this.isSelected)
     : super(
@@ -30,18 +34,24 @@ class _${blockName}DefaultsM3 extends ChipThemeData {
   late final TextTheme _textTheme = Theme.of(context).textTheme;
 
   @override
-  TextStyle? get labelStyle => ${textStyle("$tokenGroup.label-text")};
+  TextStyle? get labelStyle => ${textStyle("$tokenGroup.label-text")}?.copyWith(
+    color: isEnabled
+      ? isSelected
+        ? ${color("$tokenGroup.selected.label-text.color")}
+        : ${color("$tokenGroup.unselected.label-text.color")}
+      : ${color("$tokenGroup.disabled.label-text.color")},
+  );
 
   @override
-  MaterialStateProperty<Color?>? get color =>
-    MaterialStateProperty.resolveWith((Set<MaterialState> states) {
-      if (states.contains(MaterialState.selected) && states.contains(MaterialState.disabled)) {
+  WidgetStateProperty<Color?>? get color =>
+    WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.selected) && states.contains(WidgetState.disabled)) {
         return ${componentColor("$tokenGroup$variant.disabled.selected.container")};
       }
-      if (states.contains(MaterialState.disabled)) {
+      if (states.contains(WidgetState.disabled)) {
         return ${componentColor("$tokenGroup$variant.disabled.container")};
       }
-      if (states.contains(MaterialState.selected)) {
+      if (states.contains(WidgetState.selected)) {
         return ${componentColor("$tokenGroup$variant.selected.container")};
       }
       return ${componentColor("$tokenGroup$variant.container")};
@@ -54,10 +64,18 @@ class _${blockName}DefaultsM3 extends ChipThemeData {
   Color? get surfaceTintColor => ${colorOrTransparent("$tokenGroup.container.surface-tint-layer.color")};
 
   @override
-  Color? get checkmarkColor => ${color("$tokenGroup.with-icon.selected.icon.color")};
+  Color? get checkmarkColor => isEnabled
+    ? isSelected
+      ? ${color("$tokenGroup.with-leading-icon.selected.leading-icon.color")}
+      : ${color("$tokenGroup.with-leading-icon.unselected.leading-icon.color")}
+    : ${color("$tokenGroup.with-leading-icon.disabled.leading-icon.color")};
 
   @override
-  Color? get deleteIconColor => ${color("$tokenGroup.with-trailing-icon.selected.trailing-icon.color")};
+  Color? get deleteIconColor => isEnabled
+    ? isSelected
+      ? ${color("$tokenGroup.with-trailing-icon.selected.trailing-icon.color")}
+      : ${color("$tokenGroup.with-trailing-icon.unselected.trailing-icon.color")}
+    : ${color("$tokenGroup.with-trailing-icon.disabled.trailing-icon.color")};
 
   @override
   BorderSide? get side => !isSelected
@@ -69,7 +87,9 @@ class _${blockName}DefaultsM3 extends ChipThemeData {
   @override
   IconThemeData? get iconTheme => IconThemeData(
     color: isEnabled
-      ? ${color("$tokenGroup.with-leading-icon.leading-icon.color")}
+      ? isSelected
+        ? ${color("$tokenGroup.with-leading-icon.selected.leading-icon.color")}
+        : ${color("$tokenGroup.with-leading-icon.unselected.leading-icon.color")}
       : ${color("$tokenGroup.with-leading-icon.disabled.leading-icon.color")},
     size: ${getToken("$tokenGroup.with-leading-icon.leading-icon.size")},
   );
@@ -77,16 +97,24 @@ class _${blockName}DefaultsM3 extends ChipThemeData {
   @override
   EdgeInsetsGeometry? get padding => const EdgeInsets.all(8.0);
 
-  /// The chip at text scale 1 starts with 8px on each side and as text scaling
-  /// gets closer to 2 the label padding is linearly interpolated from 8px to 4px.
-  /// Once the widget has a text scaling of 2 or higher than the label padding
-  /// remains 4px.
+  /// The label padding of the chip scales with the font size specified in the
+  /// [labelStyle], and the system font size settings that scale font sizes
+  /// globally.
+  ///
+  /// The chip at effective font size 14.0 starts with 8px on each side and as
+  /// the font size scales up to closer to 28.0, the label padding is linearly
+  /// interpolated from 8px to 4px. Once the label has a font size of 2 or
+  /// higher, label padding remains 4px.
   @override
-  EdgeInsetsGeometry? get labelPadding => EdgeInsets.lerp(
-    const EdgeInsets.symmetric(horizontal: 8.0),
-    const EdgeInsets.symmetric(horizontal: 4.0),
-    clampDouble(MediaQuery.textScaleFactorOf(context) - 1.0, 0.0, 1.0),
-  )!;
+  EdgeInsetsGeometry? get labelPadding {
+    final double fontSize = labelStyle?.fontSize ?? 14.0;
+    final double fontSizeRatio = MediaQuery.textScalerOf(context).scale(fontSize) / 14.0;
+    return EdgeInsets.lerp(
+      const EdgeInsets.symmetric(horizontal: 8.0),
+      const EdgeInsets.symmetric(horizontal: 4.0),
+      clampDouble(fontSizeRatio - 1.0, 0.0, 1.0),
+    )!;
+  }
 }
 ''';
 }

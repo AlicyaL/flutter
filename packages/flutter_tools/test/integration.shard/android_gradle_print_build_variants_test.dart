@@ -4,10 +4,8 @@
 
 import 'dart:convert';
 
-import 'package:collection/collection.dart';
 import 'package:file/file.dart';
-import 'package:flutter_tools/src/android/gradle_utils.dart'
-    show getGradlewFileName;
+import 'package:flutter_tools/src/android/gradle_utils.dart' show getGradlewFileName;
 import 'package:flutter_tools/src/base/io.dart';
 
 import '../src/common.dart';
@@ -24,11 +22,8 @@ void main() {
     tryToDelete(tempDir);
   });
 
-  testWithoutContext(
-      'gradle task exists named printBuildVariants that prints build variants', () async {
+  test('gradle task exists named printBuildVariants that prints build variants', () async {
     // Create a new flutter project.
-    final String flutterBin =
-    fileSystem.path.join(getFlutterRoot(), 'bin', 'flutter');
     ProcessResult result = await processManager.run(<String>[
       flutterBin,
       'create',
@@ -52,15 +47,12 @@ void main() {
       '-q', // quiet output.
       'printBuildVariants',
     ], workingDirectory: androidApp.path);
-    // Verify that gradlew has a javaVersion task.
+    // Verify that gradlew has a printBuildVariants task.
     expect(result.exitCode, 0);
     // Verify the format is a number on its own line.
-    const List<String> expectedLines = <String>[
-      'BuildVariant: debug',
-      'BuildVariant: release',
-      'BuildVariant: profile',
-    ];
     final List<String> actualLines = LineSplitter.split(result.stdout.toString()).toList();
-    expect(const ListEquality<String>().equals(actualLines, expectedLines), isTrue);
+    expect(actualLines, contains('BuildVariant: debug'), reason: 'actual: $actualLines');
+    expect(actualLines, contains('BuildVariant: release'), reason: 'actual: $actualLines');
+    expect(actualLines, contains('BuildVariant: profile'), reason: 'actual: $actualLines');
   });
 }

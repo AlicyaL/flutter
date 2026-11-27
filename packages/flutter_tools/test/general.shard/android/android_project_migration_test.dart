@@ -7,6 +7,10 @@ import 'package:file/memory.dart';
 import 'package:flutter_tools/src/android/android_studio.dart';
 import 'package:flutter_tools/src/android/gradle_utils.dart';
 import 'package:flutter_tools/src/android/migrations/android_studio_java_gradle_conflict_migration.dart';
+import 'package:flutter_tools/src/android/migrations/disable_built_in_kotlin_migration.dart';
+import 'package:flutter_tools/src/android/migrations/disable_new_dsl_migration.dart';
+import 'package:flutter_tools/src/android/migrations/min_sdk_version_migration.dart';
+import 'package:flutter_tools/src/android/migrations/multidex_removal_migration.dart';
 import 'package:flutter_tools/src/android/migrations/top_level_gradle_build_file_migration.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/version.dart';
@@ -14,10 +18,9 @@ import 'package:flutter_tools/src/project.dart';
 import 'package:test/fake.dart';
 
 import '../../src/common.dart';
-import '../../src/context.dart';
 import '../../src/fakes.dart';
 
-const String otherGradleVersionWrapper = r'''
+const otherGradleVersionWrapper = r'''
 distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
 distributionUrl=https\://services.gradle.org/distributions/gradle-6.6-all.zip
@@ -25,7 +28,7 @@ zipStoreBase=GRADLE_USER_HOME
 zipStorePath=wrapper/dists
 ''';
 
-const String gradleWrapperToMigrate = r'''
+const gradleWrapperToMigrate = r'''
 distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
 distributionUrl=https\://services.gradle.org/distributions/gradle-6.7-all.zip
@@ -33,7 +36,7 @@ zipStoreBase=GRADLE_USER_HOME
 zipStorePath=wrapper/dists
 ''';
 
-const String gradleWrapperToMigrateTo = r'''
+const gradleWrapperToMigrateTo = r'''
 distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
 distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.1-all.zip
@@ -41,10 +44,134 @@ zipStoreBase=GRADLE_USER_HOME
 zipStorePath=wrapper/dists
 ''';
 
-final Version androidStudioDolphin = Version(2021, 3, 1);
+String sampleModuleGradleBuildFile(String minSdkVersionString) {
+  return r'''
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
 
-const Version _javaVersion17 = Version.withText(17, 0, 2, 'openjdk 17.0.2');
-const Version _javaVersion16 = Version.withText(16, 0, 2, 'openjdk 16.0.2');
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0'
+}
+
+android {
+    namespace "com.example.asset_sample"
+    compileSdk flutter.compileSdkVersion
+    ndkVersion flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        applicationId "com.example.asset_sample"
+        // You can update the following values to match your application needs.
+        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        ''' +
+      minSdkVersionString +
+      r'''
+
+        targetSdkVersion flutter.targetSdkVersion
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+    }
+
+    buildTypes {
+        release {
+            // TODO: Add your own signing config for the release build.
+            // Signing with the debug keys for now, so `flutter run --release` works.
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {}
+''';
+}
+
+String sampleKotlinDslModuleGradleBuildFile(String minSdkVersionString) {
+  return r'''
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id("dev.flutter.flutter-gradle-plugin")
+}
+
+android {
+    namespace = "com.example.telasdka"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17.toString()
+    }
+
+    defaultConfig {
+        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        applicationId = "com.example.asset_sample"
+        // You can update the following values to match your application needs.
+        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        $minSdkVersionString
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    buildTypes {
+        release {
+            // TODO: Add your own signing config for the release build.
+            // Signing with the debug keys for now, so `flutter run --release` works.
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
+''';
+}
+
+final androidStudioDolphin = Version(2021, 3, 1);
+
+const _javaVersion17 = Version.withText(17, 0, 2, 'openjdk 17.0.2');
+const _javaVersion16 = Version.withText(16, 0, 2, 'openjdk 16.0.2');
 
 void main() {
   group('Android migration', () {
@@ -63,52 +190,434 @@ void main() {
         topLevelGradleBuildFile = project.hostAppGradleRoot.childFile('build.gradle');
       });
 
-      testUsingContext('skipped if files are missing', () {
-        final TopLevelGradleBuildFileMigration androidProjectMigration = TopLevelGradleBuildFileMigration(
-          project,
-          bufferLogger,
-        );
-        androidProjectMigration.migrate();
+      test('skipped if files are missing', () async {
+        final androidProjectMigration = TopLevelGradleBuildFileMigration(project, bufferLogger);
+        await androidProjectMigration.migrate();
         expect(topLevelGradleBuildFile.existsSync(), isFalse);
-        expect(bufferLogger.traceText, contains('Top-level Gradle build file not found, skipping migration of task "clean".'));
+        expect(
+          bufferLogger.traceText,
+          contains('Top-level Gradle build file not found, skipping migration of task "clean".'),
+        );
       });
 
-      testUsingContext('skipped if nothing to upgrade', () {
+      test('skipped if nothing to upgrade', () async {
         topLevelGradleBuildFile.writeAsStringSync('''
 tasks.register("clean", Delete) {
   delete rootProject.buildDir
 }
         ''');
 
-        final TopLevelGradleBuildFileMigration androidProjectMigration = TopLevelGradleBuildFileMigration(
-          project,
-          bufferLogger,
-        );
+        final androidProjectMigration = TopLevelGradleBuildFileMigration(project, bufferLogger);
         final DateTime previousLastModified = topLevelGradleBuildFile.lastModifiedSync();
-        androidProjectMigration.migrate();
+        await androidProjectMigration.migrate();
 
         expect(topLevelGradleBuildFile.lastModifiedSync(), previousLastModified);
       });
 
-      testUsingContext('top-level build.gradle is migrated', () {
+      test('top-level build.gradle is migrated', () async {
         topLevelGradleBuildFile.writeAsStringSync('''
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
 ''');
 
-        final TopLevelGradleBuildFileMigration androidProjectMigration = TopLevelGradleBuildFileMigration(
-          project,
-          bufferLogger,
-        );
-        androidProjectMigration.migrate();
+        final androidProjectMigration = TopLevelGradleBuildFileMigration(project, bufferLogger);
+        await androidProjectMigration.migrate();
 
-        expect(bufferLogger.traceText, contains('Migrating "clean" Gradle task to lazy declaration style.'));
-        expect(topLevelGradleBuildFile.readAsStringSync(), equals('''
+        expect(
+          bufferLogger.traceText,
+          contains('Migrating "clean" Gradle task to lazy declaration style.'),
+        );
+        expect(
+          topLevelGradleBuildFile.readAsStringSync(),
+          equals('''
 tasks.register("clean", Delete) {
-    delete rootProject.buildDir
+    delete rootProject.layout.buildDirectory
 }
-'''));
+'''),
+        );
+      });
+    });
+    group('Migrators to support AGP 9', () {
+      late MemoryFileSystem memoryFileSystem;
+      late BufferLogger bufferLogger;
+      late FakeAndroidProject project;
+      late File topLevelGradlePropertiesFile;
+      late MemoryFileSystem errorThrowingFileSystemForRead;
+      late MemoryFileSystem errorThrowingFileSystemForWrite;
+      late MemoryFileSystem errorThrowingFileSystemForProcessFile;
+
+      MemoryFileSystem createErrorThrowingFileSystem({
+        required FileSystemOp failingOperation,
+        int failOnAttempt = 1,
+        String targetFileName = 'gradle.properties',
+        String? customErrorMessage,
+      }) {
+        var attemptCount = 0;
+        final opName = failingOperation == FileSystemOp.read ? 'read' : 'write';
+        final String errorMessage = customErrorMessage ?? 'Mock $opName error';
+
+        return MemoryFileSystem.test(
+          opHandle: (String context, FileSystemOp operation) {
+            if (operation == failingOperation && context.contains(targetFileName)) {
+              attemptCount++;
+
+              if (attemptCount >= failOnAttempt) {
+                throw FileSystemException(errorMessage);
+              }
+            }
+          },
+        );
+      }
+
+      setUp(() {
+        memoryFileSystem = MemoryFileSystem.test();
+        bufferLogger = BufferLogger.test();
+        project = FakeAndroidProject(
+          root: memoryFileSystem.currentDirectory.childDirectory('android')..createSync(),
+        );
+        topLevelGradlePropertiesFile = project.hostAppGradleRoot.childFile('gradle.properties');
+        errorThrowingFileSystemForRead = createErrorThrowingFileSystem(
+          failingOperation: FileSystemOp.read,
+        );
+        errorThrowingFileSystemForWrite = createErrorThrowingFileSystem(
+          failingOperation: FileSystemOp.write,
+        );
+        errorThrowingFileSystemForProcessFile = createErrorThrowingFileSystem(
+          failingOperation: FileSystemOp.write,
+          failOnAttempt: 2,
+          customErrorMessage: 'Mock write error during processing',
+        );
+      });
+
+      group('Migrate to opt-out of Built-in Kotlin', () {
+        test('skip if Built-in Kotlin flag exists', () async {
+          topLevelGradlePropertiesFile.writeAsStringSync('''
+android.builtInKotlin=false
+''');
+          expect(
+            topLevelGradlePropertiesFile.readAsStringSync().contains('android.builtInKotlin=false'),
+            isTrue,
+          );
+          final androidProjectMigration = DisableBuiltInKotlinMigration(project, bufferLogger);
+
+          await androidProjectMigration.migrate();
+          expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+          expect(
+            bufferLogger.traceText,
+            contains(
+              'The developer has already configured the Built-In Kotlin flag, skipping migration.',
+            ),
+          );
+        });
+
+        test('skip if Built-in Kotlin flag uses a nonstandard separator and exists', () async {
+          topLevelGradlePropertiesFile.writeAsStringSync('''
+android.builtInKotlin    false
+''');
+          expect(
+            topLevelGradlePropertiesFile.readAsStringSync().contains(
+              'android.builtInKotlin    false',
+            ),
+            isTrue,
+          );
+          final androidProjectMigration = DisableBuiltInKotlinMigration(project, bufferLogger);
+
+          await androidProjectMigration.migrate();
+          expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+          expect(
+            bufferLogger.traceText,
+            contains(
+              'The developer has already configured the Built-In Kotlin flag, skipping migration.',
+            ),
+          );
+        });
+
+        test('create gradle.properties file and add the Built-in Kotlin flag if gradle.properties file is missing', () async {
+          final androidProjectMigration = DisableBuiltInKotlinMigration(project, bufferLogger);
+          expect(topLevelGradlePropertiesFile.existsSync(), isFalse);
+          await androidProjectMigration.migrate();
+          expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+          expect(
+            bufferLogger.traceText,
+            contains(
+              'The gradle.properties file was not found. Creating it with a disabled Built-in Kotlin flag.',
+            ),
+          );
+          expect(
+            topLevelGradlePropertiesFile.readAsStringSync().contains('android.builtInKotlin=false'),
+            isTrue,
+          );
+        });
+
+        test('logs an error if the gradle.properties file cannot be written to', () async {
+          final projectWithUnwritablePropertiesFile = FakeAndroidProject(
+            root: errorThrowingFileSystemForWrite.currentDirectory.childDirectory('android')
+              ..createSync(),
+          );
+
+          final File unwritablePropertiesFile = projectWithUnwritablePropertiesFile
+              .hostAppGradleRoot
+              .childFile('gradle.properties');
+
+          expect(unwritablePropertiesFile.existsSync(), isFalse);
+
+          final androidProjectMigration = DisableBuiltInKotlinMigration(
+            projectWithUnwritablePropertiesFile,
+            bufferLogger,
+          );
+
+          await androidProjectMigration.migrate();
+
+          expect(
+            bufferLogger.traceText,
+            contains(
+              'The gradle.properties file was not found. Creating it with a disabled Built-in Kotlin flag.',
+            ),
+          );
+
+          expect(
+            bufferLogger.errorText,
+            contains('Failed to write to the gradle.properties during migration'),
+          );
+        });
+
+        test('logs an error and aborts if the gradle.properties file cannot be read', () async {
+          final projectWithUnreadablePropertiesFile = FakeAndroidProject(
+            root: errorThrowingFileSystemForRead.currentDirectory.childDirectory('android')
+              ..createSync(),
+          );
+
+          final File unreadablePropertiesFile =
+              projectWithUnreadablePropertiesFile.hostAppGradleRoot.childFile('gradle.properties')
+                ..createSync(recursive: true);
+
+          final androidProjectMigration = DisableBuiltInKotlinMigration(
+            projectWithUnreadablePropertiesFile,
+            bufferLogger,
+          );
+
+          expect(unreadablePropertiesFile.existsSync(), isTrue);
+          await androidProjectMigration.migrate();
+          expect(
+            bufferLogger.errorText,
+            contains('Failed to read gradle.properties during migration'),
+          );
+        });
+
+        test('add Built-in Kotlin flag if it does not exist in gradle.properties file', () async {
+          topLevelGradlePropertiesFile.writeAsStringSync('''
+''');
+          expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+          expect(
+            topLevelGradlePropertiesFile.readAsStringSync().contains('android.builtInKotlin=false'),
+            isFalse,
+          );
+          final androidProjectMigration = DisableBuiltInKotlinMigration(project, bufferLogger);
+
+          await androidProjectMigration.migrate();
+
+          expect(
+            bufferLogger.traceText,
+            contains('Migrating to disable Built-in Kotlin by default.'),
+          );
+
+          final String fileContents = topLevelGradlePropertiesFile.readAsStringSync();
+          expect(
+            fileContents.contains(
+              '# This builtInKotlin flag was added automatically by Flutter migrator',
+            ),
+            isTrue,
+          );
+          expect(fileContents.contains('android.builtInKotlin=false'), isTrue);
+        });
+
+        test('logs an error if processFileLines fails to write the migrated file', () async {
+          final projectWithProcessError = FakeAndroidProject(
+            root: errorThrowingFileSystemForProcessFile.currentDirectory.childDirectory('android')
+              ..createSync(),
+          );
+
+          final File topLevelGradlePropertiesFile = projectWithProcessError.hostAppGradleRoot
+              .childFile('gradle.properties');
+
+          topLevelGradlePropertiesFile.writeAsStringSync('');
+
+          final androidProjectMigration = DisableBuiltInKotlinMigration(
+            projectWithProcessError,
+            bufferLogger,
+          );
+
+          await androidProjectMigration.migrate();
+
+          expect(
+            bufferLogger.traceText,
+            contains('Migrating to disable Built-in Kotlin by default.'),
+          );
+
+          expect(
+            bufferLogger.errorText,
+            contains('Failed to process/migrate gradle.properties during migration:'),
+          );
+        });
+      });
+
+      group('Migrate to opt-out of new DSL', () {
+        test('skip if new DSL flag exists', () async {
+          topLevelGradlePropertiesFile.writeAsStringSync('''
+android.newDsl=false
+''');
+          expect(
+            topLevelGradlePropertiesFile.readAsStringSync().contains('android.newDsl=false'),
+            isTrue,
+          );
+          final androidProjectMigration = DisableNewDslMigration(project, bufferLogger);
+
+          await androidProjectMigration.migrate();
+          expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+          expect(
+            bufferLogger.traceText,
+            contains('The developer has already configured the new DSL flag, skipping migration.'),
+          );
+        });
+
+        test('skip if new DSL flag uses a nonstandard separator and exists', () async {
+          topLevelGradlePropertiesFile.writeAsStringSync('''
+android.newDsl  :  false
+''');
+          expect(
+            topLevelGradlePropertiesFile.readAsStringSync().contains('android.newDsl  :  false'),
+            isTrue,
+          );
+          final androidProjectMigration = DisableNewDslMigration(project, bufferLogger);
+
+          await androidProjectMigration.migrate();
+          expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+          expect(
+            bufferLogger.traceText,
+            contains('The developer has already configured the new DSL flag, skipping migration.'),
+          );
+        });
+
+        test('create gradle.properties file and add the new DSL flag if gradle.properties file is missing', () async {
+          final androidProjectMigration = DisableNewDslMigration(project, bufferLogger);
+          expect(topLevelGradlePropertiesFile.existsSync(), isFalse);
+          await androidProjectMigration.migrate();
+          expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+          expect(
+            bufferLogger.traceText,
+            contains(
+              'The gradle.properties file was not found. Creating it with a disabled new DSL flag.',
+            ),
+          );
+          expect(
+            topLevelGradlePropertiesFile.readAsStringSync().contains('android.newDsl=false'),
+            isTrue,
+          );
+        });
+
+        test('logs an error if the gradle.properties file cannot be written to', () async {
+          final projectWithUnwritablePropertiesFile = FakeAndroidProject(
+            root: errorThrowingFileSystemForWrite.currentDirectory.childDirectory('android')
+              ..createSync(),
+          );
+
+          final File unwritablePropertiesFile = projectWithUnwritablePropertiesFile
+              .hostAppGradleRoot
+              .childFile('gradle.properties');
+
+          expect(unwritablePropertiesFile.existsSync(), isFalse);
+
+          final androidProjectMigration = DisableNewDslMigration(
+            projectWithUnwritablePropertiesFile,
+            bufferLogger,
+          );
+
+          await androidProjectMigration.migrate();
+
+          expect(
+            bufferLogger.traceText,
+            contains(
+              'The gradle.properties file was not found. Creating it with a disabled new DSL flag.',
+            ),
+          );
+
+          expect(
+            bufferLogger.errorText,
+            contains('Failed to write to the gradle.properties during migration'),
+          );
+        });
+
+        test('logs an error and aborts if the gradle.properties file cannot be read', () async {
+          final projectWithUnreadablePropertiesFile = FakeAndroidProject(
+            root: errorThrowingFileSystemForRead.currentDirectory.childDirectory('android')
+              ..createSync(),
+          );
+
+          final File unreadablePropertiesFile =
+              projectWithUnreadablePropertiesFile.hostAppGradleRoot.childFile('gradle.properties')
+                ..createSync(recursive: true);
+
+          final androidProjectMigration = DisableNewDslMigration(
+            projectWithUnreadablePropertiesFile,
+            bufferLogger,
+          );
+
+          expect(unreadablePropertiesFile.existsSync(), isTrue);
+          await androidProjectMigration.migrate();
+          expect(
+            bufferLogger.errorText,
+            contains('Failed to read gradle.properties during migration:'),
+          );
+        });
+
+        test('add new DSL flag if it does not exist in gradle.properties file', () async {
+          topLevelGradlePropertiesFile.writeAsStringSync('''
+''');
+          expect(topLevelGradlePropertiesFile.existsSync(), isTrue);
+          expect(
+            topLevelGradlePropertiesFile.readAsStringSync().contains('android.newDsl=false'),
+            isFalse,
+          );
+          final androidProjectMigration = DisableNewDslMigration(project, bufferLogger);
+
+          await androidProjectMigration.migrate();
+
+          expect(bufferLogger.traceText, contains('Migrating to disable new DSL by default.'));
+
+          final String fileContents = topLevelGradlePropertiesFile.readAsStringSync();
+          expect(
+            fileContents.contains('# This newDsl flag was added automatically by Flutter migrator'),
+            isTrue,
+          );
+          expect(fileContents.contains('android.newDsl=false'), isTrue);
+        });
+
+        test('logs an error if processFileLines fails to write the migrated file', () async {
+          final projectWithProcessError = FakeAndroidProject(
+            root: errorThrowingFileSystemForProcessFile.currentDirectory.childDirectory('android')
+              ..createSync(),
+          );
+
+          final File topLevelGradlePropertiesFile = projectWithProcessError.hostAppGradleRoot
+              .childFile('gradle.properties');
+
+          topLevelGradlePropertiesFile.writeAsStringSync('');
+
+          final androidProjectMigration = DisableNewDslMigration(
+            projectWithProcessError,
+            bufferLogger,
+          );
+
+          await androidProjectMigration.migrate();
+
+          expect(bufferLogger.traceText, contains('Migrating to disable new DSL by default.'));
+
+          expect(
+            bufferLogger.errorText,
+            contains('Failed to process/migrate gradle.properties during migration:'),
+          );
+        });
       });
     });
 
@@ -125,7 +634,8 @@ tasks.register("clean", Delete) {
         project = FakeAndroidProject(
           root: memoryFileSystem.currentDirectory.childDirectory('android')..createSync(),
         );
-        project.hostAppGradleRoot.childDirectory(gradleDirectoryName)
+        project.hostAppGradleRoot
+            .childDirectory(gradleDirectoryName)
             .childDirectory(gradleWrapperDirectoryName)
             .createSync(recursive: true);
         gradleWrapperPropertiesFile = project.hostAppGradleRoot
@@ -134,137 +644,385 @@ tasks.register("clean", Delete) {
             .childFile(gradleWrapperPropertiesFilename);
       });
 
-      testWithoutContext('skipped if files are missing', () {
-        final AndroidStudioJavaGradleConflictMigration migration = AndroidStudioJavaGradleConflictMigration(
+      test('skipped if files are missing', () async {
+        final migration = AndroidStudioJavaGradleConflictMigration(
           java: FakeJava(version: _javaVersion17),
           bufferLogger,
           project: project,
           androidStudio: FakeAndroidStudio(version: androidStudioDolphin),
         );
-        migration.migrate();
+        await migration.migrate();
         expect(gradleWrapperPropertiesFile.existsSync(), isFalse);
         expect(bufferLogger.traceText, contains(gradleWrapperNotFound));
       });
 
-
-      testWithoutContext('skipped if android studio is null', () {
-        final AndroidStudioJavaGradleConflictMigration migration = AndroidStudioJavaGradleConflictMigration(
+      test('skipped if android studio is null', () async {
+        final migration = AndroidStudioJavaGradleConflictMigration(
           java: FakeJava(version: _javaVersion17),
           bufferLogger,
           project: project,
         );
         gradleWrapperPropertiesFile.writeAsStringSync(gradleWrapperToMigrate);
-        migration.migrate();
+        await migration.migrate();
         expect(bufferLogger.traceText, contains(androidStudioNotFound));
-        expect(gradleWrapperPropertiesFile.readAsStringSync(),
-            gradleWrapperToMigrate);
+        expect(gradleWrapperPropertiesFile.readAsStringSync(), gradleWrapperToMigrate);
       });
 
-      testWithoutContext('skipped if android studio version is null', () {
-        final AndroidStudioJavaGradleConflictMigration migration = AndroidStudioJavaGradleConflictMigration(
+      test('skipped if android studio version is null', () async {
+        final migration = AndroidStudioJavaGradleConflictMigration(
           java: FakeJava(version: _javaVersion17),
           bufferLogger,
           project: project,
           androidStudio: FakeAndroidStudio(version: null),
         );
         gradleWrapperPropertiesFile.writeAsStringSync(gradleWrapperToMigrate);
-        migration.migrate();
+        await migration.migrate();
         expect(bufferLogger.traceText, contains(androidStudioNotFound));
-        expect(gradleWrapperPropertiesFile.readAsStringSync(),
-            gradleWrapperToMigrate);
+        expect(gradleWrapperPropertiesFile.readAsStringSync(), gradleWrapperToMigrate);
       });
 
-      testWithoutContext('skipped if error is encountered in migrate()', () {
-        final AndroidStudioJavaGradleConflictMigration migration = AndroidStudioJavaGradleConflictMigration(
+      test('skipped if error is encountered in migrate()', () async {
+        final migration = AndroidStudioJavaGradleConflictMigration(
           java: FakeErroringJava(),
           bufferLogger,
           project: project,
           androidStudio: FakeAndroidStudio(version: androidStudioFlamingo),
         );
         gradleWrapperPropertiesFile.writeAsStringSync(gradleWrapperToMigrate);
-        migration.migrate();
+        await migration.migrate();
         expect(bufferLogger.traceText, contains(errorWhileMigrating));
-        expect(gradleWrapperPropertiesFile.readAsStringSync(),
-            gradleWrapperToMigrate);
+        expect(gradleWrapperPropertiesFile.readAsStringSync(), gradleWrapperToMigrate);
       });
 
-      testWithoutContext('skipped if android studio version is less than flamingo', () {
-        final AndroidStudioJavaGradleConflictMigration migration = AndroidStudioJavaGradleConflictMigration(
+      test('skipped if android studio version is less than flamingo', () async {
+        final migration = AndroidStudioJavaGradleConflictMigration(
           java: FakeJava(),
           bufferLogger,
           project: project,
           androidStudio: FakeAndroidStudio(version: androidStudioDolphin),
         );
         gradleWrapperPropertiesFile.writeAsStringSync(gradleWrapperToMigrate);
-        migration.migrate();
+        await migration.migrate();
         expect(gradleWrapperPropertiesFile.readAsStringSync(), gradleWrapperToMigrate);
         expect(bufferLogger.traceText, contains(androidStudioVersionBelowFlamingo));
       });
 
-      testWithoutContext('skipped if bundled java version is less than 17', () {
-        final AndroidStudioJavaGradleConflictMigration migration = AndroidStudioJavaGradleConflictMigration(
+      test('skipped if bundled java version is less than 17', () async {
+        final migration = AndroidStudioJavaGradleConflictMigration(
           java: FakeJava(version: _javaVersion16),
           bufferLogger,
           project: project,
           androidStudio: FakeAndroidStudio(version: androidStudioFlamingo),
         );
         gradleWrapperPropertiesFile.writeAsStringSync(gradleWrapperToMigrate);
-        migration.migrate();
+        await migration.migrate();
         expect(gradleWrapperPropertiesFile.readAsStringSync(), gradleWrapperToMigrate);
         expect(bufferLogger.traceText, contains(javaVersionNot17));
       });
 
-      testWithoutContext('nothing is changed if gradle version not one that was '
-          'used by flutter create', () {
-        final AndroidStudioJavaGradleConflictMigration migration = AndroidStudioJavaGradleConflictMigration(
+      test('nothing is changed if gradle version not one that was '
+          'used by flutter create', () async {
+        final migration = AndroidStudioJavaGradleConflictMigration(
           java: FakeJava(version: _javaVersion17),
           bufferLogger,
           project: project,
           androidStudio: FakeAndroidStudio(version: androidStudioFlamingo),
         );
         gradleWrapperPropertiesFile.writeAsStringSync(otherGradleVersionWrapper);
-        migration.migrate();
+        await migration.migrate();
         expect(gradleWrapperPropertiesFile.readAsStringSync(), otherGradleVersionWrapper);
         expect(bufferLogger.traceText, isEmpty);
       });
 
-      testWithoutContext('change is made with one of the specific gradle versions'
-          ' we migrate for', () {
-        final AndroidStudioJavaGradleConflictMigration migration = AndroidStudioJavaGradleConflictMigration(
+      test('change is made with one of the specific gradle versions'
+          ' we migrate for', () async {
+        final migration = AndroidStudioJavaGradleConflictMigration(
           java: FakeJava(version: _javaVersion17),
           bufferLogger,
           project: project,
           androidStudio: FakeAndroidStudio(version: androidStudioFlamingo),
         );
         gradleWrapperPropertiesFile.writeAsStringSync(gradleWrapperToMigrate);
-        migration.migrate();
+        await migration.migrate();
         expect(gradleWrapperPropertiesFile.readAsStringSync(), gradleWrapperToMigrateTo);
-        expect(bufferLogger.statusText, contains('Conflict detected between '
+        expect(
+          bufferLogger.statusText,
+          contains(
+            'Conflict detected between '
             'Android Studio Java version and Gradle version, upgrading Gradle '
-            'version from 6.7 to $gradleVersion7_6_1.'));
+            'version from 6.7 to $gradleVersion7_6_1.',
+          ),
+        );
       });
 
-      testWithoutContext('change is not made when opt out flag is set', () {
-        final AndroidStudioJavaGradleConflictMigration migration = AndroidStudioJavaGradleConflictMigration(
+      test('change is not made when opt out flag is set', () async {
+        final migration = AndroidStudioJavaGradleConflictMigration(
           java: FakeJava(version: _javaVersion17),
           bufferLogger,
           project: project,
           androidStudio: FakeAndroidStudio(version: androidStudioFlamingo),
         );
         gradleWrapperPropertiesFile.writeAsStringSync(gradleWrapperToMigrate + optOutFlag);
-        migration.migrate();
+        await migration.migrate();
         expect(gradleWrapperPropertiesFile.readAsStringSync(), gradleWrapperToMigrate + optOutFlag);
         expect(bufferLogger.traceText, contains(optOutFlagEnabled));
+      });
+    });
+
+    group('migrate min sdk versions less than 24 to flutter.minSdkVersion '
+        'when in a FlutterProject that is an app', () {
+      late MemoryFileSystem memoryFileSystem;
+      late BufferLogger bufferLogger;
+      late FakeAndroidProject project;
+      late MinSdkVersionMigration migration;
+
+      setUp(() {
+        memoryFileSystem = MemoryFileSystem.test();
+        memoryFileSystem.currentDirectory.childDirectory('android').createSync();
+        bufferLogger = BufferLogger.test();
+        project = FakeAndroidProject(
+          root: memoryFileSystem.currentDirectory.childDirectory('android'),
+        );
+        project.appGradleFile.parent.createSync(recursive: true);
+        migration = MinSdkVersionMigration(project, bufferLogger);
+      });
+
+      test('do nothing when files missing', () async {
+        await migration.migrate();
+        expect(bufferLogger.traceText, contains(appGradleNotFoundWarning));
+      });
+
+      test('replace when api 19', () async {
+        const minSdkVersion19 = 'minSdkVersion 19';
+        project.appGradleFile.writeAsStringSync(sampleModuleGradleBuildFile(minSdkVersion19));
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleModuleGradleBuildFile(replacementMinSdkText),
+        );
+      });
+
+      test('replace when api 20', () async {
+        const minSdkVersion20 = 'minSdkVersion 20';
+        project.appGradleFile.writeAsStringSync(sampleModuleGradleBuildFile(minSdkVersion20));
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleModuleGradleBuildFile(replacementMinSdkText),
+        );
+      });
+
+      test('replace when api 21', () async {
+        const minSdkVersion21 = 'minSdkVersion 21';
+        project.appGradleFile.writeAsStringSync(sampleModuleGradleBuildFile(minSdkVersion21));
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleModuleGradleBuildFile(replacementMinSdkText),
+        );
+      });
+
+      test('replace when api 22', () async {
+        const minSdkVersion22 = 'minSdkVersion 22';
+        project.appGradleFile.writeAsStringSync(sampleModuleGradleBuildFile(minSdkVersion22));
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleModuleGradleBuildFile(replacementMinSdkText),
+        );
+      });
+
+      test('replace when api 23', () async {
+        const minSdkVersion23 = 'minSdkVersion 23';
+        project.appGradleFile.writeAsStringSync(sampleModuleGradleBuildFile(minSdkVersion23));
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleModuleGradleBuildFile(replacementMinSdkText),
+        );
+      });
+
+      test('do nothing when >=api 24', () async {
+        const minSdkVersion24 = 'minSdkVersion 24';
+        project.appGradleFile.writeAsStringSync(sampleModuleGradleBuildFile(minSdkVersion24));
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleModuleGradleBuildFile(minSdkVersion24),
+        );
+      });
+
+      test('do nothing when already using '
+          'flutter.minSdkVersion', () async {
+        project.appGradleFile.writeAsStringSync(sampleModuleGradleBuildFile(replacementMinSdkText));
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleModuleGradleBuildFile(replacementMinSdkText),
+        );
+      });
+
+      test('avoid rewriting comments', () async {
+        const code =
+            '// minSdkVersion 19  // old default\n'
+            '        minSdkVersion 24  // new version';
+        project.appGradleFile.writeAsStringSync(sampleModuleGradleBuildFile(code));
+        await migration.migrate();
+        expect(project.appGradleFile.readAsStringSync(), sampleModuleGradleBuildFile(code));
+      });
+
+      test('do nothing when project is a module', () async {
+        project = FakeAndroidProject(
+          root: memoryFileSystem.currentDirectory.childDirectory('android'),
+          module: true,
+        );
+        migration = MinSdkVersionMigration(project, bufferLogger);
+        const minSdkVersion19 = 'minSdkVersion 19';
+        project.appGradleFile.writeAsStringSync(sampleModuleGradleBuildFile(minSdkVersion19));
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleModuleGradleBuildFile(minSdkVersion19),
+        );
+      });
+
+      test('do nothing when minSdkVersion is set '
+          'to a constant', () async {
+        const minSdkVersionConstant = 'minSdkVersion kMinSdkversion';
+        project.appGradleFile.writeAsStringSync(sampleModuleGradleBuildFile(minSdkVersionConstant));
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleModuleGradleBuildFile(minSdkVersionConstant),
+        );
+      });
+
+      test('migrate when minSdkVersion is set '
+          'using = syntax', () async {
+        const equalsSyntaxMinSdkVersion19 = 'minSdkVersion = 19';
+        project.appGradleFile.writeAsStringSync(
+          sampleModuleGradleBuildFile(equalsSyntaxMinSdkVersion19),
+        );
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleModuleGradleBuildFile(groovyReplacementWithEquals),
+        );
+      });
+    });
+
+    group('migrate min sdk versions less than 24 to flutter.minSdkVersion - kotlin dsl', () {
+      late MemoryFileSystem memoryFileSystem;
+      late BufferLogger bufferLogger;
+      late FakeAndroidProject project;
+      late MinSdkVersionMigration migration;
+
+      setUp(() {
+        memoryFileSystem = MemoryFileSystem.test();
+        memoryFileSystem.currentDirectory.childDirectory('android').createSync();
+        bufferLogger = BufferLogger.test();
+        project = FakeKotlinDslAndroidProject(
+          root: memoryFileSystem.currentDirectory.childDirectory('android'),
+        );
+        project.appGradleFile.parent.createSync(recursive: true);
+        migration = MinSdkVersionMigration(project, bufferLogger);
+      });
+
+      test('do nothing when already using '
+          'flutter.minSdkVersion', () async {
+        project.appGradleFile.writeAsStringSync(
+          sampleKotlinDslModuleGradleBuildFile(kotlinReplacementMinSdkText),
+        );
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleKotlinDslModuleGradleBuildFile(kotlinReplacementMinSdkText),
+        );
+      });
+
+      test('migrate when minSdkVersion is set '
+          'using = syntax', () async {
+        const equalsSyntaxMinSdkVersion19 = 'minSdk = 19';
+        project.appGradleFile.writeAsStringSync(
+          sampleKotlinDslModuleGradleBuildFile(equalsSyntaxMinSdkVersion19),
+        );
+        await migration.migrate();
+        expect(
+          project.appGradleFile.readAsStringSync(),
+          sampleKotlinDslModuleGradleBuildFile(kotlinReplacementMinSdkText),
+        );
+      });
+    });
+
+    group('delete FlutterMultiDexApplication.java, if it exists', () {
+      late MemoryFileSystem memoryFileSystem;
+      late BufferLogger bufferLogger;
+      late FakeAndroidProject project;
+      late MultidexRemovalMigration migration;
+
+      setUp(() {
+        memoryFileSystem = MemoryFileSystem.test();
+        memoryFileSystem.currentDirectory.childDirectory('android').createSync();
+        bufferLogger = BufferLogger.test();
+        project = FakeAndroidProject(
+          root: memoryFileSystem.currentDirectory.childDirectory('android'),
+        );
+        project.appGradleFile.parent.createSync(recursive: true);
+        migration = MultidexRemovalMigration(project, bufferLogger);
+      });
+
+      test('do nothing when FlutterMultiDexApplication.java is not present', () async {
+        await migration.migrate();
+        expect(bufferLogger.traceText, isEmpty);
+      });
+
+      test('delete and note when FlutterMultiDexApplication.java is present', () async {
+        // Write a blank string to the FlutterMultiDexApplication.java file.
+        final File flutterMultiDexApplication =
+            project.hostAppGradleRoot
+                .childDirectory('src')
+                .childDirectory('main')
+                .childDirectory('java')
+                .childDirectory('io')
+                .childDirectory('flutter')
+                .childDirectory('app')
+                .childFile('FlutterMultiDexApplication.java')
+              ..createSync(recursive: true);
+        flutterMultiDexApplication.writeAsStringSync('');
+
+        await migration.migrate();
+        expect(bufferLogger.traceText, contains(MultidexRemovalMigration.deletionMessage));
+        expect(flutterMultiDexApplication.existsSync(), false);
       });
     });
   });
 }
 
 class FakeAndroidProject extends Fake implements AndroidProject {
-  FakeAndroidProject({required Directory root}) : hostAppGradleRoot = root;
+  FakeAndroidProject({required Directory root, this.module, this.plugin})
+    : hostAppGradleRoot = root;
 
   @override
   Directory hostAppGradleRoot;
+
+  final bool? module;
+  final bool? plugin;
+
+  @override
+  bool get isPlugin => plugin ?? false;
+
+  @override
+  bool get isModule => module ?? false;
+
+  @override
+  File get appGradleFile => hostAppGradleRoot.childDirectory('app').childFile('build.gradle');
+}
+
+class FakeKotlinDslAndroidProject extends FakeAndroidProject {
+  FakeKotlinDslAndroidProject({required super.root, super.module, super.plugin});
+
+  @override
+  File get appGradleFile => hostAppGradleRoot.childDirectory('app').childFile('build.gradle.kts');
 }
 
 class FakeAndroidStudio extends Fake implements AndroidStudio {

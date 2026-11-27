@@ -25,16 +25,12 @@ class FakeFlutterDestination implements FlutterDestination {
 void main() {
   group('Parse', () {
     test('duplicate entries for both builder name and test name', () {
-      final Map<String, dynamic> results = <String, dynamic>{
+      final results = <String, dynamic>{
         'CommitBranch': 'master',
         'CommitSha': 'abc',
         'BuilderName': 'Linux test',
-        'ResultData': <String, dynamic>{
-          'average_frame_build_time_millis': 0.4550425531914895,
-        },
-        'BenchmarkScoreKeys': <String>[
-          'average_frame_build_time_millis',
-        ],
+        'ResultData': <String, dynamic>{'average_frame_build_time_millis': 0.4550425531914895},
+        'BenchmarkScoreKeys': <String>['average_frame_build_time_millis'],
       };
       final List<MetricPoint> metricPoints = parse(results, <String, String>{}, 'test');
 
@@ -43,8 +39,31 @@ void main() {
       expect(metricPoints[0].tags[kNameKey], 'test');
     });
 
+    test('merged score keys keep the original task name', () {
+      final results = <String, dynamic>{
+        'CommitBranch': 'master',
+        'CommitSha': 'abc',
+        'BuilderName': 'Mac_ios suite',
+        'ResultData': <String, dynamic>{
+          'a_perf/average_frame_build_time_millis': 1.5,
+          'b_perf/average_frame_build_time_millis': 2.5,
+        },
+        'BenchmarkScoreKeys': <String>[
+          'a_perf/average_frame_build_time_millis',
+          'b_perf/average_frame_build_time_millis',
+        ],
+      };
+      final List<MetricPoint> metricPoints = parse(results, <String, String>{}, 'suite');
+
+      expect(metricPoints.map((MetricPoint p) => p.tags[kNameKey]), <String>['a_perf', 'b_perf']);
+      expect(metricPoints.map((MetricPoint p) => p.tags[kSubResultKey]).toSet(), <String>{
+        'average_frame_build_time_millis',
+      });
+      expect(metricPoints.map((MetricPoint p) => p.value), <double>[1.5, 2.5]);
+    });
+
     test('without additional benchmark tags', () {
-      final Map<String, dynamic> results = <String, dynamic>{
+      final results = <String, dynamic>{
         'CommitBranch': 'master',
         'CommitSha': 'abc',
         'BuilderName': 'test',
@@ -64,7 +83,7 @@ void main() {
     });
 
     test('with additional benchmark tags', () {
-      final Map<String, dynamic> results = <String, dynamic>{
+      final results = <String, dynamic>{
         'CommitBranch': 'master',
         'CommitSha': 'abc',
         'BuilderName': 'test',
@@ -77,7 +96,7 @@ void main() {
           '90th_percentile_frame_build_time_millis',
         ],
       };
-      final Map<String, dynamic> tags = <String, dynamic>{
+      final tags = <String, dynamic>{
         'arch': 'intel',
         'device_type': 'Moto G Play',
         'device_version': 'android-25',
@@ -93,7 +112,7 @@ void main() {
     });
 
     test('succeeds - null ResultData', () {
-      final Map<String, dynamic> results = <String, dynamic>{
+      final results = <String, dynamic>{
         'CommitBranch': 'master',
         'CommitSha': 'abc',
         'BuilderName': 'test',
@@ -108,7 +127,7 @@ void main() {
 
   group('Update', () {
     test('without taskName', () async {
-      final Map<String, dynamic> results = <String, dynamic>{
+      final results = <String, dynamic>{
         'CommitBranch': 'master',
         'CommitSha': 'abc',
         'BuilderName': 'test',
@@ -122,9 +141,9 @@ void main() {
         ],
       };
       final List<MetricPoint> metricPoints = parse(results, <String, String>{}, 'task abc');
-      final FakeFlutterDestination flutterDestination = FakeFlutterDestination();
-      const String taskName = 'default';
-      const int commitTimeSinceEpoch = 1629220312;
+      final flutterDestination = FakeFlutterDestination();
+      const taskName = 'default';
+      const commitTimeSinceEpoch = 1629220312;
 
       await upload(flutterDestination, metricPoints, commitTimeSinceEpoch, taskName);
 
@@ -132,7 +151,7 @@ void main() {
     });
 
     test('with taskName', () async {
-      final Map<String, dynamic> results = <String, dynamic>{
+      final results = <String, dynamic>{
         'CommitBranch': 'master',
         'CommitSha': 'abc',
         'BuilderName': 'test',
@@ -146,9 +165,9 @@ void main() {
         ],
       };
       final List<MetricPoint> metricPoints = parse(results, <String, String>{}, 'task abc');
-      final FakeFlutterDestination flutterDestination = FakeFlutterDestination();
-      const String taskName = 'test';
-      const int commitTimeSinceEpoch = 1629220312;
+      final flutterDestination = FakeFlutterDestination();
+      const taskName = 'test';
+      const commitTimeSinceEpoch = 1629220312;
 
       await upload(flutterDestination, metricPoints, commitTimeSinceEpoch, taskName);
 
@@ -158,19 +177,19 @@ void main() {
 
   group('metric file name', () {
     test('without tags', () async {
-      final Map<String, dynamic> tags = <String, dynamic>{};
+      final tags = <String, dynamic>{};
       final String fileName = metricFileName('test', tags);
       expect(fileName, 'test');
     });
 
     test('with device tags', () async {
-      final Map<String, dynamic> tags = <String, dynamic>{'device_type': 'ab-c'};
+      final tags = <String, dynamic>{'device_type': 'ab-c'};
       final String fileName = metricFileName('test', tags);
       expect(fileName, 'test_abc');
     });
 
     test('with device host and arch tags', () async {
-      final Map<String, dynamic> tags = <String, dynamic>{'device_type': 'ab-c', 'host_type': 'de-f', 'arch': 'm1'};
+      final tags = <String, dynamic>{'device_type': 'ab-c', 'host_type': 'de-f', 'arch': 'm1'};
       final String fileName = metricFileName('test', tags);
       expect(fileName, 'test_m1_def_abc');
     });

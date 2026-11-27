@@ -22,5 +22,18 @@
   "tabSemanticsLabel": "Sekme $tabIndex/$tabCount",
   "modalBarrierDismissLabel": "Kapat",
   "searchTextFieldPlaceholderLabel": "Ara",
-  "noSpellCheckReplacementsLabel": "No Replacements Found"
+  "noSpellCheckReplacementsLabel": "Yerine Kelime Bulunamadı",
+  "menuDismissLabel": "Menüyü kapat",
+  "lookUpButtonLabel": "Ara",
+  "searchWebButtonLabel": "Web'de Ara",
+  "shareButtonLabel": "Paylaş...",
+  "clearButtonLabel": "Temizle",
+  "cancelButtonLabel": "İptal",
+  "backButtonLabel": "Geri",
+  "expansionTileExpandedHint": "daraltmak için iki kez dokunun",
+  "expansionTileCollapsedHint": "genişletmek için iki kez dokunun",
+  "expansionTileExpandedTapHint": "Daralt",
+  "expansionTileCollapsedTapHint": "Daha fazla ayrıntı için genişletin",
+  "expandedHint": "Daraltıldı",
+  "collapsedHint": "Genişletildi"
 }

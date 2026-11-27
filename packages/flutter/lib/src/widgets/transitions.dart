@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter/material.dart';
+/// @docImport 'package:flutter/widgets.dart';
+library;
+
 import 'dart:math' as math;
 
 import 'package:flutter/rendering.dart';
@@ -77,10 +81,7 @@ abstract class AnimatedWidget extends StatefulWidget {
   /// Creates a widget that rebuilds when the given listenable changes.
   ///
   /// The [listenable] argument is required.
-  const AnimatedWidget({
-    super.key,
-    required this.listenable,
-  });
+  const AnimatedWidget({super.key, required this.listenable});
 
   /// The [Listenable] to which this widget is listening.
   ///
@@ -126,6 +127,9 @@ class _AnimatedState extends State<AnimatedWidget> {
   }
 
   void _handleChange() {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       // The listenable's state is our build state, and it changed already.
     });
@@ -134,6 +138,23 @@ class _AnimatedState extends State<AnimatedWidget> {
   @override
   Widget build(BuildContext context) => widget.build(context);
 }
+
+/// Signature for a builder used to control a page's exit transition.
+///
+/// When a new route enters the stack, the `animation` argument is typically
+/// used to control the enter and exit transition of the topmost route. The exit
+/// transition of the route just below the new route is controlled with the
+/// `secondaryAnimation`, which also controls the transition of the old route
+/// when the topmost route is popped off the stack.
+///
+/// Typically used as the argument for [ModalRoute.delegatedTransition].
+typedef DelegatedTransitionBuilder = Widget? Function(
+  BuildContext context,
+  Animation<double> animation,
+  Animation<double> secondaryAnimation,
+  bool allowSnapshotting,
+  Widget? child,
+);
 
 /// Animates the position of a widget relative to its normal position.
 ///
@@ -168,8 +189,6 @@ class _AnimatedState extends State<AnimatedWidget> {
 ///    position based on the value of a rectangle relative to a bounding box.
 class SlideTransition extends AnimatedWidget {
   /// Creates a fractional translation transition.
-  ///
-  /// The [position] argument must not be null.
   const SlideTransition({
     super.key,
     required Animation<Offset> position,
@@ -225,51 +244,58 @@ class SlideTransition extends AnimatedWidget {
   }
 }
 
-/// Animates the scale of a transformed widget.
+/// Signature for the callback to [MatrixTransition.onTransform].
 ///
-/// Here's an illustration of the [ScaleTransition] widget, with it's [alignment]
-/// animated by a [CurvedAnimation] set to [Curves.fastOutSlowIn]:
-/// {@animation 300 378 https://flutter.github.io/assets-for-api-docs/assets/widgets/scale_transition.mp4}
+/// Computes a [Matrix4] to be used in the [MatrixTransition] transformed widget
+/// from the [MatrixTransition.animation] value.
+typedef TransformCallback = Matrix4 Function(double animationValue);
+
+/// Animates the [Matrix4] of a transformed widget.
+///
+/// The [onTransform] callback computes a [Matrix4] from the animated value, it
+/// is called every time the [animation] changes its value.
 ///
 /// {@tool dartpad}
-/// The following code implements the [ScaleTransition] as seen in the video
-/// above:
+/// The following example implements a [MatrixTransition] with a rotation around
+/// the Y axis, with a 3D perspective skew.
 ///
-/// ** See code in examples/api/lib/widgets/transitions/scale_transition.0.dart **
+/// ** See code in examples/api/lib/widgets/transitions/matrix_transition.0.dart **
 /// {@end-tool}
 ///
 /// See also:
 ///
-///  * [PositionedTransition], a widget that animates its child from a start
-///    position to an end position over the lifetime of the animation.
-///  * [RelativePositionedTransition], a widget that transitions its child's
-///    position based on the value of a rectangle relative to a bounding box.
-///  * [SizeTransition], a widget that animates its own size and clips and
-///    aligns its child.
-class ScaleTransition extends AnimatedWidget {
-  /// Creates a scale transition.
+///  * [ScaleTransition], which animates the scale of a widget, by providing a
+///    matrix which scales along the X and Y axis.
+///  * [RotationTransition], which animates the rotation of a widget, by
+///    providing a matrix which rotates along the Z axis.
+class MatrixTransition extends AnimatedWidget {
+  /// Creates a matrix transition.
   ///
-  /// The [scale] argument must not be null. The [alignment] argument defaults
-  /// to [Alignment.center].
-  const ScaleTransition({
+  /// The [alignment] argument defaults to [Alignment.center].
+  const MatrixTransition({
     super.key,
-    required Animation<double> scale,
+    required Animation<double> animation,
+    required this.onTransform,
     this.alignment = Alignment.center,
     this.filterQuality,
     this.child,
-  }) : super(listenable: scale);
+  }) : super(listenable: animation);
 
-  /// The animation that controls the scale of the child.
-  ///
-  /// If the current value of the scale animation is v, the child will be
-  /// painted v times its normal size.
-  Animation<double> get scale => listenable as Animation<double>;
+  /// The callback to compute a [Matrix4] from the [animation]. It's called
+  /// every time [animation] changes its value.
+  final TransformCallback onTransform;
 
-  /// The alignment of the origin of the coordinate system in which the scale
-  /// takes place, relative to the size of the box.
+  /// The animation that controls the matrix of the child.
   ///
-  /// For example, to set the origin of the scale to bottom middle, you can use
-  /// an alignment of (0.0, 1.0).
+  /// The matrix will be computed from the animation with the [onTransform]
+  /// callback.
+  Animation<double> get animation => listenable as Animation<double>;
+
+  /// The alignment of the origin of the coordinate system in which the
+  /// transform takes place, relative to the size of the box.
+  ///
+  /// For example, to set the origin of the transform to bottom middle, you can
+  /// use an alignment of (0.0, 1.0).
   final Alignment alignment;
 
   /// The filter quality with which to apply the transform as a bitmap operation.
@@ -291,22 +317,56 @@ class ScaleTransition extends AnimatedWidget {
     // a saveLayer call. This is usually worthwhile when animating the layer,
     // but leaving it in the layer tree before the animation has started or after
     // it has finished significantly hurts performance.
-    final bool useFilterQuality;
-    switch (scale.status) {
-      case AnimationStatus.dismissed:
-      case AnimationStatus.completed:
-        useFilterQuality = false;
-      case AnimationStatus.forward:
-      case AnimationStatus.reverse:
-        useFilterQuality = true;
-    }
-    return Transform.scale(
-      scale: scale.value,
+    return Transform(
+      transform: onTransform(animation.value),
       alignment: alignment,
-      filterQuality: useFilterQuality ? filterQuality : null,
+      filterQuality: animation.isAnimating ? filterQuality : null,
       child: child,
     );
   }
+}
+
+/// Animates the scale of a transformed widget.
+///
+/// Here's an illustration of the [ScaleTransition] widget, with it's [scale]
+/// animated by a [CurvedAnimation] set to [Curves.fastOutSlowIn]:
+/// {@animation 300 378 https://flutter.github.io/assets-for-api-docs/assets/widgets/scale_transition.mp4}
+///
+/// {@tool dartpad}
+/// The following code implements the [ScaleTransition] as seen in the video
+/// above:
+///
+/// ** See code in examples/api/lib/widgets/transitions/scale_transition.0.dart **
+/// {@end-tool}
+///
+/// See also:
+///
+///  * [PositionedTransition], a widget that animates its child from a start
+///    position to an end position over the lifetime of the animation.
+///  * [RelativePositionedTransition], a widget that transitions its child's
+///    position based on the value of a rectangle relative to a bounding box.
+///  * [SizeTransition], a widget that animates its own size and clips and
+///    aligns its child.
+class ScaleTransition extends MatrixTransition {
+  /// Creates a scale transition.
+  ///
+  /// The [alignment] argument defaults to [Alignment.center].
+  const ScaleTransition({
+    super.key,
+    required Animation<double> scale,
+    super.alignment = Alignment.center,
+    super.filterQuality,
+    super.child,
+  }) : super(animation: scale, onTransform: _handleScaleMatrix);
+
+  /// The animation that controls the scale of the child.
+  Animation<double> get scale => animation;
+
+  /// The callback that controls the scale of the child.
+  ///
+  /// If the current value of the animation is v, the child will be
+  /// painted v times its normal size.
+  static Matrix4 _handleScaleMatrix(double value) => Matrix4.diagonal3Values(value, value, 1.0);
 }
 
 /// Animates the rotation of a widget.
@@ -328,73 +388,31 @@ class ScaleTransition extends AnimatedWidget {
 ///    widget.
 ///  * [SizeTransition], a widget that animates its own size and clips and
 ///    aligns its child.
-class RotationTransition extends AnimatedWidget {
+class RotationTransition extends MatrixTransition {
   /// Creates a rotation transition.
-  ///
-  /// The [turns] argument must not be null.
   const RotationTransition({
     super.key,
     required Animation<double> turns,
-    this.alignment = Alignment.center,
-    this.filterQuality,
-    this.child,
-  }) : super(listenable: turns);
+    super.alignment = Alignment.center,
+    super.filterQuality,
+    super.child,
+  }) : super(animation: turns, onTransform: _handleTurnsMatrix);
 
   /// The animation that controls the rotation of the child.
-  ///
-  /// If the current value of the turns animation is v, the child will be
-  /// rotated v * 2 * pi radians before being painted.
-  Animation<double> get turns => listenable as Animation<double>;
+  Animation<double> get turns => animation;
 
-  /// The alignment of the origin of the coordinate system around which the
-  /// rotation occurs, relative to the size of the box.
+  /// The callback that controls the rotation of the child.
   ///
-  /// For example, to set the origin of the rotation to top right corner, use
-  /// an alignment of (1.0, -1.0) or use [Alignment.topRight]
-  final Alignment alignment;
-
-  /// The filter quality with which to apply the transform as a bitmap operation.
-  ///
-  /// When the animation is stopped (either in [AnimationStatus.dismissed] or
-  /// [AnimationStatus.completed]), the filter quality argument will be ignored.
-  ///
-  /// {@macro flutter.widgets.Transform.optional.FilterQuality}
-  final FilterQuality? filterQuality;
-
-  /// The widget below this widget in the tree.
-  ///
-  /// {@macro flutter.widgets.ProxyWidget.child}
-  final Widget? child;
-
-  @override
-  Widget build(BuildContext context) {
-    // The ImageFilter layer created by setting filterQuality will introduce
-    // a saveLayer call. This is usually worthwhile when animating the layer,
-    // but leaving it in the layer tree before the animation has started or after
-    // it has finished significantly hurts performance.
-    final bool useFilterQuality;
-    switch (turns.status) {
-      case AnimationStatus.dismissed:
-      case AnimationStatus.completed:
-        useFilterQuality = false;
-      case AnimationStatus.forward:
-      case AnimationStatus.reverse:
-        useFilterQuality = true;
-    }
-    return Transform.rotate(
-      angle: turns.value * math.pi * 2.0,
-      alignment: alignment,
-      filterQuality: useFilterQuality ? filterQuality : null,
-      child: child,
-    );
-  }
+  /// If the current value of the animation is v, the child will be rotated
+  /// v * 2 * pi radians before being painted.
+  static Matrix4 _handleTurnsMatrix(double value) => Matrix4.rotationZ(value * math.pi * 2.0);
 }
 
 /// Animates its own size and clips and aligns its child.
 ///
 /// [SizeTransition] acts as a [ClipRect] that animates either its width or its
-/// height, depending upon the value of [axis]. The alignment of the child along
-/// the [axis] is specified by the [axisAlignment].
+/// height, depending upon the value of [axis]. The alignment of the child is
+/// specified by the [alignment].
 ///
 /// Like most widgets, [SizeTransition] will conform to the constraints it is
 /// given, so be sure to put it in a context where it can change size. For
@@ -427,17 +445,28 @@ class RotationTransition extends AnimatedWidget {
 class SizeTransition extends AnimatedWidget {
   /// Creates a size transition.
   ///
-  /// The [axis], [sizeFactor], and [axisAlignment] arguments must not be null.
-  /// The [axis] argument defaults to [Axis.vertical]. The [axisAlignment]
-  /// defaults to 0.0, which centers the child along the main axis during the
-  /// transition.
+  /// The [axis] argument defaults to [Axis.vertical]. The [alignment] defaults
+  /// to [Alignment.center], which centers the child within the parent during
+  /// the transition.
   const SizeTransition({
     super.key,
     this.axis = Axis.vertical,
     required Animation<double> sizeFactor,
-    this.axisAlignment = 0.0,
+    @Deprecated(
+      'Use alignment instead. '
+      'This property provides full control over both axes, which is an improvement over the old axisAlignment. '
+      'This feature was deprecated after v3.41.0-1.0.pre.',
+    )
+    this.axisAlignment,
+    this.alignment,
+    this.fixedCrossAxisSizeFactor,
     this.child,
-  }) : super(listenable: sizeFactor);
+  }) : assert(fixedCrossAxisSizeFactor == null || fixedCrossAxisSizeFactor >= 0.0),
+       assert(
+         axisAlignment == null || alignment == null,
+         'Cannot provide both axisAlignment and alignment as axisAlignment has been deprecated and superseded by alignment.',
+       ),
+       super(listenable: sizeFactor);
 
   /// [Axis.horizontal] if [sizeFactor] modifies the width, otherwise
   /// [Axis.vertical].
@@ -464,7 +493,27 @@ class SizeTransition extends AnimatedWidget {
   /// A value of 1.0 indicates the bottom or end, depending upon the [axis].
   ///
   /// A value of 0.0 (the default) indicates the center for either [axis] value.
-  final double axisAlignment;
+  ///
+  /// This property has been deprecated and superseded by [alignment]. Existing usages can be migrated to [alignment] as follows:
+  /// - If [axis] is [Axis.horizontal], replace with `Alignment(axisAlignment ?? 0.0, -1.0)`.
+  /// - If [axis] is [Axis.vertical], replace with `Alignment(-1.0, axisAlignment ?? 0.0)`.
+  @Deprecated(
+    'Use alignment instead. '
+    'This property provides full control over both axes, which is an improvement over the old axisAlignment. '
+    'This feature was deprecated after v3.41.0-1.0.pre.',
+  )
+  final double? axisAlignment;
+
+  /// The alignment of the child within the parent during the transition.
+  final AlignmentGeometry? alignment;
+
+  /// The factor by which to multiply the cross axis size of the child.
+  ///
+  /// If the value of [fixedCrossAxisSizeFactor] is less than one, the child
+  /// will be clipped along the appropriate axis.
+  ///
+  /// If `null` (the default), the cross axis size is as large as the parent.
+  final double? fixedCrossAxisSizeFactor;
 
   /// The widget below this widget in the tree.
   ///
@@ -473,17 +522,20 @@ class SizeTransition extends AnimatedWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AlignmentDirectional alignment;
-    if (axis == Axis.vertical) {
-      alignment = AlignmentDirectional(-1.0, axisAlignment);
-    } else {
-      alignment = AlignmentDirectional(axisAlignment, -1.0);
-    }
     return ClipRect(
       child: Align(
-        alignment: alignment,
-        heightFactor: axis == Axis.vertical ? math.max(sizeFactor.value, 0.0) : null,
-        widthFactor: axis == Axis.horizontal ? math.max(sizeFactor.value, 0.0) : null,
+        alignment:
+            alignment ??
+            switch (axis) {
+              Axis.horizontal => AlignmentDirectional(axisAlignment ?? 0.0, -1.0),
+              Axis.vertical => AlignmentDirectional(-1.0, axisAlignment ?? 0.0),
+            },
+        heightFactor: axis == Axis.vertical
+            ? math.max(sizeFactor.value, 0.0)
+            : fixedCrossAxisSizeFactor,
+        widthFactor: axis == Axis.horizontal
+            ? math.max(sizeFactor.value, 0.0)
+            : fixedCrossAxisSizeFactor,
         child: child,
       ),
     );
@@ -507,6 +559,26 @@ class SizeTransition extends AnimatedWidget {
 /// ** See code in examples/api/lib/widgets/transitions/fade_transition.0.dart **
 /// {@end-tool}
 ///
+/// ## Hit testing
+///
+/// Setting the [opacity] to zero does not prevent hit testing from being
+/// applied to the descendants of the [FadeTransition] widget. This can be
+/// confusing for the user, who may not see anything, and may believe the area
+/// of the interface where the [FadeTransition] is hiding a widget to be
+/// non-interactive.
+///
+/// With certain widgets, such as [Flow], that compute their positions only when
+/// they are painted, this can actually lead to bugs (from unexpected geometry
+/// to exceptions), because those widgets are not painted by the [FadeTransition]
+/// widget at all when the [opacity] animation reaches zero.
+///
+/// To avoid such problems, it is generally a good idea to combine this widget
+/// with an [IgnorePointer] that one enables when the [opacity] animation
+/// reaches zero. This prevents interactions with any children in the subtree
+/// when the [child] is not visible. For performance reasons, when implementing
+/// this, care should be taken not to rebuild the relevant widget (e.g. by
+/// calling [State.setState]) except at the transition point.
+///
 /// See also:
 ///
 ///  * [Opacity], which does not animate changes in opacity.
@@ -515,8 +587,6 @@ class SizeTransition extends AnimatedWidget {
 ///  * [SliverFadeTransition], the sliver version of this widget.
 class FadeTransition extends SingleChildRenderObjectWidget {
   /// Creates an opacity transition.
-  ///
-  /// The [opacity] argument must not be null.
   const FadeTransition({
     super.key,
     required this.opacity,
@@ -544,10 +614,7 @@ class FadeTransition extends SingleChildRenderObjectWidget {
 
   @override
   RenderAnimatedOpacity createRenderObject(BuildContext context) {
-    return RenderAnimatedOpacity(
-      opacity: opacity,
-      alwaysIncludeSemantics: alwaysIncludeSemantics,
-    );
+    return RenderAnimatedOpacity(opacity: opacity, alwaysIncludeSemantics: alwaysIncludeSemantics);
   }
 
   @override
@@ -561,7 +628,13 @@ class FadeTransition extends SingleChildRenderObjectWidget {
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty<Animation<double>>('opacity', opacity));
-    properties.add(FlagProperty('alwaysIncludeSemantics', value: alwaysIncludeSemantics, ifTrue: 'alwaysIncludeSemantics'));
+    properties.add(
+      FlagProperty(
+        'alwaysIncludeSemantics',
+        value: alwaysIncludeSemantics,
+        ifTrue: 'alwaysIncludeSemantics',
+      ),
+    );
   }
 }
 
@@ -580,14 +653,33 @@ class FadeTransition extends SingleChildRenderObjectWidget {
 ///
 /// {@animation 300 378 https://flutter.github.io/assets-for-api-docs/assets/widgets/fade_transition.mp4}
 ///
+/// ## Hit testing
+///
+/// Setting the [opacity] to zero does not prevent hit testing from being
+/// applied to the descendants of the [SliverFadeTransition] widget. This can be
+/// confusing for the user, who may not see anything, and may believe the area
+/// of the interface where the [SliverFadeTransition] is hiding a widget to be
+/// non-interactive.
+///
+/// With certain widgets, such as [Flow], that compute their positions only when
+/// they are painted, this can actually lead to bugs (from unexpected geometry
+/// to exceptions), because those widgets are not painted by the
+/// [SliverFadeTransition] widget at all when the [opacity] animation reaches
+/// zero.
+///
+/// To avoid such problems, it is generally a good idea to combine this widget
+/// with a [SliverIgnorePointer] that one enables when the [opacity] animation
+/// reaches zero. This prevents interactions with any children in the subtree
+/// when the sliver is not visible. For performance reasons, when implementing
+/// this, care should be taken not to rebuild the relevant widget (e.g. by
+/// calling [State.setState]) except at the transition point.
+///
 /// See also:
 ///
 ///  * [SliverOpacity], which does not animate changes in opacity.
 ///  * [FadeTransition], the box version of this widget.
 class SliverFadeTransition extends SingleChildRenderObjectWidget {
   /// Creates an opacity transition.
-  ///
-  /// The [opacity] argument must not be null.
   const SliverFadeTransition({
     super.key,
     required this.opacity,
@@ -632,7 +724,13 @@ class SliverFadeTransition extends SingleChildRenderObjectWidget {
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty<Animation<double>>('opacity', opacity));
-    properties.add(FlagProperty('alwaysIncludeSemantics', value: alwaysIncludeSemantics, ifTrue: 'alwaysIncludeSemantics'));
+    properties.add(
+      FlagProperty(
+        'alwaysIncludeSemantics',
+        value: alwaysIncludeSemantics,
+        ifTrue: 'alwaysIncludeSemantics',
+      ),
+    );
   }
 }
 
@@ -647,7 +745,7 @@ class RelativeRectTween extends Tween<RelativeRect> {
   ///
   /// The [begin] and [end] properties may be null; the null value
   /// is treated as [RelativeRect.fill].
-  RelativeRectTween({ super.begin, super.end });
+  RelativeRectTween({super.begin, super.end});
 
   /// Returns the value this variable has at the given animation clock value.
   @override
@@ -658,7 +756,8 @@ class RelativeRectTween extends Tween<RelativeRect> {
 /// [Animation<RelativeRect>] to transition the child's position from a start
 /// position to an end position over the lifetime of the animation.
 ///
-/// Only works if it's the child of a [Stack].
+/// Only works inside a [Stack] or an [Overlay]; see [Positioned] for the
+/// exact restrictions.
 ///
 /// Here's an illustration of the [PositionedTransition] widget, with it's [rect]
 /// animated by a [CurvedAnimation] set to [Curves.elasticInOut]:
@@ -687,8 +786,6 @@ class RelativeRectTween extends Tween<RelativeRect> {
 ///    aligns its child.
 class PositionedTransition extends AnimatedWidget {
   /// Creates a transition for [Positioned].
-  ///
-  /// The [rect] argument must not be null.
   const PositionedTransition({
     super.key,
     required Animation<RelativeRect> rect,
@@ -705,10 +802,7 @@ class PositionedTransition extends AnimatedWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Positioned.fromRelativeRect(
-      rect: rect.value,
-      child: child,
-    );
+    return Positioned.fromRelativeRect(rect: rect.value, child: child);
   }
 }
 
@@ -716,7 +810,8 @@ class PositionedTransition extends AnimatedWidget {
 /// based on the value of [rect] relative to a bounding box with the
 /// specified [size].
 ///
-/// Only works if it's the child of a [Stack].
+/// Only works inside a [Stack] or an [Overlay]; see [Positioned] for the
+/// exact restrictions.
 ///
 /// Here's an illustration of the [RelativePositionedTransition] widget, with it's [rect]
 /// animated by a [CurvedAnimation] set to [Curves.elasticInOut]:
@@ -746,7 +841,7 @@ class RelativePositionedTransition extends AnimatedWidget {
   ///
   /// Each frame, the [Positioned] widget will be configured to represent the
   /// current value of the [rect] argument assuming that the stack has the given
-  /// [size]. Both [rect] and [size] must not be null.
+  /// [size].
   const RelativePositionedTransition({
     super.key,
     required Animation<Rect?> rect,
@@ -775,7 +870,7 @@ class RelativePositionedTransition extends AnimatedWidget {
 
   @override
   Widget build(BuildContext context) {
-    final RelativeRect offsets = RelativeRect.fromSize(rect.value ?? Rect.zero, size);
+    final offsets = RelativeRect.fromSize(rect.value ?? Rect.zero, size);
     return Positioned(
       top: offsets.top,
       right: offsets.right,
@@ -809,8 +904,6 @@ class DecoratedBoxTransition extends AnimatedWidget {
   /// Creates an animated [DecoratedBox] whose [Decoration] animation updates
   /// the widget.
   ///
-  /// The [decoration] and [position] must not be null.
-  ///
   /// See also:
   ///
   ///  * [DecoratedBox.new]
@@ -837,11 +930,7 @@ class DecoratedBoxTransition extends AnimatedWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: decoration.value,
-      position: position,
-      child: child,
-    );
+    return DecoratedBox(decoration: decoration.value, position: position, child: child);
   }
 }
 
@@ -1043,8 +1132,6 @@ class DefaultTextStyleTransition extends AnimatedWidget {
 ///   reports the new value in its builder callback.
 class ListenableBuilder extends AnimatedWidget {
   /// Creates a builder that responds to changes in [listenable].
-  ///
-  /// The [listenable] and [builder] arguments must not be null.
   const ListenableBuilder({
     super.key,
     required super.listenable,

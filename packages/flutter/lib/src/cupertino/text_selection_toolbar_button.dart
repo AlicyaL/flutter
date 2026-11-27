@@ -34,28 +34,18 @@ const EdgeInsets _kToolbarButtonPadding = EdgeInsets.symmetric(vertical: 18.0, h
 /// A button in the style of the iOS text selection toolbar buttons.
 class CupertinoTextSelectionToolbarButton extends StatefulWidget {
   /// Create an instance of [CupertinoTextSelectionToolbarButton].
-  ///
-  /// [child] cannot be null.
-  const CupertinoTextSelectionToolbarButton({
-    super.key,
-    this.onPressed,
-    required Widget this.child,
-  }) : text = null,
-       buttonItem = null;
+  const CupertinoTextSelectionToolbarButton({super.key, this.onPressed, required Widget this.child})
+    : text = null,
+      buttonItem = null;
 
   /// Create an instance of [CupertinoTextSelectionToolbarButton] whose child is
   /// a [Text] widget styled like the default iOS text selection toolbar button.
-  const CupertinoTextSelectionToolbarButton.text({
-    super.key,
-    this.onPressed,
-    required this.text,
-  }) : buttonItem = null,
-       child = null;
+  const CupertinoTextSelectionToolbarButton.text({super.key, this.onPressed, required this.text})
+    : buttonItem = null,
+      child = null;
 
   /// Create an instance of [CupertinoTextSelectionToolbarButton] from the given
   /// [ContextMenuButtonItem].
-  ///
-  /// [buttonItem] cannot be null.
   CupertinoTextSelectionToolbarButton.buttonItem({
     super.key,
     required ContextMenuButtonItem this.buttonItem,
@@ -96,20 +86,18 @@ class CupertinoTextSelectionToolbarButton extends StatefulWidget {
 
     assert(debugCheckHasCupertinoLocalizations(context));
     final CupertinoLocalizations localizations = CupertinoLocalizations.of(context);
-    switch (buttonItem.type) {
-      case ContextMenuButtonType.cut:
-        return localizations.cutButtonLabel;
-      case ContextMenuButtonType.copy:
-        return localizations.copyButtonLabel;
-      case ContextMenuButtonType.paste:
-        return localizations.pasteButtonLabel;
-      case ContextMenuButtonType.selectAll:
-        return localizations.selectAllButtonLabel;
-      case ContextMenuButtonType.liveTextInput:
-      case ContextMenuButtonType.delete:
-      case ContextMenuButtonType.custom:
-        return '';
-    }
+    return switch (buttonItem.type) {
+      ContextMenuButtonType.cut => localizations.cutButtonLabel,
+      ContextMenuButtonType.copy => localizations.copyButtonLabel,
+      ContextMenuButtonType.paste => localizations.pasteButtonLabel,
+      ContextMenuButtonType.selectAll => localizations.selectAllButtonLabel,
+      ContextMenuButtonType.lookUp => localizations.lookUpButtonLabel,
+      ContextMenuButtonType.searchWeb => localizations.searchWebButtonLabel,
+      ContextMenuButtonType.share => localizations.shareButtonLabel,
+      ContextMenuButtonType.liveTextInput ||
+      ContextMenuButtonType.delete ||
+      ContextMenuButtonType.custom => '',
+    };
   }
 
   @override
@@ -136,11 +124,8 @@ class _CupertinoTextSelectionToolbarButtonState extends State<CupertinoTextSelec
   Widget build(BuildContext context) {
     final Widget content = _getContentWidget(context);
     final Widget child = CupertinoButton(
-      color: isPressed
-        ? _kToolbarPressedColor.resolveFrom(context)
-        : const Color(0x00000000),
-      borderRadius: null,
-      disabledColor: const Color(0x00000000),
+      color: isPressed ? _kToolbarPressedColor.resolveFrom(context) : CupertinoColors.transparent,
+      disabledColor: CupertinoColors.transparent,
       // This CupertinoButton does not actually handle the onPressed callback,
       // this is only here to correctly enable/disable the button (see
       // GestureDetector comment below).
@@ -172,7 +157,8 @@ class _CupertinoTextSelectionToolbarButtonState extends State<CupertinoTextSelec
       return widget.child!;
     }
     final Widget textWidget = Text(
-      widget.text ?? CupertinoTextSelectionToolbarButton.getButtonLabel(context, widget.buttonItem!),
+      widget.text ??
+          CupertinoTextSelectionToolbarButton.getButtonLabel(context, widget.buttonItem!),
       overflow: TextOverflow.ellipsis,
       style: _kToolbarButtonFontStyle.copyWith(
         color: widget.onPressed != null
@@ -180,21 +166,21 @@ class _CupertinoTextSelectionToolbarButtonState extends State<CupertinoTextSelec
             : CupertinoColors.inactiveGray,
       ),
     );
-    if (widget.buttonItem == null) {
-      return textWidget;
-    }
-    switch (widget.buttonItem!.type) {
+    switch (widget.buttonItem?.type) {
       case ContextMenuButtonType.cut:
       case ContextMenuButtonType.copy:
       case ContextMenuButtonType.paste:
       case ContextMenuButtonType.selectAll:
       case ContextMenuButtonType.delete:
+      case ContextMenuButtonType.lookUp:
+      case ContextMenuButtonType.searchWeb:
+      case ContextMenuButtonType.share:
       case ContextMenuButtonType.custom:
+      case null:
         return textWidget;
       case ContextMenuButtonType.liveTextInput:
-        return SizedBox(
-          width: 13.0,
-          height: 13.0,
+        return SizedBox.square(
+          dimension: 13.0,
           child: CustomPaint(
             painter: _LiveTextIconPainter(color: _kToolbarTextColor.resolveFrom(context)),
           ),
@@ -220,17 +206,17 @@ class _LiveTextIconPainter extends CustomPainter {
     canvas.save();
     canvas.translate(size.width / 2.0, size.height / 2.0);
 
-    final Offset origin = Offset(-size.width / 2.0, -size.height / 2.0);
+    final origin = Offset(-size.width / 2.0, -size.height / 2.0);
     // Path for the one corner.
-    final Path path = Path()
+    final path = Path()
       ..moveTo(origin.dx, origin.dy + 3.5)
       ..lineTo(origin.dx, origin.dy + 1.0)
       ..arcToPoint(Offset(origin.dx + 1.0, origin.dy), radius: const Radius.circular(1))
       ..lineTo(origin.dx + 3.5, origin.dy);
 
     // Rotate to draw corner four times.
-    final Matrix4 rotationMatrix = Matrix4.identity()..rotateZ(pi / 2.0);
-    for (int i = 0; i < 4; i += 1) {
+    final rotationMatrix = Matrix4.identity()..rotateZ(pi / 2.0);
+    for (var i = 0; i < 4; i += 1) {
       canvas.drawPath(path, _painter);
       canvas.transform(rotationMatrix.storage);
     }

@@ -11,20 +11,25 @@ import 'package:flutter_test/flutter_test.dart';
 import '../image_data.dart';
 
 void main() {
-  final MockHttpClient client = MockHttpClient();
+  final client = MockHttpClient();
 
   testWidgets('Headers', (WidgetTester tester) async {
-    HttpOverrides.runZoned<Future<void>>(() async {
-      await tester.pumpWidget(Image.network(
-        'https://www.example.com/images/frame.png',
-        headers: const <String, String>{'flutter': 'flutter'},
-      ));
+    await HttpOverrides.runZoned<Future<void>>(
+      () async {
+        await tester.pumpWidget(
+          Image.network(
+            'https://www.example.com/images/frame.png',
+            headers: const <String, String>{'flutter': 'flutter'},
+          ),
+        );
 
-      expect(MockHttpHeaders.headers['flutter'], <String>['flutter']);
-
-    }, createHttpClient: (SecurityContext? _) {
-      return client;
-    });
+        expect(MockHttpHeaders.headers['flutter'], <String>['flutter']);
+        imageCache.clear();
+      },
+      createHttpClient: (SecurityContext? _) {
+        return client;
+      },
+    );
   }, skip: isBrowser); // https://github.com/flutter/flutter/issues/57187
 }
 
@@ -56,16 +61,18 @@ class MockHttpClientResponse extends Fake implements HttpClientResponse {
   int get statusCode => HttpStatus.ok;
 
   @override
-  HttpClientResponseCompressionState get compressionState => HttpClientResponseCompressionState.decompressed;
+  HttpClientResponseCompressionState get compressionState =>
+      HttpClientResponseCompressionState.decompressed;
 
   @override
-  StreamSubscription<List<int>> listen(void Function(List<int> event)? onData, {Function? onError, void Function()? onDone, bool? cancelOnError}) {
-    return Stream<List<int>>.fromIterable(<List<int>>[kTransparentImage]).listen(
-      onData,
-      onDone: onDone,
-      onError: onError,
-      cancelOnError: cancelOnError,
-    );
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    return Stream<List<int>>.fromIterable(<List<int>>[kTransparentImage])
+        .listen(onData, onDone: onDone, onError: onError, cancelOnError: cancelOnError);
   }
 }
 
@@ -73,7 +80,7 @@ class MockHttpHeaders extends Fake implements HttpHeaders {
   static final Map<String, List<String>> headers = <String, List<String>>{};
 
   @override
-  void add(String key, Object value, { bool preserveHeaderCase = false }) {
+  void add(String key, Object value, {bool preserveHeaderCase = false}) {
     headers[key] ??= <String>[];
     headers[key]!.add(value.toString());
   }

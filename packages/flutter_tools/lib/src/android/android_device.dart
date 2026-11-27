@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:meta/meta.dart';
 import 'package:process/process.dart';
+import 'package:vm_service/vm_service.dart';
 
 import '../application_package.dart';
 import '../base/common.dart' show throwToolExit;
@@ -14,17 +15,21 @@ import '../base/io.dart';
 import '../base/logger.dart';
 import '../base/platform.dart';
 import '../base/process.dart';
+import '../base/utils.dart';
 import '../build_info.dart';
 import '../convert.dart';
 import '../device.dart';
 import '../device_port_forwarder.dart';
+import '../device_vm_service_discovery_for_attach.dart';
 import '../project.dart';
 import '../protocol_discovery.dart';
-import 'android.dart';
+import '../vmservice.dart';
 import 'android_builder.dart';
 import 'android_console.dart';
+import 'android_engine_cli_flags.dart';
 import 'android_sdk.dart';
 import 'application_package.dart';
+import 'gradle_utils.dart' as gradle_utils;
 
 /// Whether the [AndroidDevice] is believed to be a physical device or an emulator.
 enum HardwareType { emulator, physical }
@@ -32,7 +37,7 @@ enum HardwareType { emulator, physical }
 /// Map to help our `isLocalEmulator` detection.
 ///
 /// See [AndroidDevice] for more explanation of why this is needed.
-const Map<String, HardwareType> kKnownHardware = <String, HardwareType>{
+const kKnownHardware = <String, HardwareType>{
   'goldfish': HardwareType.emulator,
   'qcom': HardwareType.physical,
   'ranchu': HardwareType.emulator,
@@ -48,34 +53,28 @@ const Map<String, HardwareType> kKnownHardware = <String, HardwareType>{
 
 /// A physical Android device or emulator.
 ///
-/// While [isEmulator] attempts to distinguish between the device categories,
+/// While [isLocalEmulator] attempts to distinguish between the device categories,
 /// this is a best effort process and not a guarantee; certain physical devices
 /// identify as emulators. These device identifiers may be added to the [kKnownHardware]
 /// map to specify that they are actually physical devices.
 class AndroidDevice extends Device {
   AndroidDevice(
     super.id, {
-    this.productID,
+    required this._androidSdk,
+    required this._fileSystem,
+    required super.logger,
     required this.modelID,
-    this.deviceCodeName,
-    required Logger logger,
+    required this._platform,
     required ProcessManager processManager,
-    required Platform platform,
-    required AndroidSdk androidSdk,
-    required FileSystem fileSystem,
-    AndroidConsoleSocketFactory androidConsoleSocketFactory = kAndroidConsoleSocketFactory,
+    this._androidBuilder,
+    this._androidConsoleSocketFactory = kAndroidConsoleSocketFactory,
+    this._applicationPackageFactory,
+    this.deviceCodeName,
+    this.productID,
   }) : _logger = logger,
        _processManager = processManager,
-       _androidSdk = androidSdk,
-       _platform = platform,
-       _fileSystem = fileSystem,
-       _androidConsoleSocketFactory = androidConsoleSocketFactory,
        _processUtils = ProcessUtils(logger: logger, processManager: processManager),
-       super(
-         category: Category.mobile,
-         platformType: PlatformType.android,
-         ephemeral: true,
-       );
+       super(category: Category.mobile, platformType: PlatformType.android, ephemeral: true);
 
   final Logger _logger;
   final ProcessManager _processManager;
@@ -83,7 +82,9 @@ class AndroidDevice extends Device {
   final Platform _platform;
   final FileSystem _fileSystem;
   final ProcessUtils _processUtils;
+  final AndroidBuilder? _androidBuilder;
   final AndroidConsoleSocketFactory _androidConsoleSocketFactory;
+  final ApplicationPackageFactory? _applicationPackageFactory;
 
   final String? productID;
   final String modelID;
@@ -92,13 +93,12 @@ class AndroidDevice extends Device {
   @override
   // Wirelessly paired Android devices should have `adb-tls-connect` in the id.
   // Source: https://android.googlesource.com/platform/packages/modules/adb/+/f4ba8d73079b99532069dbe888a58167b8723d6c/adb_mdns.h#30
-  DeviceConnectionInterface get connectionInterface =>
-      id.contains('adb-tls-connect')
-          ? DeviceConnectionInterface.wireless
-          : DeviceConnectionInterface.attached;
+  DeviceConnectionInterface get connectionInterface => id.contains('adb-tls-connect')
+      ? DeviceConnectionInterface.wireless
+      : DeviceConnectionInterface.attached;
 
   late final Future<Map<String, String>> _properties = () async {
-    Map<String, String> properties = <String, String>{};
+    var properties = <String, String>{};
 
     final List<String> propCommand = adbCommandForDevice(<String>['shell', 'getprop']);
     _logger.printTrace(propCommand.join(' '));
@@ -155,31 +155,31 @@ class AndroidDevice extends Device {
 
     // Emulators always have IDs in the format emulator-(port) where port is the
     // Android Console port number.
-    final RegExp emulatorPortRegex = RegExp(r'emulator-(\d+)');
+    final emulatorPortRegex = RegExp(r'emulator-(\d+)');
 
     final Match? portMatch = emulatorPortRegex.firstMatch(id);
     if (portMatch == null || portMatch.groupCount < 1) {
       return null;
     }
 
-    const String host = 'localhost';
+    const host = 'localhost';
     final int port = int.parse(portMatch.group(1)!);
     _logger.printTrace('Fetching avd name for $name via Android console on $host:$port');
 
     try {
       final Socket socket = await _androidConsoleSocketFactory(host, port);
-      final AndroidConsole console = AndroidConsole(socket);
+      final console = AndroidConsole(socket);
 
       try {
-        await console
-            .connect()
-            .timeout(const Duration(seconds: 2),
-                onTimeout: () => throw TimeoutException('Connection timed out'));
+        await console.connect().timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => throw TimeoutException('Connection timed out'),
+        );
 
-        return await console
-            .getAvdName()
-            .timeout(const Duration(seconds: 2),
-                onTimeout: () => throw TimeoutException('"avd name" timed out'));
+        return await console.getAvdName().timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => throw TimeoutException('"avd name" timed out'),
+        );
       } finally {
         console.destroy();
       }
@@ -193,8 +193,19 @@ class AndroidDevice extends Device {
 
   @override
   late final Future<TargetPlatform> targetPlatform = () async {
+    return switch (await cpuArch) {
+      .arm64 => TargetPlatform.android_arm64,
+      .armv7 => TargetPlatform.android_arm,
+      .x64 => TargetPlatform.android_x64,
+      _ => TargetPlatform.unsupported,
+    };
+  }();
+
+  @override
+  late final Future<CpuArch> cpuArch = () async {
     // http://developer.android.com/ndk/guides/abis.html (x86, armeabi-v7a, ...)
-    switch (await _getProperty('ro.product.cpu.abi')) {
+    final String? abi = await _getProperty('ro.product.cpu.abi');
+    switch (abi) {
       case 'arm64-v8a':
         // Perform additional verification for 64 bit ABI. Some devices,
         // like the Kindle Fire 8, misreport the abilist. We might not
@@ -202,44 +213,30 @@ class AndroidDevice extends Device {
         // to assuming 64 bit.
         final String? abilist = await _getProperty('ro.product.cpu.abilist');
         if (abilist == null || abilist.contains('arm64-v8a')) {
-          return TargetPlatform.android_arm64;
+          return CpuArch.arm64;
         } else {
-          return TargetPlatform.android_arm;
+          return CpuArch.armv7;
         }
+      case 'armeabi-v7a':
+        return CpuArch.armv7;
       case 'x86_64':
-        return TargetPlatform.android_x64;
-      case 'x86':
-        return TargetPlatform.android_x86;
+        return CpuArch.x64;
       default:
-        return TargetPlatform.android_arm;
+        return CpuArch.unknown;
     }
   }();
 
   @override
   Future<bool> supportsRuntimeMode(BuildMode buildMode) async {
-    switch (await targetPlatform) {
-      case TargetPlatform.android_arm:
-      case TargetPlatform.android_arm64:
-      case TargetPlatform.android_x64:
-        return buildMode != BuildMode.jitRelease;
-      case TargetPlatform.android_x86:
-        return buildMode == BuildMode.debug;
-      case TargetPlatform.android:
-      case TargetPlatform.darwin:
-      case TargetPlatform.fuchsia_arm64:
-      case TargetPlatform.fuchsia_x64:
-      case TargetPlatform.ios:
-      case TargetPlatform.linux_arm64:
-      case TargetPlatform.linux_x64:
-      case TargetPlatform.tester:
-      case TargetPlatform.web_javascript:
-      case TargetPlatform.windows_x64:
-        throw UnsupportedError('Invalid target platform for Android');
+    if ((await targetPlatform).os != .android) {
+      throw UnsupportedError('Invalid target platform for Android');
     }
+    return buildMode != BuildMode.jitRelease;
   }
 
   @override
-  Future<String> get sdkNameAndVersion async => 'Android ${await _sdkVersion} (API ${await apiVersion})';
+  Future<String> get sdkNameAndVersion async =>
+      'Android ${await _sdkVersion} (API ${await apiVersion})';
 
   Future<String?> get _sdkVersion => _getProperty('ro.build.version.release');
 
@@ -285,8 +282,7 @@ class AndroidDevice extends Device {
       }
       return false;
     }
-    _logger.printError(
-        'Unrecognized adb version string $adbVersion. Skipping version check.');
+    _logger.printError('Unrecognized adb version string $adbVersion. Skipping version check.');
     return true;
   }
 
@@ -297,14 +293,16 @@ class AndroidDevice extends Device {
     }
 
     try {
-      final RunResult adbVersion = await _processUtils.run(
-        <String>[adbPath, 'version'],
-        throwOnError: true,
-      );
+      final RunResult adbVersion = await _processUtils.run(<String>[
+        adbPath,
+        'version',
+      ], throwOnError: true);
       if (_isValidAdbVersion(adbVersion.stdout)) {
         return true;
       }
-      _logger.printError('The ADB at "$adbPath" is too old; please install version 1.0.39 or later.');
+      _logger.printError(
+        'The ADB at "$adbPath" is too old; please install version 1.0.39 or later.',
+      );
     } on Exception catch (error, trace) {
       _logger.printError('Error running ADB: $error', stackTrace: trace);
     }
@@ -322,16 +320,13 @@ class AndroidDevice extends Device {
       // output lines like this, which we want to ignore:
       //   adb server is out of date. killing..
       //   * daemon started successfully *
-      await _processUtils.run(
-        <String>[adbPath, 'start-server'],
-        throwOnError: true,
-      );
+      await _processUtils.run(<String>[adbPath, 'start-server'], throwOnError: true);
 
       // This has been reported to return null on some devices. In this case,
       // assume the lowest supported API to still allow Flutter to run.
-      // Sample output: '22'
-      final String sdkVersion = await _getProperty('ro.build.version.sdk')
-        ?? minApiLevel.toString();
+      // Sample output: '24'
+      final String sdkVersion =
+          await _getProperty('ro.build.version.sdk') ?? gradle_utils.minSdkVersion;
 
       final int? sdkVersionParsed = int.tryParse(sdkVersion);
       if (sdkVersionParsed == null) {
@@ -339,10 +334,11 @@ class AndroidDevice extends Device {
         return false;
       }
 
-      if (sdkVersionParsed < minApiLevel) {
+      if (sdkVersionParsed < gradle_utils.minSdkVersionInt) {
         _logger.printError(
           'The Android version ($sdkVersion) on the target device is too old. Please '
-          'use a $minVersionName (version $minApiLevel / $minVersionText) device or later.');
+          'use a API ${gradle_utils.minSdkVersion} device or later.',
+        );
         return false;
       }
 
@@ -360,7 +356,8 @@ class AndroidDevice extends Device {
 
   Future<String> _getDeviceApkSha1(AndroidApk apk) async {
     final RunResult result = await _processUtils.run(
-      adbCommandForDevice(<String>['shell', 'cat', _getDeviceSha1Path(apk)]));
+      adbCommandForDevice(<String>['shell', 'cat', _getDeviceSha1Path(apk)]),
+    );
     return result.stdout;
   }
 
@@ -373,10 +370,10 @@ class AndroidDevice extends Device {
   String get name => modelID;
 
   @override
-  Future<bool> isAppInstalled(
-    ApplicationPackage app, {
-    String? userIdentifier,
-  }) async {
+  bool get supportsFlavors => true;
+
+  @override
+  Future<bool> isAppInstalled(ApplicationPackage app, {String? userIdentifier}) async {
     // This call takes 400ms - 600ms.
     try {
       final RunResult listOut = await runAdbCheckedAsync(<String>[
@@ -384,8 +381,7 @@ class AndroidDevice extends Device {
         'pm',
         'list',
         'packages',
-        if (userIdentifier != null)
-          ...<String>['--user', userIdentifier],
+        if (userIdentifier != null) ...<String>['--user', userIdentifier],
         app.id,
       ]);
       return LineSplitter.split(listOut.stdout).contains('package:${app.id}');
@@ -402,24 +398,16 @@ class AndroidDevice extends Device {
   }
 
   @override
-  Future<bool> installApp(
-    covariant AndroidApk app, {
-    String? userIdentifier,
-  }) async {
+  Future<bool> installApp(covariant AndroidApk app, {String? userIdentifier}) async {
     if (!await _adbIsValid) {
       return false;
-    }
-    final bool wasInstalled = await isAppInstalled(app, userIdentifier: userIdentifier);
-    if (wasInstalled && await isLatestBuildInstalled(app)) {
-      _logger.printTrace('Latest build already installed.');
-      return true;
     }
     _logger.printTrace('Installing APK.');
     if (await _installApp(app, userIdentifier: userIdentifier)) {
       return true;
     }
     _logger.printTrace('Warning: Failed to install APK.');
-    if (!wasInstalled) {
+    if (!await isAppInstalled(app, userIdentifier: userIdentifier)) {
       return false;
     }
     _logger.printStatus('Uninstalling old version...');
@@ -434,12 +422,11 @@ class AndroidDevice extends Device {
     return true;
   }
 
-  Future<bool> _installApp(
-    AndroidApk app, {
-    String? userIdentifier,
-  }) async {
+  Future<bool> _installApp(AndroidApk app, {String? userIdentifier}) async {
     if (!app.applicationPackage.existsSync()) {
-      _logger.printError('"${_fileSystem.path.relative(app.applicationPackage.path)}" does not exist.');
+      _logger.printError(
+        '"${_fileSystem.path.relative(app.applicationPackage.path)}" does not exist.',
+      );
       return false;
     }
 
@@ -451,14 +438,14 @@ class AndroidDevice extends Device {
         'install',
         '-t',
         '-r',
-        if (userIdentifier != null)
-          ...<String>['--user', userIdentifier],
+        if (userIdentifier != null) ...<String>['--user', userIdentifier],
         app.applicationPackage.path,
-      ]));
+      ]),
+    );
     status.stop();
     // Some versions of adb exit with exit code 0 even on failure :(
     // Parsing the output to check for failures.
-    final RegExp failureExp = RegExp(r'^Failure.*$', multiLine: true);
+    final failureExp = RegExp(r'^Failure.*$', multiLine: true);
     final String? failure = failureExp.stringMatch(installResult.stdout);
     if (failure != null) {
       _logger.printError('Package install error: $failure');
@@ -466,7 +453,9 @@ class AndroidDevice extends Device {
     }
     if (installResult.exitCode != 0) {
       if (installResult.stderr.contains('Bad user number')) {
-        _logger.printError('Error: User "$userIdentifier" not found. Run "adb shell pm list users" to see list of available identifiers.');
+        _logger.printError(
+          'Error: User "$userIdentifier" not found. Run "adb shell pm list users" to see list of available identifiers.',
+        );
       } else {
         _logger.printError('Error: ADB exited with exit code ${installResult.exitCode}');
         _logger.printError('$installResult');
@@ -475,7 +464,12 @@ class AndroidDevice extends Device {
     }
     try {
       await runAdbCheckedAsync(<String>[
-        'shell', 'echo', '-n', _getSourceSha1(app), '>', _getDeviceSha1Path(app),
+        'shell',
+        'echo',
+        '-n',
+        _getSourceSha1(app),
+        '>',
+        _getDeviceSha1Path(app),
       ]);
     } on ProcessException catch (error) {
       _logger.printError('adb shell failed to write the SHA hash: $error.');
@@ -485,10 +479,7 @@ class AndroidDevice extends Device {
   }
 
   @override
-  Future<bool> uninstallApp(
-    ApplicationPackage app, {
-    String? userIdentifier,
-  }) async {
+  Future<bool> uninstallApp(ApplicationPackage app, {String? userIdentifier}) async {
     if (!await _adbIsValid) {
       return false;
     }
@@ -498,18 +489,18 @@ class AndroidDevice extends Device {
       final RunResult uninstallResult = await _processUtils.run(
         adbCommandForDevice(<String>[
           'uninstall',
-          if (userIdentifier != null)
-            ...<String>['--user', userIdentifier],
+          if (userIdentifier != null) ...<String>['--user', userIdentifier],
           app.id,
         ]),
         throwOnError: true,
+        timeout: const Duration(seconds: 30),
       );
       uninstallOut = uninstallResult.stdout;
     } on Exception catch (error) {
       _logger.printError('adb uninstall failed: $error');
       return false;
     }
-    final RegExp failureExp = RegExp(r'^Failure.*$', multiLine: true);
+    final failureExp = RegExp(r'^Failure.*$', multiLine: true);
     final String? failure = failureExp.stringMatch(uninstallOut);
     if (failure != null) {
       _logger.printError('Package uninstall error: $failure');
@@ -541,54 +532,50 @@ class AndroidDevice extends Device {
     }
 
     final TargetPlatform devicePlatform = await targetPlatform;
-    if (devicePlatform == TargetPlatform.android_x86 &&
-       !debuggingOptions.buildInfo.isDebug) {
-      _logger.printError('Profile and release builds are only supported on ARM/x64 targets.');
-      return LaunchResult.failed();
-    }
 
-    AndroidApk? builtPackage = package;
-    AndroidArch androidArch;
-    switch (devicePlatform) {
-      case TargetPlatform.android_arm:
-        androidArch = AndroidArch.armeabi_v7a;
-      case TargetPlatform.android_arm64:
-        androidArch = AndroidArch.arm64_v8a;
-      case TargetPlatform.android_x64:
-        androidArch = AndroidArch.x86_64;
-      case TargetPlatform.android_x86:
-        androidArch = AndroidArch.x86;
-      case TargetPlatform.android:
-      case TargetPlatform.darwin:
-      case TargetPlatform.fuchsia_arm64:
-      case TargetPlatform.fuchsia_x64:
-      case TargetPlatform.ios:
-      case TargetPlatform.linux_arm64:
-      case TargetPlatform.linux_x64:
-      case TargetPlatform.tester:
-      case TargetPlatform.web_javascript:
-      case TargetPlatform.windows_x64:
-        _logger.printError('Android platforms are only supported.');
+    var builtPackage = package;
+    final CpuArch cpuArch = await this.cpuArch;
+    switch (cpuArch) {
+      case .armv7:
+      case .arm64:
+      case .x64:
+        break;
+      default:
+        _logger.printError('Unsupported Android CPU architecture: $cpuArch');
         return LaunchResult.failed();
     }
 
-    if (!prebuiltApplication || _androidSdk.licensesAvailable && _androidSdk.latestVersion == null) {
+    if (!prebuiltApplication ||
+        _androidSdk.licensesAvailable && _androidSdk.latestVersion == null) {
       _logger.printTrace('Building APK');
-      final FlutterProject project = FlutterProject.current();
-      await androidBuilder!.buildApk(
-          project: project,
-          target: mainPath ?? 'lib/main.dart',
-          androidBuildInfo: AndroidBuildInfo(
-            debuggingOptions.buildInfo,
-            targetArchs: <AndroidArch>[androidArch],
-            fastStart: debuggingOptions.fastStart,
-            multidexEnabled: (platformArgs['multidex'] as bool?) ?? false,
-          ),
+      final FlutterProject project = FlutterProject.current(_fileSystem, logger: _logger);
+
+      final releaseManifestEngineShellArgs = <String>[
+        if (debuggingOptions.buildInfo.mode == BuildMode.release) ...<String>[
+          ...debuggingOptions.getAndroidLaunchArguments(),
+          if (platformArgs[AndroidEngineCliFlags.traceStartup] as bool? ?? false)
+            '--${AndroidEngineCliFlags.traceStartup}',
+          if (route != null) '--${AndroidEngineCliFlags.route}=$route',
+        ],
+      ];
+
+      await _androidBuilder!.buildApk(
+        project: project,
+        target: mainPath ?? 'lib/main.dart',
+        androidBuildInfo: AndroidBuildInfo(
+          debuggingOptions.buildInfo,
+          targetArchs: <CpuArch>[cpuArch],
+          releaseManifestEngineShellArgs: releaseManifestEngineShellArgs.isEmpty
+              ? null
+              : releaseManifestEngineShellArgs,
+        ),
       );
       // Package has been built, so we can get the updated application ID and
       // activity name from the .apk.
-      builtPackage = await ApplicationPackageFactory.instance!
-        .getPackageForPlatform(devicePlatform, buildInfo: debuggingOptions.buildInfo) as AndroidApk?;
+      builtPackage = await _applicationPackageFactory!.getPackageForPlatform(
+        devicePlatform,
+        buildInfo: debuggingOptions.buildInfo,
+      ) as AndroidApk?;
     }
     // There was a failure parsing the android project information.
     if (builtPackage == null) {
@@ -602,17 +589,19 @@ class AndroidDevice extends Device {
       return LaunchResult.failed();
     }
 
-    final bool traceStartup = platformArgs['trace-startup'] as bool? ?? false;
+    final bool traceStartup = platformArgs[AndroidEngineCliFlags.traceStartup] as bool? ?? false;
     ProtocolDiscovery? vmServiceDiscovery;
 
     if (debuggingOptions.debuggingEnabled) {
       vmServiceDiscovery = ProtocolDiscovery.vmService(
         // Avoid using getLogReader, which returns a singleton instance, because the
-        // VM Service discovery will dipose at the end. creating a new logger here allows
+        // VM Service discovery will dispose at the end. creating a new logger here allows
         // logs to be surfaced normally during `flutter drive`.
         await AdbLogReader.createLogReader(
           this,
           _processManager,
+          _logger,
+          adbLogFiltering: debuggingOptions.adbLogFiltering,
         ),
         portForwarder: portForwarder,
         hostPort: debuggingOptions.hostVmServicePort,
@@ -622,71 +611,27 @@ class AndroidDevice extends Device {
       );
     }
 
-    final String dartVmFlags = computeDartVmFlags(debuggingOptions);
-    final String? traceAllowlist = debuggingOptions.traceAllowlist;
-    final String? traceSkiaAllowlist = debuggingOptions.traceSkiaAllowlist;
-    final List<String> cmd = <String>[
+    final cmd = <String>[
       'shell', 'am', 'start',
       '-a', 'android.intent.action.MAIN',
       '-c', 'android.intent.category.LAUNCHER',
       '-f', '0x20000000', // FLAG_ACTIVITY_SINGLE_TOP
-      if (debuggingOptions.enableDartProfiling)
-        ...<String>['--ez', 'enable-dart-profiling', 'true'],
-      if (traceStartup)
-        ...<String>['--ez', 'trace-startup', 'true'],
-      if (route != null)
-        ...<String>['--es', 'route', route],
-      if (debuggingOptions.enableSoftwareRendering)
-        ...<String>['--ez', 'enable-software-rendering', 'true'],
-      if (debuggingOptions.skiaDeterministicRendering)
-        ...<String>['--ez', 'skia-deterministic-rendering', 'true'],
-      if (debuggingOptions.traceSkia)
-        ...<String>['--ez', 'trace-skia', 'true'],
-      if (traceAllowlist != null)
-        ...<String>['--es', 'trace-allowlist', traceAllowlist],
-      if (traceSkiaAllowlist != null)
-        ...<String>['--es', 'trace-skia-allowlist', traceSkiaAllowlist],
-      if (debuggingOptions.traceSystrace)
-        ...<String>['--ez', 'trace-systrace', 'true'],
-      if (debuggingOptions.endlessTraceBuffer)
-        ...<String>['--ez', 'endless-trace-buffer', 'true'],
-      if (debuggingOptions.dumpSkpOnShaderCompilation)
-        ...<String>['--ez', 'dump-skp-on-shader-compilation', 'true'],
-      if (debuggingOptions.cacheSkSL)
-      ...<String>['--ez', 'cache-sksl', 'true'],
-      if (debuggingOptions.purgePersistentCache)
-        ...<String>['--ez', 'purge-persistent-cache', 'true'],
-      if (debuggingOptions.enableImpeller == ImpellerStatus.enabled)
-        ...<String>['--ez', 'enable-impeller', 'true'],
-      if (debuggingOptions.enableImpeller == ImpellerStatus.disabled)
-        ...<String>['--ez', 'enable-impeller', 'false'],
-      if (debuggingOptions.enableVulkanValidation)
-        ...<String>['--ez', 'enable-vulkan-validation', 'true'],
-      if (debuggingOptions.impellerForceGL)
-        ...<String>['--ez', 'impeller-force-gl', 'true'],
-      if (debuggingOptions.debuggingEnabled) ...<String>[
-        if (debuggingOptions.buildInfo.isDebug) ...<String>[
-          ...<String>['--ez', 'enable-checked-mode', 'true'],
-          ...<String>['--ez', 'verify-entry-points', 'true'],
-        ],
-        if (debuggingOptions.startPaused)
-          ...<String>['--ez', 'start-paused', 'true'],
-        if (debuggingOptions.disableServiceAuthCodes)
-          ...<String>['--ez', 'disable-service-auth-codes', 'true'],
-        if (dartVmFlags.isNotEmpty)
-          ...<String>['--es', 'dart-flags', dartVmFlags],
-        if (debuggingOptions.useTestFonts)
-          ...<String>['--ez', 'use-test-fonts', 'true'],
-        if (debuggingOptions.verboseSystemLogs)
-          ...<String>['--ez', 'verbose-logging', 'true'],
-        if (userIdentifier != null)
-          ...<String>['--user', userIdentifier],
+      if (debuggingOptions.buildInfo.mode != BuildMode.release) ...<String>[
+        ...debuggingOptions.getAndroidLaunchArgumentsAsIntentExtras(),
+        if (traceStartup) ...<String>['--ez', AndroidEngineCliFlags.traceStartup, 'true'],
+        if (route != null) ...<String>['--es', AndroidEngineCliFlags.route, route],
+      ],
+      if (debuggingOptions.debuggingEnabled && userIdentifier != null) ...<String>[
+        '--user',
+        userIdentifier,
       ],
       builtPackage.launchActivity,
     ];
     final String result = (await runAdbCheckedAsync(cmd)).stdout;
     // This invocation returns 0 even when it fails.
-    if (result.contains('Error: ')) {
+    if (result.contains(
+      RegExp(r'(Error:|Error type|Security\s?exception)', caseSensitive: false),
+    )) {
       _logger.printError(result.trim(), wrap: false);
       return LaunchResult.failed();
     }
@@ -727,13 +672,7 @@ class AndroidDevice extends Device {
   bool get supportsHotRestart => true;
 
   @override
-  bool get supportsFastStart => true;
-
-  @override
-  Future<bool> stopApp(
-    ApplicationPackage? app, {
-    String? userIdentifier,
-  }) async {
+  Future<bool> stopApp(ApplicationPackage? app, {String? userIdentifier}) async {
     if (app == null) {
       return false;
     }
@@ -741,12 +680,20 @@ class AndroidDevice extends Device {
       'shell',
       'am',
       'force-stop',
-      if (userIdentifier != null)
-        ...<String>['--user', userIdentifier],
+      if (userIdentifier != null) ...<String>['--user', userIdentifier],
       app.id,
     ]);
-    return _processUtils.stream(command).then<bool>(
-        (int exitCode) => exitCode == 0 || _allowHeapCorruptionOnWindows(exitCode, _platform));
+    try {
+      final RunResult result = await _processUtils.run(
+        command,
+        timeout: const Duration(seconds: 30),
+      );
+      final int exitCode = result.exitCode;
+      return exitCode == 0 || _allowHeapCorruptionOnWindows(exitCode, _platform);
+    } on Exception catch (error) {
+      _logger.printError('adb shell am force-stop failed: $error');
+      return false;
+    }
   }
 
   @override
@@ -756,13 +703,9 @@ class AndroidDevice extends Device {
       _logger.printError('Android package unknown, skipping dumpsys meminfo.');
       return const MemoryInfo.empty();
     }
-    final RunResult runResult = await _processUtils.run(adbCommandForDevice(<String>[
-      'shell',
-      'dumpsys',
-      'meminfo',
-      package.id,
-      '-d',
-    ]));
+    final RunResult runResult = await _processUtils.run(
+      adbCommandForDevice(<String>['shell', 'dumpsys', 'meminfo', package.id, '-d']),
+    );
 
     if (runResult.exitCode != 0) {
       return const MemoryInfo.empty();
@@ -772,28 +715,59 @@ class AndroidDevice extends Device {
 
   @override
   void clearLogs() {
-    _processUtils.runSync(adbCommandForDevice(<String>['logcat', '-c']));
+    final RunResult result = _processUtils.runSync(adbCommandForDevice(<String>['logcat', '-c']));
+    // Do not log to standard error because that causes test to fail.
+    if (result.exitCode != 0) {
+      _logger.printTrace(
+        '"adb logcat -c" failed: exitCode: ${result.exitCode}'
+        ' stdout: ${result.stdout} stderr: ${result.stderr}',
+      );
+    }
   }
 
   @override
   FutureOr<DeviceLogReader> getLogReader({
     ApplicationPackage? app,
     bool includePastLogs = false,
+    bool adbLogFiltering = true,
   }) async {
     // The Android log reader isn't app-specific. The `app` parameter isn't used.
     if (includePastLogs) {
       return _pastLogReader ??= await AdbLogReader.createLogReader(
         this,
         _processManager,
+        _logger,
         includePastLogs: true,
+        adbLogFiltering: adbLogFiltering,
       );
     } else {
       return _logReader ??= await AdbLogReader.createLogReader(
         this,
         _processManager,
+        _logger,
+        adbLogFiltering: adbLogFiltering,
       );
     }
   }
+
+  @override
+  VMServiceDiscoveryForAttach getVMServiceDiscoveryForAttach({
+    String? appId,
+    String? fuchsiaModule,
+    int? filterDevicePort,
+    int? expectedHostPort,
+    required bool ipv6,
+    required Logger logger,
+  }) => LogScanningVMServiceDiscoveryForAttach(
+    // If it's an Android device, attaching relies on past log searching
+    // to find the service protocol.
+    Future<DeviceLogReader>.value(getLogReader(includePastLogs: true)),
+    portForwarder: portForwarder,
+    ipv6: ipv6,
+    devicePort: filterDevicePort,
+    hostPort: expectedHostPort,
+    logger: logger,
+  );
 
   @override
   late final DevicePortForwarder? portForwarder = () {
@@ -809,19 +783,19 @@ class AndroidDevice extends Device {
     );
   }();
 
-  static final RegExp _timeRegExp = RegExp(r'^\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}', multiLine: true);
+  static final _timeRegExp = RegExp(r'^\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}', multiLine: true);
 
-  /// Return the most recent timestamp in the Android log or [null] if there is
+  /// Return the most recent timestamp in the Android log or `null` if there is
   /// no available timestamp. The format can be passed to logcat's -T option.
   @visibleForTesting
   Future<String?> lastLogcatTimestamp() async {
     RunResult output;
     try {
-      output = await runAdbCheckedAsync(<String>[
-        'shell', '-x', 'logcat', '-v', 'time', '-t', '1',
-      ]);
+      output = await runAdbCheckedAsync(<String>['shell', '-x', 'logcat', '-v', 'time', '-t', '1']);
     } on Exception catch (error) {
-      _logger.printError('Failed to extract the most recent timestamp from the Android log: $error.');
+      _logger.printError(
+        'Failed to extract the most recent timestamp from the Android log: $error.',
+      );
       return null;
     }
     final Match? timeMatch = _timeRegExp.firstMatch(output.stdout);
@@ -829,14 +803,16 @@ class AndroidDevice extends Device {
   }
 
   @override
-  bool isSupported() => true;
+  Future<bool> isSupported() async {
+    return (await targetPlatform).os == .android;
+  }
 
   @override
   bool get supportsScreenshot => true;
 
   @override
   Future<void> takeScreenshot(File outputFile) async {
-    const String remotePath = '/data/local/tmp/flutter_screenshot.png';
+    const remotePath = '/data/local/tmp/flutter_screenshot.png';
     await runAdbCheckedAsync(<String>['shell', 'screencap', '-p', remotePath]);
     await _processUtils.run(
       adbCommandForDevice(<String>['pull', remotePath, outputFile.path]),
@@ -852,14 +828,13 @@ class AndroidDevice extends Device {
 
   @override
   Future<void> dispose() async {
-    _logReader?._stop();
-    _pastLogReader?._stop();
+    await Future.wait(<Future<void>>[?_logReader?.dispose(), ?_pastLogReader?.dispose()]);
   }
 }
 
 Map<String, String> parseAdbDeviceProperties(String str) {
-  final Map<String, String> properties = <String, String>{};
-  final RegExp propertyExp = RegExp(r'\[(.*?)\]: \[(.*?)\]');
+  final properties = <String, String>{};
+  final propertyExp = RegExp(r'\[(.*?)\]: \[(.*?)\]');
   for (final Match match in propertyExp.allMatches(str)) {
     properties[match.group(1)!] = match.group(2)!;
   }
@@ -872,7 +847,7 @@ Map<String, String> parseAdbDeviceProperties(String str) {
 ///
 /// Example output:
 ///
-/// ```
+/// ```none
 /// Applications Memory Usage (in Kilobytes):
 /// Uptime: 441088659 Realtime: 521464097
 ///
@@ -929,55 +904,56 @@ Map<String, String> parseAdbDeviceProperties(String str) {
 /// For more information, see https://developer.android.com/studio/command-line/dumpsys.
 @visibleForTesting
 AndroidMemoryInfo parseMeminfoDump(String input) {
-  final AndroidMemoryInfo androidMemoryInfo = AndroidMemoryInfo();
+  final androidMemoryInfo = AndroidMemoryInfo();
 
   final List<String> lines = input.split('\n');
 
-  final String timelineData = lines.firstWhere((String line) =>
-    line.startsWith('${AndroidMemoryInfo._kUpTimeKey}: '));
+  final String timelineData = lines.firstWhere(
+    (String line) => line.startsWith('${AndroidMemoryInfo._kUpTimeKey}: '),
+  );
   final List<String> times = timelineData.trim().split('${AndroidMemoryInfo._kRealTimeKey}:');
   androidMemoryInfo.realTime = int.tryParse(times.last.trim()) ?? 0;
 
   lines
-    .skipWhile((String line) => !line.contains('App Summary'))
-    .takeWhile((String line) => !line.contains('TOTAL'))
-    .where((String line) => line.contains(':'))
-    .forEach((String line) {
-      final List<String> sections = line.trim().split(':');
-      final String key = sections.first.trim();
-      final int value = int.tryParse(sections.last.trim()) ?? 0;
-      switch (key) {
-        case AndroidMemoryInfo._kJavaHeapKey:
-          androidMemoryInfo.javaHeap = value;
-        case AndroidMemoryInfo._kNativeHeapKey:
-          androidMemoryInfo.nativeHeap = value;
-        case AndroidMemoryInfo._kCodeKey:
-          androidMemoryInfo.code = value;
-        case AndroidMemoryInfo._kStackKey:
-          androidMemoryInfo.stack = value;
-        case AndroidMemoryInfo._kGraphicsKey:
-          androidMemoryInfo.graphics = value;
-        case AndroidMemoryInfo._kPrivateOtherKey:
-          androidMemoryInfo.privateOther = value;
-        case AndroidMemoryInfo._kSystemKey:
-          androidMemoryInfo.system = value;
-      }
-  });
+      .skipWhile((String line) => !line.contains('App Summary'))
+      .takeWhile((String line) => !line.contains('TOTAL'))
+      .where((String line) => line.contains(':'))
+      .forEach((String line) {
+        final List<String> sections = line.trim().split(':');
+        final String key = sections.first.trim();
+        final int value = int.tryParse(sections.last.trim()) ?? 0;
+        switch (key) {
+          case AndroidMemoryInfo._kJavaHeapKey:
+            androidMemoryInfo.javaHeap = value;
+          case AndroidMemoryInfo._kNativeHeapKey:
+            androidMemoryInfo.nativeHeap = value;
+          case AndroidMemoryInfo._kCodeKey:
+            androidMemoryInfo.code = value;
+          case AndroidMemoryInfo._kStackKey:
+            androidMemoryInfo.stack = value;
+          case AndroidMemoryInfo._kGraphicsKey:
+            androidMemoryInfo.graphics = value;
+          case AndroidMemoryInfo._kPrivateOtherKey:
+            androidMemoryInfo.privateOther = value;
+          case AndroidMemoryInfo._kSystemKey:
+            androidMemoryInfo.system = value;
+        }
+      });
   return androidMemoryInfo;
 }
 
 /// Android specific implementation of memory info.
 class AndroidMemoryInfo extends MemoryInfo {
-  static const String _kUpTimeKey = 'Uptime';
-  static const String _kRealTimeKey = 'Realtime';
-  static const String _kJavaHeapKey = 'Java Heap';
-  static const String _kNativeHeapKey = 'Native Heap';
-  static const String _kCodeKey = 'Code';
-  static const String _kStackKey = 'Stack';
-  static const String _kGraphicsKey = 'Graphics';
-  static const String _kPrivateOtherKey = 'Private Other';
-  static const String _kSystemKey = 'System';
-  static const String _kTotalKey = 'Total';
+  static const _kUpTimeKey = 'Uptime';
+  static const _kRealTimeKey = 'Realtime';
+  static const _kJavaHeapKey = 'Java Heap';
+  static const _kNativeHeapKey = 'Native Heap';
+  static const _kCodeKey = 'Code';
+  static const _kStackKey = 'Stack';
+  static const _kGraphicsKey = 'Graphics';
+  static const _kPrivateOtherKey = 'Private Other';
+  static const _kSystemKey = 'System';
+  static const _kTotalKey = 'Total';
 
   // Realtime is time since the system was booted includes deep sleep. Clock
   // is monotonic, and ticks even when the CPU is in power saving modes.
@@ -1011,19 +987,28 @@ class AndroidMemoryInfo extends MemoryInfo {
 
 /// A log reader that logs from `adb logcat`.
 class AdbLogReader extends DeviceLogReader {
-  AdbLogReader._(this._adbProcess, this.name);
+  AdbLogReader._(this._adbProcess, this.name, this._logger, {this.adbLogFiltering = true});
 
   @visibleForTesting
-  factory AdbLogReader.test(Process adbProcess, String name) = AdbLogReader._;
+  factory AdbLogReader.test(
+    Process adbProcess,
+    String name,
+    Logger logger, {
+    bool adbLogFiltering = true,
+  }) {
+    return AdbLogReader._(adbProcess, name, logger, adbLogFiltering: adbLogFiltering);
+  }
 
   /// Create a new [AdbLogReader] from an [AndroidDevice] instance.
   static Future<AdbLogReader> createLogReader(
     AndroidDevice device,
-    ProcessManager processManager, {
+    ProcessManager processManager,
+    Logger logger, {
     bool includePastLogs = false,
+    bool adbLogFiltering = true,
   }) async {
     // logcat -T is not supported on Android releases before Lollipop.
-    const int kLollipopVersionCode = 21;
+    const kLollipopVersionCode = 21;
     final int? apiVersion = (String? v) {
       // If the API version string isn't found, conservatively assume that the
       // version is less recent than the one we're looking for.
@@ -1033,13 +1018,7 @@ class AdbLogReader extends DeviceLogReader {
     // Start the adb logcat process and filter the most recent logs since `lastTimestamp`.
     // Some devices (notably LG) will only output logcat via shell
     // https://github.com/flutter/flutter/issues/51853
-    final List<String> args = <String>[
-      'shell',
-      '-x',
-      'logcat',
-      '-v',
-      'time',
-    ];
+    final args = <String>['shell', '-x', 'logcat', '-v', 'time'];
 
     // If past logs are included then filter for 'flutter' logs only.
     if (includePastLogs) {
@@ -1054,15 +1033,21 @@ class AdbLogReader extends DeviceLogReader {
       ]);
     }
     final Process process = await processManager.start(device.adbCommandForDevice(args));
-    return AdbLogReader._(process, device.name);
+    return AdbLogReader._(process, device.displayName, logger, adbLogFiltering: adbLogFiltering);
   }
 
+  int? _appPid;
+
   final Process _adbProcess;
+
+  final Logger _logger;
+
+  final bool adbLogFiltering;
 
   @override
   final String name;
 
-  late final StreamController<String> _linesController = StreamController<String>.broadcast(
+  late final _linesController = StreamController<String>.broadcast(
     onListen: _start,
     onCancel: _stop,
   );
@@ -1070,27 +1055,44 @@ class AdbLogReader extends DeviceLogReader {
   @override
   Stream<String> get logLines => _linesController.stream;
 
+  @override
+  Future<void> provideVmService(FlutterVmService connectedVmService) async {
+    final VM? vm = await connectedVmService.getVmGuarded(logger: _logger);
+    if (vm == null) {
+      _logger.printError(
+        'An error occurred when setting up filtering for adb logs. '
+        'Unable to communicate with the VM service.',
+      );
+    } else {
+      _appPid = vm.pid;
+    }
+  }
+
   void _start() {
     // We expect logcat streams to occasionally contain invalid utf-8,
     // see: https://github.com/flutter/flutter/pull/8864.
-    const Utf8Decoder decoder = Utf8Decoder(reportErrors: false);
-    _adbProcess.stdout.transform<String>(decoder)
-      .transform<String>(const LineSplitter())
-      .listen(_onLine);
-    _adbProcess.stderr.transform<String>(decoder)
-      .transform<String>(const LineSplitter())
-      .listen(_onLine);
-    unawaited(_adbProcess.exitCode.whenComplete(() {
-      if (_linesController.hasListener) {
-        _linesController.close();
-      }
-    }));
+    const decoder = Utf8Decoder(reportErrors: false);
+    _adbProcess.stdout
+        .transformWithCallSite(decoder)
+        .transform(const LineSplitter())
+        .listen(_onLine);
+    _adbProcess.stderr
+        .transformWithCallSite(decoder)
+        .transform(const LineSplitter())
+        .listen(_onLine);
+    unawaited(
+      _adbProcess.exitCode.whenComplete(() {
+        if (_linesController.hasListener) {
+          _linesController.close();
+        }
+      }),
+    );
   }
 
   // 'W/ActivityManager(pid): '
-  static final RegExp _logFormat = RegExp(r'^[VDIWEF]\/.*?\(\s*(\d+)\):\s');
+  static final _logFormat = RegExp(r'^[VDIWEF]\/.*?\(\s*(\d+)\):\s');
 
-  static final List<RegExp> _allowedTags = <RegExp>[
+  static final _allowedTags = <RegExp>[
     RegExp(r'^[VDIWEF]\/flutter[^:]*:\s+', caseSensitive: false),
     RegExp(r'^[IE]\/DartVM[^:]*:\s+'),
     RegExp(r'^[WEF]\/AndroidRuntime:\s+'),
@@ -1100,27 +1102,40 @@ class AdbLogReader extends DeviceLogReader {
     RegExp(r'^[F]\/[\S^:]+:\s+'),
   ];
 
-  // E/SurfaceSyncer(22636): Failed to find sync for id=9
-  // Some versions of Android spew this out. It is inactionable to the end user
-  // and causes no problems for the application.
-  static final RegExp _surfaceSyncerSpam = RegExp(r'^E/SurfaceSyncer\(\s*\d+\): Failed to find sync for id=\d+');
+  static final _filteredMessagees = <RegExp>[
+    // E/SurfaceSyncer(22636): Failed to find sync for id=9
+    // Some versions of Android spew this out. It is inactionable to the end user
+    // and causes no problems for the application.
+    RegExp(r'^E/SurfaceSyncer\(\s*\d+\): Failed to find sync for id=\d+'),
+    // E/FrameEvents(26685): updateAcquireFence: Did not find frame.
+    // This is a HWUI bug that spams the console when using platform views like Google Maps.
+    // It is not an actual error and causes no problems for the application.
+    // See https://github.com/flutter/flutter/issues/104268
+    RegExp(r'^E/FrameEvents\(\s*\d+\): updateAcquireFence: Did not find frame\.$'),
+    // This warning is spammy on some devices and does not affect functionality.
+    // See https://github.com/flutter/flutter/issues/174783
+    RegExp(r'^W/MotionEvent-JNI\(\s*\d+\): android_view_MotionEvent_nativeGetPointerCount: -1$'),
+    // See https://github.com/flutter/flutter/issues/160598
+    RegExp(r'ViewPostIme pointer'),
+    RegExp(r'mali.instrumentation.graph.work'),
+  ];
 
   // 'F/libc(pid): Fatal signal 11'
-  static final RegExp _fatalLog = RegExp(r'^F\/libc\s*\(\s*\d+\):\sFatal signal (\d+)');
+  static final _fatalLog = RegExp(r'^F\/libc\s*\(\s*\d+\):\sFatal signal (\d+)');
 
   // 'I/DEBUG(pid): ...'
-  static final RegExp _tombstoneLine = RegExp(r'^[IF]\/DEBUG\s*\(\s*\d+\):\s(.+)$');
+  static final _tombstoneLine = RegExp(r'^[IF]\/DEBUG\s*\(\s*\d+\):\s(.+)$');
 
   // 'I/DEBUG(pid): Tombstone written to: '
-  static final RegExp _tombstoneTerminator = RegExp(r'^Tombstone written to:\s');
+  static final _tombstoneTerminator = RegExp(r'^Tombstone written to:\s');
 
   // we default to true in case none of the log lines match
-  bool _acceptedLastLine = true;
+  var _acceptedLastLine = true;
 
   // Whether a fatal crash is happening or not.
   // During a fatal crash only lines from the crash are accepted, the rest are
   // dropped.
-  bool _fatalCrash = false;
+  var _fatalCrash = false;
 
   // The format of the line is controlled by the '-v' parameter passed to
   // adb logcat. We are currently passing 'time', which has the format:
@@ -1140,9 +1155,11 @@ class AdbLogReader extends DeviceLogReader {
     line = line.substring(timeMatch.end + 1);
     final Match? logMatch = _logFormat.firstMatch(line);
     if (logMatch != null) {
-      bool acceptLine = false;
+      var acceptLine = false;
 
-      if (_fatalCrash) {
+      if (!adbLogFiltering) {
+        acceptLine = true;
+      } else if (_fatalCrash) {
         // While a fatal crash is going on, only accept lines from the crash
         // Otherwise the crash log in the console may get interrupted
 
@@ -1158,8 +1175,8 @@ class AdbLogReader extends DeviceLogReader {
             _fatalCrash = false;
           }
         }
-      } else if (appPid != null && int.parse(logMatch.group(1)!) == appPid) {
-        acceptLine = !_surfaceSyncerSpam.hasMatch(line);
+      } else if (_appPid != null && int.parse(logMatch.group(1)!) == _appPid) {
+        acceptLine = !_filteredMessagees.any((RegExp e) => e.hasMatch(line));
 
         if (_fatalLog.hasMatch(line)) {
           // Hit fatal signal, app is now crashing
@@ -1176,8 +1193,7 @@ class AdbLogReader extends DeviceLogReader {
         return;
       }
       _acceptedLastLine = false;
-    } else if (line == '--------- beginning of system' ||
-               line == '--------- beginning of main') {
+    } else if (line == '--------- beginning of system' || line == '--------- beginning of main') {
       // hide the ugly adb logcat log boundaries at the start
       _acceptedLastLine = false;
     } else {
@@ -1190,14 +1206,15 @@ class AdbLogReader extends DeviceLogReader {
     }
   }
 
-  void _stop() {
-    _linesController.close();
+  Future<void> _stop() async {
+    final Future<void> closed = _linesController.close();
     _adbProcess.kill();
+    await closed;
   }
 
   @override
-  void dispose() {
-    _stop();
+  Future<void> dispose() async {
+    await _stop();
   }
 }
 
@@ -1206,11 +1223,9 @@ class AndroidDevicePortForwarder extends DevicePortForwarder {
   AndroidDevicePortForwarder({
     required ProcessManager processManager,
     required Logger logger,
-    required String deviceId,
-    required String adbPath,
-  }) : _deviceId = deviceId,
-       _adbPath = adbPath,
-       _logger = logger,
+    required this._deviceId,
+    required this._adbPath,
+  }) : _logger = logger,
        _processUtils = ProcessUtils(logger: logger, processManager: processManager);
 
   final String _deviceId;
@@ -1224,27 +1239,21 @@ class AndroidDevicePortForwarder extends DevicePortForwarder {
 
   @override
   List<ForwardedPort> get forwardedPorts {
-    final List<ForwardedPort> ports = <ForwardedPort>[];
+    final ports = <ForwardedPort>[];
 
     String stdout;
     try {
-      stdout = _processUtils.runSync(
-        <String>[
-          _adbPath,
-          '-s',
-          _deviceId,
-          'forward',
-          '--list',
-        ],
-        throwOnError: true,
-      ).stdout.trim();
+      stdout = _processUtils
+          .runSync(<String>[_adbPath, '-s', _deviceId, 'forward', '--list'], throwOnError: true)
+          .stdout
+          .trim();
     } on ProcessException catch (error) {
       _logger.printError('Failed to list forwarded ports: $error.');
       return ports;
     }
 
     final List<String> lines = LineSplitter.split(stdout).toList();
-    for (final String line in lines) {
+    for (final line in lines) {
       if (!line.startsWith(_deviceId)) {
         continue;
       }
@@ -1271,19 +1280,16 @@ class AndroidDevicePortForwarder extends DevicePortForwarder {
   }
 
   @override
-  Future<int> forward(int devicePort, { int? hostPort }) async {
+  Future<int> forward(int devicePort, {int? hostPort}) async {
     hostPort ??= 0;
-    final RunResult process = await _processUtils.run(
-      <String>[
-        _adbPath,
-        '-s',
-        _deviceId,
-        'forward',
-        'tcp:$hostPort',
-        'tcp:$devicePort',
-      ],
-      throwOnError: true,
-    );
+    final RunResult process = await _processUtils.run(<String>[
+      _adbPath,
+      '-s',
+      _deviceId,
+      'forward',
+      'tcp:$hostPort',
+      'tcp:$devicePort',
+    ], throwOnError: true);
 
     if (process.stderr.isNotEmpty) {
       process.throwException('adb returned error:\n${process.stderr}');
@@ -1328,17 +1334,15 @@ class AndroidDevicePortForwarder extends DevicePortForwarder {
 
   @override
   Future<void> unforward(ForwardedPort forwardedPort) async {
-    final String tcpLine = 'tcp:${forwardedPort.hostPort}';
-    final RunResult runResult = await _processUtils.run(
-      <String>[
-        _adbPath,
-        '-s',
-        _deviceId,
-        'forward',
-        '--remove',
-        tcpLine,
-      ],
-    );
+    final tcpLine = 'tcp:${forwardedPort.hostPort}';
+    final RunResult runResult = await _processUtils.run(<String>[
+      _adbPath,
+      '-s',
+      _deviceId,
+      'forward',
+      '--remove',
+      tcpLine,
+    ]);
     if (runResult.exitCode == 0) {
       return;
     }

@@ -19,8 +19,8 @@ void main() {
       eventPrinter = EventPrinter(out: output);
     });
 
-    testWithoutContext('handles a null parent', () {
-      final FakeDevice device = FakeDevice();
+    test('handles a null parent', () {
+      final device = FakeDevice();
 
       expect(() => eventPrinter.handleFinishedTest(device), returnsNormally);
       expect(() => eventPrinter.handleStartedDevice(vmServiceUri), returnsNormally);
@@ -29,26 +29,24 @@ void main() {
     });
 
     group('handleStartedDevice', () {
-      testWithoutContext('with non-null VM Service', () {
+      test('with non-null VM Service', () {
         eventPrinter.handleStartedDevice(vmServiceUri);
 
         expect(
           output.toString(),
           '\n'
-          '[{"event":"test.startedProcess","params":{"vmServiceUri":"http://localhost:1234",'
-          '"observatoryUri":"http://localhost:1234"}}]'
+          '[{"event":"test.startedProcess","params":{"vmServiceUri":"http://localhost:1234"}}]'
           '\n',
         );
       });
 
-      testWithoutContext('with null VM Service', () {
+      test('with null VM Service', () {
         eventPrinter.handleStartedDevice(null);
 
         expect(
           output.toString(),
           '\n'
-          '[{"event":"test.startedProcess","params":{"vmServiceUri":null,'
-          '"observatoryUri":null}}]'
+          '[{"event":"test.startedProcess","params":{"vmServiceUri":null}}]'
           '\n',
         );
       });
@@ -56,4 +54,4 @@ void main() {
   });
 }
 
-class FakeDevice extends Fake implements TestDevice { }
+class FakeDevice extends Fake implements TestDevice {}

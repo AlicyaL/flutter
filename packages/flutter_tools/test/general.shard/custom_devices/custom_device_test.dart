@@ -7,93 +7,81 @@ import 'dart:async';
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:file_testing/file_testing.dart';
+import 'package:flutter_tools/src/artifacts.dart';
+import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/build_system/build_system.dart';
+import 'package:flutter_tools/src/build_system/build_targets.dart';
 import 'package:flutter_tools/src/bundle.dart';
 import 'package:flutter_tools/src/bundle_builder.dart';
+import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/convert.dart';
 import 'package:flutter_tools/src/custom_devices/custom_device.dart';
 import 'package:flutter_tools/src/custom_devices/custom_device_config.dart';
 import 'package:flutter_tools/src/custom_devices/custom_devices_config.dart';
 import 'package:flutter_tools/src/device.dart';
-import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/linux/application_package.dart';
 import 'package:flutter_tools/src/project.dart';
 import 'package:meta/meta.dart';
 import 'package:test/fake.dart';
+import 'package:unified_analytics/unified_analytics.dart';
 
 import '../../src/common.dart';
-import '../../src/context.dart';
+import '../../src/fake_process_manager.dart' hide FakeProcess;
 import '../../src/fakes.dart';
-
+import '../../src/package_config.dart';
+import '../../src/test_build_system.dart';
 
 void _writeCustomDevicesConfigFile(Directory dir, List<CustomDeviceConfig> configs) {
   dir.createSync();
 
   final File file = dir.childFile('.flutter_custom_devices.json');
-  file.writeAsStringSync(jsonEncode(
-    <String, dynamic>{
+  file.writeAsStringSync(
+    jsonEncode(<String, dynamic>{
       'custom-devices': configs.map<dynamic>((CustomDeviceConfig c) => c.toJson()).toList(),
-    }
-  ));
+    }),
+  );
 }
 
 FlutterProject _setUpFlutterProject(Directory directory) {
-  final FlutterProjectFactory flutterProjectFactory = FlutterProjectFactory(
+  final flutterProjectFactory = FlutterProjectFactory(
     fileSystem: directory.fileSystem,
     logger: BufferLogger.test(),
+    config: FakeConfig(),
   );
   return flutterProjectFactory.fromDirectory(directory);
 }
 
 void main() {
-  testWithoutContext('replacing string interpolation occurrences in custom device commands', () async {
+  test('replacing string interpolation occurrences in custom device commands', () async {
     expect(
       interpolateCommand(
         <String>['scp', r'${localPath}', r'/tmp/${appName}', 'pi@raspberrypi'],
-        <String, String>{
-          'localPath': 'build/flutter_assets',
-          'appName': 'hello_world',
-        },
+        <String, String>{'localPath': 'build/flutter_assets', 'appName': 'hello_world'},
       ),
-      <String>[
-        'scp', 'build/flutter_assets', '/tmp/hello_world', 'pi@raspberrypi',
-      ]
+      <String>['scp', 'build/flutter_assets', '/tmp/hello_world', 'pi@raspberrypi'],
     );
 
     expect(
       interpolateCommand(
         <String>[r'${test1}', r' ${test2}', r'${test3}'],
-        <String, String>{
-          'test1': '_test1',
-          'test2': '_test2',
-        },
+        <String, String>{'test1': '_test1', 'test2': '_test2'},
       ),
-      <String>[
-        '_test1', ' _test2', r'',
-      ]
+      <String>['_test1', ' _test2', r''],
     );
 
     expect(
       interpolateCommand(
         <String>[r'${test1}', r' ${test2}', r'${test3}'],
-        <String, String>{
-          'test1': '_test1',
-          'test2': '_test2',
-        },
-        additionalReplacementValues: <String, String>{
-          'test2': '_nottest2',
-          'test3': '_test3',
-        }
+        <String, String>{'test1': '_test1', 'test2': '_test2'},
+        additionalReplacementValues: <String, String>{'test2': '_nottest2', 'test3': '_test3'},
       ),
-      <String>[
-        '_test1', ' _test2', r'_test3',
-      ]
+      <String>['_test1', ' _test2', r'_test3'],
     );
   });
 
-  final CustomDeviceConfig testConfig = CustomDeviceConfig(
+  final testConfig = CustomDeviceConfig(
     id: 'testid',
     label: 'testlabel',
     sdkNameAndVersion: 'testsdknameandversion',
@@ -109,86 +97,104 @@ void main() {
     screenshotCommand: const <String>['testscreenshot'],
   );
 
-  const String testConfigPingSuccessOutput = 'testpingsuccess\n';
-  const String testConfigForwardPortSuccessOutput = 'testforwardportsuccess\n';
+  const testConfigPingSuccessOutput = 'testpingsuccess\n';
+  const testConfigForwardPortSuccessOutput = 'testforwardportsuccess\n';
   final CustomDeviceConfig disabledTestConfig = testConfig.copyWith(enabled: false);
   final CustomDeviceConfig testConfigNonForwarding = testConfig.copyWith(
     explicitForwardPortCommand: true,
     explicitForwardPortSuccessRegex: true,
   );
 
-  testUsingContext('CustomDevice defaults',
-    () async {
-      final CustomDevice device = CustomDevice(
-        config: testConfig,
+  test('CustomDevice defaults', () async {
+    final device = CustomDevice(
+      config: testConfig,
+      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+      analytics: const NoOpAnalytics(),
+      buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+      buildTargets: const NoOpBuildTargets(),
+      toolContext: FakeToolContext(
         processManager: FakeProcessManager.any(),
-        logger: BufferLogger.test()
-      );
+        logger: BufferLogger.test(),
+      ),
+    );
 
-      final PrebuiltLinuxApp linuxApp = PrebuiltLinuxApp(executable: 'foo');
+    final linuxApp = PrebuiltLinuxApp(executable: 'foo');
 
-      expect(device.id, 'testid');
-      expect(device.name, 'testlabel');
-      expect(device.platformType, PlatformType.custom);
-      expect(await device.sdkNameAndVersion, 'testsdknameandversion');
-      expect(await device.targetPlatform, TargetPlatform.linux_arm64);
-      expect(await device.installApp(linuxApp), true);
-      expect(await device.uninstallApp(linuxApp), true);
-      expect(await device.isLatestBuildInstalled(linuxApp), false);
-      expect(await device.isAppInstalled(linuxApp), false);
-      expect(await device.stopApp(linuxApp), false);
-      expect(await device.stopApp(null), false);
-      expect(device.category, Category.mobile);
+    expect(device.id, 'testid');
+    expect(device.name, 'testlabel');
+    expect(device.platformType, PlatformType.custom);
+    expect(await device.sdkNameAndVersion, 'testsdknameandversion');
+    expect(await device.targetPlatform, TargetPlatform.linux_arm64);
+    expect(await device.installApp(linuxApp), true);
+    expect(await device.uninstallApp(linuxApp), true);
+    expect(await device.isLatestBuildInstalled(linuxApp), false);
+    expect(await device.isAppInstalled(linuxApp), false);
+    expect(await device.stopApp(linuxApp), false);
+    expect(await device.stopApp(null), false);
+    expect(device.category, Category.mobile);
 
-      expect(device.supportsRuntimeMode(BuildMode.debug), true);
-      expect(device.supportsRuntimeMode(BuildMode.profile), false);
-      expect(device.supportsRuntimeMode(BuildMode.release), false);
-      expect(device.supportsRuntimeMode(BuildMode.jitRelease), false);
-    },
-    overrides: <Type, dynamic Function()>{
-      FileSystem: () => MemoryFileSystem.test(),
-      ProcessManager: () => FakeProcessManager.any(),
-    }
-  );
+    expect(device.supportsRuntimeMode(BuildMode.debug), true);
+    expect(device.supportsRuntimeMode(BuildMode.profile), false);
+    expect(device.supportsRuntimeMode(BuildMode.release), false);
+    expect(device.supportsRuntimeMode(BuildMode.jitRelease), false);
+  });
 
-  testWithoutContext('CustomDevice: no devices listed if only disabled devices configured', () async {
-    final MemoryFileSystem fs = MemoryFileSystem.test();
+  test('CustomDevice: no devices listed if only disabled devices configured', () async {
+    final fs = MemoryFileSystem.test();
     final Directory dir = fs.directory('custom_devices_config_dir');
 
     _writeCustomDevicesConfigFile(dir, <CustomDeviceConfig>[disabledTestConfig]);
 
-    expect(await CustomDevices(
-      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
-      logger: BufferLogger.test(),
-      processManager: FakeProcessManager.any(),
-      config: CustomDevicesConfig.test(
-        fileSystem: fs,
-        directory: dir,
-        logger: BufferLogger.test()
-      )
-    ).devices(), <Device>[]);
+    expect(
+      await CustomDevices(
+        featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+        analytics: const NoOpAnalytics(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        buildTargets: const NoOpBuildTargets(),
+        toolContext: FakeToolContext(
+          logger: BufferLogger.test(),
+          processManager: FakeProcessManager.any(),
+          customDevicesConfig: CustomDevicesConfig.test(
+            fileSystem: fs,
+            directory: dir,
+            logger: BufferLogger.test(),
+            cache: Cache.test(processManager: FakeProcessManager.any(), flutterRoot: '/flutter'),
+          ),
+        ),
+      ).devices(),
+      <Device>[],
+    );
   });
 
-  testWithoutContext('CustomDevice: no devices listed if custom devices feature flag disabled', () async {
-    final MemoryFileSystem fs = MemoryFileSystem.test();
+  test('CustomDevice: no devices listed if custom devices feature flag disabled', () async {
+    final fs = MemoryFileSystem.test();
     final Directory dir = fs.directory('custom_devices_config_dir');
 
     _writeCustomDevicesConfigFile(dir, <CustomDeviceConfig>[testConfig]);
 
-    expect(await CustomDevices(
-      featureFlags: TestFeatureFlags(),
-      logger: BufferLogger.test(),
-      processManager: FakeProcessManager.any(),
-      config: CustomDevicesConfig.test(
-        fileSystem: fs,
-        directory: dir,
-        logger: BufferLogger.test()
-      )
-    ).devices(), <Device>[]);
+    expect(
+      await CustomDevices(
+        featureFlags: TestFeatureFlags(),
+        analytics: const NoOpAnalytics(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        buildTargets: const NoOpBuildTargets(),
+        toolContext: FakeToolContext(
+          logger: BufferLogger.test(),
+          processManager: FakeProcessManager.any(),
+          customDevicesConfig: CustomDevicesConfig.test(
+            fileSystem: fs,
+            directory: dir,
+            logger: BufferLogger.test(),
+            cache: Cache.test(processManager: FakeProcessManager.any(), flutterRoot: '/flutter'),
+          ),
+        ),
+      ).devices(),
+      <Device>[],
+    );
   });
 
-  testWithoutContext('CustomDevices.devices', () async {
-    final MemoryFileSystem fs = MemoryFileSystem.test();
+  test('CustomDevices.devices', () async {
+    final fs = MemoryFileSystem.test();
     final Directory dir = fs.directory('custom_devices_config_dir');
 
     _writeCustomDevicesConfigFile(dir, <CustomDeviceConfig>[testConfig]);
@@ -196,145 +202,240 @@ void main() {
     expect(
       await CustomDevices(
         featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+        analytics: const NoOpAnalytics(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        buildTargets: const NoOpBuildTargets(),
+        toolContext: FakeToolContext(
+          logger: BufferLogger.test(),
+          processManager: FakeProcessManager.list(<FakeCommand>[
+            FakeCommand(command: testConfig.pingCommand, stdout: testConfigPingSuccessOutput),
+          ]),
+          customDevicesConfig: CustomDevicesConfig.test(
+            fileSystem: fs,
+            directory: dir,
+            logger: BufferLogger.test(),
+            cache: Cache.test(processManager: FakeProcessManager.any(), flutterRoot: '/flutter'),
+          ),
+        ),
+      ).devices(),
+      hasLength(1),
+    );
+  });
+
+  test(
+    'CustomDevices.discoverDevices successfully discovers devices and executes ping command',
+    () async {
+      final fs = MemoryFileSystem.test();
+      final Directory dir = fs.directory('custom_devices_config_dir');
+
+      _writeCustomDevicesConfigFile(dir, <CustomDeviceConfig>[testConfig]);
+
+      var pingCommandWasExecuted = false;
+
+      final discovery = CustomDevices(
+        featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+        analytics: const NoOpAnalytics(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        buildTargets: const NoOpBuildTargets(),
+        toolContext: FakeToolContext(
+          logger: BufferLogger.test(),
+          processManager: FakeProcessManager.list(<FakeCommand>[
+            FakeCommand(
+              command: testConfig.pingCommand,
+              onRun: (_) => pingCommandWasExecuted = true,
+              stdout: testConfigPingSuccessOutput,
+            ),
+          ]),
+          customDevicesConfig: CustomDevicesConfig.test(
+            fileSystem: fs,
+            directory: dir,
+            logger: BufferLogger.test(),
+            cache: Cache.test(processManager: FakeProcessManager.any(), flutterRoot: '/flutter'),
+          ),
+        ),
+      );
+
+      final List<Device> discoveredDevices = await discovery.discoverDevices();
+
+      expect(discoveredDevices, hasLength(1));
+      expect(pingCommandWasExecuted, true);
+    },
+  );
+
+  test("CustomDevices.discoverDevices doesn't report device when ping command fails", () async {
+    final fs = MemoryFileSystem.test();
+    final Directory dir = fs.directory('custom_devices_config_dir');
+
+    _writeCustomDevicesConfigFile(dir, <CustomDeviceConfig>[testConfig]);
+
+    final discovery = CustomDevices(
+      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+      analytics: const NoOpAnalytics(),
+      buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+      buildTargets: const NoOpBuildTargets(),
+      toolContext: FakeToolContext(
         logger: BufferLogger.test(),
         processManager: FakeProcessManager.list(<FakeCommand>[
           FakeCommand(
             command: testConfig.pingCommand,
-            stdout: testConfigPingSuccessOutput
+            stdout: testConfigPingSuccessOutput,
+            exitCode: 1,
           ),
         ]),
-        config: CustomDevicesConfig.test(
+        customDevicesConfig: CustomDevicesConfig.test(
           fileSystem: fs,
           directory: dir,
-          logger: BufferLogger.test()
-        )
-      ).devices(),
-      hasLength(1)
-    );
-  });
-
-  testWithoutContext('CustomDevices.discoverDevices successfully discovers devices and executes ping command', () async {
-    final MemoryFileSystem fs = MemoryFileSystem.test();
-    final Directory dir = fs.directory('custom_devices_config_dir');
-
-    _writeCustomDevicesConfigFile(dir, <CustomDeviceConfig>[testConfig]);
-
-    bool pingCommandWasExecuted = false;
-
-    final CustomDevices discovery = CustomDevices(
-      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
-      logger: BufferLogger.test(),
-      processManager: FakeProcessManager.list(<FakeCommand>[
-        FakeCommand(
-          command: testConfig.pingCommand,
-          onRun: () => pingCommandWasExecuted = true,
-          stdout: testConfigPingSuccessOutput
+          logger: BufferLogger.test(),
+          cache: Cache.test(processManager: FakeProcessManager.any(), flutterRoot: '/flutter'),
         ),
-      ]),
-      config: CustomDevicesConfig.test(
-        fileSystem: fs,
-        directory: dir,
-        logger: BufferLogger.test(),
-      ),
-    );
-
-    final List<Device> discoveredDevices = await discovery.discoverDevices();
-
-    expect(discoveredDevices, hasLength(1));
-    expect(pingCommandWasExecuted, true);
-  });
-
-  testWithoutContext("CustomDevices.discoverDevices doesn't report device when ping command fails", () async {
-    final MemoryFileSystem fs = MemoryFileSystem.test();
-    final Directory dir = fs.directory('custom_devices_config_dir');
-
-    _writeCustomDevicesConfigFile(dir, <CustomDeviceConfig>[testConfig]);
-
-    final CustomDevices discovery = CustomDevices(
-      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
-      logger: BufferLogger.test(),
-      processManager: FakeProcessManager.list(<FakeCommand>[
-        FakeCommand(
-          command: testConfig.pingCommand,
-          stdout: testConfigPingSuccessOutput,
-          exitCode: 1
-        ),
-      ]),
-      config: CustomDevicesConfig.test(
-        fileSystem: fs,
-        directory: dir,
-        logger: BufferLogger.test(),
       ),
     );
 
     expect(await discovery.discoverDevices(), hasLength(0));
   });
 
-  testWithoutContext("CustomDevices.discoverDevices doesn't report device when ping command output doesn't match ping success regex", () async {
-    final MemoryFileSystem fs = MemoryFileSystem.test();
+  test("CustomDevices.discoverDevices doesn't report device when ping command output doesn't match ping success regex", () async {
+    final fs = MemoryFileSystem.test();
     final Directory dir = fs.directory('custom_devices_config_dir');
 
     _writeCustomDevicesConfigFile(dir, <CustomDeviceConfig>[testConfig]);
 
-    final CustomDevices discovery = CustomDevices(
+    final discovery = CustomDevices(
       featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
-      logger: BufferLogger.test(),
-      processManager: FakeProcessManager.list(<FakeCommand>[
-        FakeCommand(
-          command: testConfig.pingCommand,
-        ),
-      ]),
-      config: CustomDevicesConfig.test(
-        fileSystem: fs,
-        directory: dir,
+      analytics: const NoOpAnalytics(),
+      buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+      buildTargets: const NoOpBuildTargets(),
+      toolContext: FakeToolContext(
         logger: BufferLogger.test(),
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          FakeCommand(command: testConfig.pingCommand),
+        ]),
+        customDevicesConfig: CustomDevicesConfig.test(
+          fileSystem: fs,
+          directory: dir,
+          logger: BufferLogger.test(),
+          cache: Cache.test(processManager: FakeProcessManager.any(), flutterRoot: '/flutter'),
+        ),
       ),
     );
 
     expect(await discovery.discoverDevices(), hasLength(0));
   });
 
-  testWithoutContext('CustomDevice.isSupportedForProject is true with editable host app', () async {
-    final MemoryFileSystem fileSystem = MemoryFileSystem.test();
+  test("CustomDevices.discoverDevices doesn't report device and does not throw when ping command times out", () async {
+    final fs = MemoryFileSystem.test();
+    final Directory dir = fs.directory('custom_devices_config_dir');
+
+    _writeCustomDevicesConfigFile(dir, <CustomDeviceConfig>[testConfig]);
+
+    final logger = BufferLogger.test();
+    final discovery = CustomDevices(
+      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+      analytics: const NoOpAnalytics(),
+      buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+      buildTargets: const NoOpBuildTargets(),
+      toolContext: FakeToolContext(
+        logger: logger,
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          FakeCommand(
+            command: testConfig.pingCommand,
+            exception: const ProcessException('testping', <String>[], 'Process timed out'),
+          ),
+        ]),
+        customDevicesConfig: CustomDevicesConfig.test(
+          fileSystem: fs,
+          directory: dir,
+          logger: logger,
+          cache: Cache.test(processManager: FakeProcessManager.any(), flutterRoot: '/flutter'),
+        ),
+      ),
+    );
+
+    expect(await discovery.discoverDevices(), hasLength(0));
+    expect(
+      logger.traceText,
+      contains('Error pinging custom device testid: ProcessException: Process timed out'),
+    );
+  });
+
+  test('CustomDevice.tryPing returns false and logs trace when ping command times out', () async {
+    final logger = BufferLogger.test();
+    final device = CustomDevice(
+      config: testConfig,
+      featureFlags: TestFeatureFlags(),
+      analytics: const NoOpAnalytics(),
+      buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+      buildTargets: const NoOpBuildTargets(),
+      toolContext: FakeToolContext(
+        logger: logger,
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          FakeCommand(
+            command: testConfig.pingCommand,
+            exception: const ProcessException('testping', <String>[], 'Process timed out'),
+          ),
+        ]),
+      ),
+    );
+
+    expect(await device.tryPing(), isFalse);
+    expect(
+      logger.traceText,
+      contains('Error pinging custom device testid: ProcessException: Process timed out'),
+    );
+  });
+
+  test('CustomDevice.isSupportedForProject is true with editable host app', () async {
+    final fileSystem = MemoryFileSystem.test();
     fileSystem.file('pubspec.yaml').createSync();
-    fileSystem.file('.packages').createSync();
+    writePackageConfigFiles(directory: fileSystem.currentDirectory, mainLibName: 'my_app');
 
     final FlutterProject flutterProject = _setUpFlutterProject(fileSystem.currentDirectory);
 
-    expect(CustomDevice(
-      config: testConfig,
-      logger: BufferLogger.test(),
-      processManager: FakeProcessManager.any(),
-    ).isSupportedForProject(flutterProject), true);
+    expect(
+      CustomDevice(
+        config: testConfig,
+        featureFlags: TestFeatureFlags(),
+        analytics: const NoOpAnalytics(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        buildTargets: const NoOpBuildTargets(),
+        toolContext: FakeToolContext(
+          logger: BufferLogger.test(),
+          processManager: FakeProcessManager.any(),
+        ),
+      ).isSupportedForProject(flutterProject),
+      true,
+    );
   });
 
-  testUsingContext(
-    'CustomDevice.install invokes uninstall and install command',
-    () async {
-      bool bothCommandsWereExecuted = false;
+  test('CustomDevice.install invokes uninstall and install command', () async {
+    var bothCommandsWereExecuted = false;
 
-      final CustomDevice device = CustomDevice(
-          config: testConfig,
-          logger: BufferLogger.test(),
-          processManager: FakeProcessManager.list(<FakeCommand>[
-            FakeCommand(command: testConfig.uninstallCommand),
-            FakeCommand(command: testConfig.installCommand, onRun: () => bothCommandsWereExecuted = true),
-          ])
-      );
+    final device = CustomDevice(
+      config: testConfig,
+      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+      analytics: const NoOpAnalytics(),
+      buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+      buildTargets: const NoOpBuildTargets(),
+      toolContext: FakeToolContext(
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.list(<FakeCommand>[
+          FakeCommand(command: testConfig.uninstallCommand),
+          FakeCommand(
+            command: testConfig.installCommand,
+            onRun: (_) => bothCommandsWereExecuted = true,
+          ),
+        ]),
+      ),
+    );
 
-      expect(await device.installApp(PrebuiltLinuxApp(executable: 'exe')), true);
-      expect(bothCommandsWereExecuted, true);
-    },
-    overrides: <Type, dynamic Function()>{
-      FileSystem: () => MemoryFileSystem.test(),
-      ProcessManager: () => FakeProcessManager.any(),
-    }
-  );
+    expect(await device.installApp(PrebuiltLinuxApp(executable: 'exe')), true);
+    expect(bothCommandsWereExecuted, true);
+  });
 
-  testWithoutContext('CustomDevicePortForwarder will run and terminate forwardPort command', () async {
-    final Completer<void> forwardPortCommandCompleter = Completer<void>();
+  test('CustomDevicePortForwarder will run and terminate forwardPort command', () async {
+    final forwardPortCommandCompleter = Completer<void>();
 
-    final CustomDevicePortForwarder forwarder = CustomDevicePortForwarder(
+    final forwarder = CustomDevicePortForwarder(
       deviceName: 'testdevicename',
       forwardPortCommand: testConfig.forwardPortCommand!,
       forwardPortSuccessRegex: testConfig.forwardPortSuccessRegex!,
@@ -345,7 +446,7 @@ void main() {
           stdout: testConfigForwardPortSuccessOutput,
           completer: forwardPortCommandCompleter,
         ),
-      ])
+      ]),
     );
 
     // this should start the command
@@ -359,11 +460,102 @@ void main() {
     expect(forwardPortCommandCompleter.isCompleted, true);
   });
 
-  testWithoutContext('CustomDevice forwards VM Service port correctly when port forwarding is configured', () async {
-    final Completer<void> runDebugCompleter = Completer<void>();
-    final Completer<void> forwardPortCompleter = Completer<void>();
+  test(
+    'CustomDevice forwards VM Service port correctly when port forwarding is configured',
+    () async {
+      final runDebugCompleter = Completer<void>();
+      final forwardPortCompleter = Completer<void>();
 
-    final FakeProcessManager processManager = FakeProcessManager.list(<FakeCommand>[
+      final processManager = FakeProcessManager.list(<FakeCommand>[
+        FakeCommand(
+          command: testConfig.runDebugCommand,
+          completer: runDebugCompleter,
+          stdout: 'The Dart VM service is listening on http://127.0.0.1:12345/abcd/\n',
+        ),
+        FakeCommand(
+          command: testConfig.forwardPortCommand!,
+          completer: forwardPortCompleter,
+          stdout: testConfigForwardPortSuccessOutput,
+        ),
+      ]);
+
+      final appSession = CustomDeviceAppSession(
+        name: 'testname',
+        device: CustomDevice(
+          config: testConfig,
+          featureFlags: TestFeatureFlags(),
+          analytics: const NoOpAnalytics(),
+          buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+          buildTargets: const NoOpBuildTargets(),
+          toolContext: FakeToolContext(logger: BufferLogger.test(), processManager: processManager),
+        ),
+        appPackage: PrebuiltLinuxApp(executable: 'testexecutable'),
+        logger: BufferLogger.test(),
+        processManager: processManager,
+      );
+
+      final LaunchResult launchResult = await appSession.start(
+        debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
+      );
+
+      expect(launchResult.started, true);
+      expect(launchResult.vmServiceUri, Uri.parse('http://127.0.0.1:12345/abcd/'));
+      expect(runDebugCompleter.isCompleted, false);
+      expect(forwardPortCompleter.isCompleted, false);
+
+      expect(await appSession.stop(), true);
+      expect(runDebugCompleter.isCompleted, true);
+      expect(forwardPortCompleter.isCompleted, true);
+    },
+  );
+
+  test('CustomDeviceAppSession forwards VM Service port correctly when port forwarding is not configured', () async {
+    final runDebugCompleter = Completer<void>();
+
+    final processManager = FakeProcessManager.list(<FakeCommand>[
+      FakeCommand(
+        command: testConfigNonForwarding.runDebugCommand,
+        completer: runDebugCompleter,
+        stdout: 'The Dart VM service is listening on http://192.168.178.123:12345/abcd/\n',
+      ),
+    ]);
+
+    final appSession = CustomDeviceAppSession(
+      name: 'testname',
+      device: CustomDevice(
+        config: testConfigNonForwarding,
+        featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+        analytics: const NoOpAnalytics(),
+        buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+        buildTargets: const NoOpBuildTargets(),
+        toolContext: FakeToolContext(logger: BufferLogger.test(), processManager: processManager),
+      ),
+      appPackage: PrebuiltLinuxApp(executable: 'testexecutable'),
+      logger: BufferLogger.test(),
+      processManager: processManager,
+    );
+
+    final LaunchResult launchResult = await appSession.start(
+      debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
+    );
+
+    expect(launchResult.started, true);
+    expect(launchResult.vmServiceUri, Uri.parse('http://192.168.178.123:12345/abcd/'));
+    expect(runDebugCompleter.isCompleted, false);
+
+    expect(await appSession.stop(), true);
+    expect(runDebugCompleter.isCompleted, true);
+  });
+
+  test('custom device end-to-end test', () async {
+    final runDebugCompleter = Completer<void>();
+    final forwardPortCompleter = Completer<void>();
+
+    final processManager = FakeProcessManager.list(<FakeCommand>[
+      FakeCommand(command: testConfig.pingCommand, stdout: testConfigPingSuccessOutput),
+      FakeCommand(command: testConfig.postBuildCommand!),
+      FakeCommand(command: testConfig.uninstallCommand),
+      FakeCommand(command: testConfig.installCommand),
       FakeCommand(
         command: testConfig.runDebugCommand,
         completer: runDebugCompleter,
@@ -376,163 +568,167 @@ void main() {
       ),
     ]);
 
-    final CustomDeviceAppSession appSession = CustomDeviceAppSession(
-      name: 'testname',
-      device: CustomDevice(
-        config: testConfig,
+    final fs = MemoryFileSystem.test();
+
+    // CustomDevice.startApp doesn't care whether we pass a prebuilt app or
+    // buildable app as long as we pass prebuiltApplication as false
+    final app = PrebuiltLinuxApp(executable: 'testexecutable');
+
+    final Directory configFileDir = fs.directory('custom_devices_config_dir');
+    _writeCustomDevicesConfigFile(configFileDir, <CustomDeviceConfig>[testConfig]);
+
+    // finally start actually testing things
+    final customDevices = CustomDevices(
+      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+      analytics: const NoOpAnalytics(),
+      buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+      buildTargets: const NoOpBuildTargets(),
+      toolContext: FakeToolContext(
+        fs: fs,
+        processManager: processManager,
         logger: BufferLogger.test(),
-        processManager: processManager
+        customDevicesConfig: CustomDevicesConfig.test(
+          fileSystem: fs,
+          directory: configFileDir,
+          logger: BufferLogger.test(),
+          cache: Cache.test(processManager: FakeProcessManager.any(), flutterRoot: '/flutter'),
+        ),
       ),
-      appPackage: PrebuiltLinuxApp(executable: 'testexecutable'),
-      logger: BufferLogger.test(),
-      processManager: processManager,
     );
 
-    final LaunchResult launchResult = await appSession.start(debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug));
+    final List<Device> devices = await customDevices.discoverDevices();
+    expect(devices.length, 1);
+    expect(devices.single, isA<CustomDevice>());
 
-    expect(launchResult.started, true);
-    expect(launchResult.vmServiceUri, Uri.parse('http://127.0.0.1:12345/abcd/'));
+    final device = devices.single as CustomDevice;
+    expect(device.id, testConfig.id);
+    expect(device.name, testConfig.label);
+    expect(await device.sdkNameAndVersion, testConfig.sdkNameAndVersion);
+
+    final LaunchResult result = await device.startApp(
+      app,
+      debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
+      bundleBuilder: FakeBundleBuilder(),
+    );
+    expect(result.started, true);
+    expect(result.hasVmService, true);
+    expect(result.vmServiceUri, Uri.tryParse('http://127.0.0.1:12345/abcd/'));
     expect(runDebugCompleter.isCompleted, false);
     expect(forwardPortCompleter.isCompleted, false);
 
-    expect(await appSession.stop(), true);
+    expect(await device.stopApp(app), true);
     expect(runDebugCompleter.isCompleted, true);
     expect(forwardPortCompleter.isCompleted, true);
   });
 
-  testWithoutContext('CustomDeviceAppSession forwards VM Service port correctly when port forwarding is not configured', () async {
-    final Completer<void> runDebugCompleter = Completer<void>();
+  test('custom device command string interpolation end-to-end test', () async {
+    final runDebugCompleter = Completer<void>();
 
-    final FakeProcessManager processManager = FakeProcessManager.list(
-      <FakeCommand>[
-        FakeCommand(
-          command: testConfigNonForwarding.runDebugCommand,
-          completer: runDebugCompleter,
-          stdout: 'The Dart VM service is listening on http://192.168.178.123:12345/abcd/\n'
-        ),
-      ]
+    final CustomDeviceConfig config = testConfig.copyWith(
+      platform: TargetPlatform.linux_arm64,
+      postBuildCommand: const <String>[
+        'testpostbuild',
+        r'--buildMode=${buildMode}',
+        r'--icuDataPath=${icuDataPath}',
+        r'--engineRevision=${engineRevision}',
+      ],
+      runDebugCommand: const <String>[
+        'testrundebug',
+        r'--buildMode=${buildMode}',
+        r'--icuDataPath=${icuDataPath}',
+        r'--engineRevision=${engineRevision}',
+      ],
     );
 
-    final CustomDeviceAppSession appSession = CustomDeviceAppSession(
-      name: 'testname',
-      device: CustomDevice(
-        config: testConfigNonForwarding,
-        logger: BufferLogger.test(),
-        processManager: processManager
+    final commandArgumentsPattern = <Pattern>[
+      RegExp(r'--buildMode=.*'),
+      RegExp(r'--icuDataPath=.*'),
+      RegExp(r'--engineRevision=.*'),
+    ];
+
+    final artifacts = Artifacts.test();
+    final flutterVersion = FakeFlutterVersion();
+    final String expectedIcuDataPath = artifacts.getArtifactPath(
+      Artifact.icuData,
+      platform: config.platform,
+    );
+    final String expectedEngineRevision = flutterVersion.engineRevision;
+
+    final expectedCommandArguments = <String>[
+      '--buildMode=debug',
+      '--icuDataPath=$expectedIcuDataPath',
+      '--engineRevision=$expectedEngineRevision',
+    ];
+
+    final expectedRunDebugCommand = <String>['testrundebug', ...expectedCommandArguments];
+    final expectedPostBuildCommand = <String>['testpostbuild', ...expectedCommandArguments];
+
+    final processManager = FakeProcessManager.list(<FakeCommand>[
+      FakeCommand(
+        command: <Pattern>['testpostbuild', ...commandArgumentsPattern],
+        onRun: (List<String> command) => expect(command, expectedPostBuildCommand),
       ),
-      appPackage: PrebuiltLinuxApp(executable: 'testexecutable'),
-      logger: BufferLogger.test(),
-      processManager: processManager
+      FakeCommand(command: config.uninstallCommand),
+      FakeCommand(command: config.installCommand),
+      FakeCommand(
+        command: <Pattern>['testrundebug', ...commandArgumentsPattern],
+        completer: runDebugCompleter,
+        onRun: (List<String> command) => expect(command, expectedRunDebugCommand),
+        stdout: 'The Dart VM service is listening on http://127.0.0.1:12345/abcd/\n',
+      ),
+      FakeCommand(command: config.forwardPortCommand!, stdout: testConfigForwardPortSuccessOutput),
+    ]);
+
+    // CustomDevice.startApp doesn't care whether we pass a prebuilt app or
+    // buildable app as long as we pass prebuiltApplication as false
+    final app = PrebuiltLinuxApp(executable: 'testexecutable');
+
+    // finally start actually testing things
+    final device = CustomDevice(
+      config: config,
+      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+      analytics: const NoOpAnalytics(),
+      buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+      buildTargets: const NoOpBuildTargets(),
+      toolContext: FakeToolContext(
+        artifacts: artifacts,
+        flutterVersion: flutterVersion,
+        logger: BufferLogger.test(),
+        processManager: processManager,
+      ),
     );
 
-    final LaunchResult launchResult = await appSession.start(debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug));
-
-    expect(launchResult.started, true);
-    expect(launchResult.vmServiceUri, Uri.parse('http://192.168.178.123:12345/abcd/'));
+    await device.startApp(
+      app,
+      debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
+      bundleBuilder: FakeBundleBuilder(),
+    );
     expect(runDebugCompleter.isCompleted, false);
 
-    expect(await appSession.stop(), true);
+    expect(await device.stopApp(app), true);
     expect(runDebugCompleter.isCompleted, true);
   });
 
-  testUsingContext(
-    'custom device end-to-end test',
-    () async {
-      final Completer<void> runDebugCompleter = Completer<void>();
-      final Completer<void> forwardPortCompleter = Completer<void>();
+  test('CustomDevice screenshotting', () async {
+    var screenshotCommandWasExecuted = false;
 
-      final FakeProcessManager processManager = FakeProcessManager.list(
-        <FakeCommand>[
-          FakeCommand(
-            command: testConfig.pingCommand,
-            stdout: testConfigPingSuccessOutput
-          ),
-          FakeCommand(command: testConfig.postBuildCommand!),
-          FakeCommand(command: testConfig.uninstallCommand),
-          FakeCommand(command: testConfig.installCommand),
-          FakeCommand(
-            command: testConfig.runDebugCommand,
-            completer: runDebugCompleter,
-            stdout: 'The Dart VM service is listening on http://127.0.0.1:12345/abcd/\n',
-          ),
-          FakeCommand(
-            command: testConfig.forwardPortCommand!,
-            completer: forwardPortCompleter,
-            stdout: testConfigForwardPortSuccessOutput,
-          ),
-        ]
-      );
-
-      // Reuse our filesystem from context instead of mixing two filesystem instances
-      // together
-      final FileSystem fs = globals.fs;
-
-      // CustomDevice.startApp doesn't care whether we pass a prebuilt app or
-      // buildable app as long as we pass prebuiltApplication as false
-      final PrebuiltLinuxApp app = PrebuiltLinuxApp(executable: 'testexecutable');
-
-      final Directory configFileDir = fs.directory('custom_devices_config_dir');
-      _writeCustomDevicesConfigFile(configFileDir, <CustomDeviceConfig>[testConfig]);
-
-      // finally start actually testing things
-      final CustomDevices customDevices = CustomDevices(
-        featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
-        processManager: processManager,
-        logger: BufferLogger.test(),
-        config: CustomDevicesConfig.test(
-          fileSystem: fs,
-          directory: configFileDir,
-          logger: BufferLogger.test()
-        )
-      );
-
-      final List<Device> devices = await customDevices.discoverDevices();
-      expect(devices.length, 1);
-      expect(devices.single, isA<CustomDevice>());
-
-      final CustomDevice device = devices.single as CustomDevice;
-      expect(device.id, testConfig.id);
-      expect(device.name, testConfig.label);
-      expect(await device.sdkNameAndVersion, testConfig.sdkNameAndVersion);
-
-      final LaunchResult result = await device.startApp(
-        app,
-        debuggingOptions: DebuggingOptions.enabled(BuildInfo.debug),
-        bundleBuilder: FakeBundleBuilder()
-      );
-      expect(result.started, true);
-      expect(result.hasVmService, true);
-      expect(result.vmServiceUri, Uri.tryParse('http://127.0.0.1:12345/abcd/'));
-      expect(runDebugCompleter.isCompleted, false);
-      expect(forwardPortCompleter.isCompleted, false);
-
-      expect(await device.stopApp(app), true);
-      expect(runDebugCompleter.isCompleted, true);
-      expect(forwardPortCompleter.isCompleted, true);
-    },
-    overrides: <Type, Generator>{
-      FileSystem: () => MemoryFileSystem.test(),
-      ProcessManager: () => FakeProcessManager.any(),
-    }
-  );
-
-  testWithoutContext('CustomDevice screenshotting', () async {
-    bool screenshotCommandWasExecuted = false;
-
-    final FakeProcessManager processManager = FakeProcessManager.list(<FakeCommand>[
+    final processManager = FakeProcessManager.list(<FakeCommand>[
       FakeCommand(
         command: testConfig.screenshotCommand!,
-        onRun: () => screenshotCommandWasExecuted = true,
+        onRun: (_) => screenshotCommandWasExecuted = true,
       ),
     ]);
 
-    final MemoryFileSystem fs = MemoryFileSystem.test();
+    final fs = MemoryFileSystem.test();
     final File screenshotFile = fs.file('screenshot.png');
 
-    final CustomDevice device = CustomDevice(
+    final device = CustomDevice(
       config: testConfig,
-      logger: BufferLogger.test(),
-      processManager: processManager
+      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+      analytics: const NoOpAnalytics(),
+      buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+      buildTargets: const NoOpBuildTargets(),
+      toolContext: FakeToolContext(logger: BufferLogger.test(), processManager: processManager),
     );
 
     expect(device.supportsScreenshot, true);
@@ -542,25 +738,26 @@ void main() {
     expect(screenshotFile, exists);
   });
 
-  testWithoutContext('CustomDevice without screenshotting support', () async {
-    bool screenshotCommandWasExecuted = false;
+  test('CustomDevice without screenshotting support', () async {
+    var screenshotCommandWasExecuted = false;
 
-    final FakeProcessManager processManager = FakeProcessManager.list(<FakeCommand>[
+    final processManager = FakeProcessManager.list(<FakeCommand>[
       FakeCommand(
         command: testConfig.screenshotCommand!,
-        onRun: () => screenshotCommandWasExecuted = true,
+        onRun: (_) => screenshotCommandWasExecuted = true,
       ),
     ]);
 
-    final MemoryFileSystem fs = MemoryFileSystem.test();
+    final fs = MemoryFileSystem.test();
     final File screenshotFile = fs.file('screenshot.png');
 
-    final CustomDevice device = CustomDevice(
-        config: testConfig.copyWith(
-          explicitScreenshotCommand: true
-        ),
-        logger: BufferLogger.test(),
-        processManager: processManager
+    final device = CustomDevice(
+      config: testConfig.copyWith(explicitScreenshotCommand: true),
+      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+      analytics: const NoOpAnalytics(),
+      buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+      buildTargets: const NoOpBuildTargets(),
+      toolContext: FakeToolContext(logger: BufferLogger.test(), processManager: processManager),
     );
 
     expect(device.supportsScreenshot, false);
@@ -572,22 +769,26 @@ void main() {
     expect(screenshotFile.existsSync(), false);
   });
 
-  testWithoutContext('CustomDevice returns correct target platform', () async {
-    final CustomDevice device = CustomDevice(
-      config: testConfig.copyWith(
-        platform: TargetPlatform.linux_x64
+  test('CustomDevice returns correct target platform', () async {
+    final device = CustomDevice(
+      config: testConfig.copyWith(platform: TargetPlatform.linux_x64),
+      featureFlags: TestFeatureFlags(areCustomDevicesEnabled: true),
+      analytics: const NoOpAnalytics(),
+      buildSystem: TestBuildSystem.all(BuildResult(success: true)),
+      buildTargets: const NoOpBuildTargets(),
+      toolContext: FakeToolContext(
+        logger: BufferLogger.test(),
+        processManager: FakeProcessManager.empty(),
       ),
-      logger: BufferLogger.test(),
-      processManager: FakeProcessManager.empty()
     );
 
     expect(await device.targetPlatform, TargetPlatform.linux_x64);
   });
 
-  testWithoutContext('CustomDeviceLogReader cancels subscriptions before closing logLines stream', () async {
-    final CustomDeviceLogReader logReader = CustomDeviceLogReader('testname');
+  test('CustomDeviceLogReader cancels subscriptions before closing logLines stream', () async {
+    final logReader = CustomDeviceLogReader('testname');
 
-    final Iterable<List<int>> lines = Iterable<List<int>>.generate(5, (int _) => utf8.encode('test'));
+    final lines = Iterable<List<int>>.generate(5, (int _) => utf8.encode('test'));
 
     logReader.listenToProcessOutput(
       FakeProcess(
@@ -597,18 +798,21 @@ void main() {
       ),
     );
 
-    final List<MyFakeStreamSubscription<String>> subscriptions = <MyFakeStreamSubscription<String>>[];
-    bool logLinesStreamDone = false;
-    logReader.logLines.listen((_) {}, onDone: () {
-      expect(subscriptions, everyElement((MyFakeStreamSubscription<String> s) => s.canceled));
-      logLinesStreamDone = true;
-    });
+    final subscriptions = <MyFakeStreamSubscription<String>>[];
+    var logLinesStreamDone = false;
+    logReader.logLines.listen(
+      (_) {},
+      onDone: () {
+        expect(subscriptions, everyElement((MyFakeStreamSubscription<String> s) => s.canceled));
+        logLinesStreamDone = true;
+      },
+    );
 
     logReader.subscriptions.replaceRange(
       0,
       logReader.subscriptions.length,
       logReader.subscriptions.map(
-        (StreamSubscription<String> e) => MyFakeStreamSubscription<String>(e)
+        (StreamSubscription<String> e) => MyFakeStreamSubscription<String>(e),
       ),
     );
 
@@ -644,6 +848,8 @@ class FakeBundleBuilder extends Fake implements BundleBuilder {
     String? applicationKernelFilePath,
     String? depfilePath,
     String? assetDirPath,
-    @visibleForTesting BuildSystem? buildSystem
+    Uri? nativeAssets,
+    bool buildNativeAssets = true,
+    @visibleForTesting BuildSystem? buildSystem,
   }) async {}
 }

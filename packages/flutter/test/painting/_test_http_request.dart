@@ -4,20 +4,14 @@
 
 import 'dart:js_interop';
 
-import 'package:flutter/src/services/dom.dart';
+import 'package:web/web.dart' as web;
 
 /// Defines a new property on an Object.
 @JS('Object.defineProperty')
-external JSVoid objectDefineProperty(JSAny o, JSString symbol, JSAny desc);
+external void objectDefineProperty(JSAny o, String symbol, JSAny desc);
 
 void createGetter(JSAny mock, String key, JSAny? Function() get) {
-  objectDefineProperty(
-    mock,
-    key.toJS,
-    <String, JSFunction>{
-      'get': (() => get()).toJS,
-    }.jsify()!,
-  );
+  objectDefineProperty(mock, key, <String, JSFunction>{'get': (() => get()).toJS}.jsify()!);
 }
 
 @JS()
@@ -35,18 +29,19 @@ class DomXMLHttpRequestMock {
   });
 }
 
+typedef _DartDomEventListener = JSVoid Function(web.Event event);
+
 class TestHttpRequest {
   TestHttpRequest() {
     _mock = DomXMLHttpRequestMock(
-        open: open.toJS,
-        send: send.toJS,
-        setRequestHeader: setRequestHeader.toJS,
-        addEventListener: addEventListener.toJS,
+      open: open.toJS,
+      send: send.toJS,
+      setRequestHeader: setRequestHeader.toJS,
+      addEventListener: addEventListener.toJS,
     );
-    final JSAny mock = _mock as JSAny;
+    final JSAny mock = _mock.jsify()!;
     createGetter(mock, 'headers', () => headers.jsify());
-    createGetter(mock,
-        'responseHeaders', () => responseHeaders.jsify());
+    createGetter(mock, 'responseHeaders', () => responseHeaders.jsify());
     createGetter(mock, 'status', () => status.toJS);
     createGetter(mock, 'response', () => response.jsify());
   }
@@ -58,26 +53,120 @@ class TestHttpRequest {
   Object? response;
 
   Map<String, String> get responseHeaders => headers;
-  JSVoid open(JSString method, JSString url, JSBoolean async) {}
+  JSVoid open(String method, String url, bool async) {}
   JSVoid send() {}
-  JSVoid setRequestHeader(JSString name, JSString value) {
-    headers[name.toDart] = value.toDart;
+  JSVoid setRequestHeader(String name, String value) {
+    headers[name] = value;
   }
 
-  JSVoid addEventListener(JSString type, DomEventListener listener) {
-    if (type.toDart == mockEvent?.type) {
-      final DartDomEventListener dartListener =
-        (listener as JSExportedDartFunction).toDart as DartDomEventListener;
+  JSVoid addEventListener(String type, web.EventListener listener) {
+    if (type == mockEvent?.type) {
+      final dartListener = (listener as JSExportedDartFunction).toDart as _DartDomEventListener;
       dartListener(mockEvent!.event);
     }
   }
 
-  DomXMLHttpRequest getMock() => _mock as DomXMLHttpRequest;
+  web.XMLHttpRequest getMock() => _mock.jsify()! as web.XMLHttpRequest;
 }
 
 class MockEvent {
   MockEvent(this.type, this.event);
 
   final String type;
-  final DomEvent event;
+  final web.Event event;
+}
+
+@JS()
+@staticInterop
+@anonymous
+class ImgElementMock {
+  external factory ImgElementMock({JSFunction? decode});
+}
+
+class TestImgElement {
+  TestImgElement() {
+    _mock = ImgElementMock(decode: decode.toJS);
+    final JSAny mock = _mock.jsify()!;
+    objectDefineProperty(
+      mock,
+      'src',
+      <String, JSFunction>{
+        'get': (() => src).toJS,
+        'set': ((JSString newValue) {
+          src = newValue.toDart;
+        }).toJS,
+      }.jsify()!,
+    );
+    objectDefineProperty(
+      mock,
+      'naturalWidth',
+      <String, JSFunction>{
+        'get': (() => naturalWidth).toJS,
+        'set': ((JSNumber newValue) {
+          naturalWidth = newValue.toDartInt;
+        }).toJS,
+      }.jsify()!,
+    );
+    objectDefineProperty(
+      mock,
+      'naturalHeight',
+      <String, JSFunction>{
+        'get': (() => naturalHeight).toJS,
+        'set': ((JSNumber newValue) {
+          naturalHeight = newValue.toDartInt;
+        }).toJS,
+      }.jsify()!,
+    );
+  }
+
+  late ImgElementMock _mock;
+
+  String src = '';
+  int naturalWidth = 1;
+  int naturalHeight = 1;
+
+  // Either `decode` or `decodeSuccess/Failure` may be called first.
+  // The following fields allow properly handling either case.
+  bool _callbacksAssigned = false;
+  late final JSFunction _resolveFunc;
+  late final JSFunction _rejectFunc;
+
+  bool _resultAssigned = false;
+  late final bool _resultSuccessful;
+
+  JSPromise<JSAny?> decode() {
+    if (_resultAssigned) {
+      return switch (_resultSuccessful) {
+        true => Future<JSAny?>.value().toJS,
+        false => Future<JSAny?>.error(Error()).toJS,
+      };
+    }
+    _callbacksAssigned = true;
+    return JSPromise<JSAny?>(
+      (JSFunction resolveFunc, JSFunction rejectFunc) {
+        _resolveFunc = resolveFunc;
+        _rejectFunc = rejectFunc;
+      }.toJS,
+    );
+  }
+
+  void decodeSuccess() {
+    if (_callbacksAssigned) {
+      _resolveFunc.callAsFunction();
+    } else {
+      _resultAssigned = true;
+      _resultSuccessful = true;
+    }
+  }
+
+  void decodeFailure() {
+    if (_callbacksAssigned) {
+      _rejectFunc.callAsFunction();
+    } else {
+      _resultAssigned = true;
+      _resultSuccessful = false;
+    }
+  }
+
+  web.HTMLImageElement getMock() => _mock.jsify()! as web.HTMLImageElement;
 }

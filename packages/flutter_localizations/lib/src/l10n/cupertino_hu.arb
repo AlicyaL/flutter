@@ -22,5 +22,18 @@
   "tabSemanticsLabel": "$tabCount/$tabIndex. lap",
   "modalBarrierDismissLabel": "Elvetés",
   "searchTextFieldPlaceholderLabel": "Keresés",
-  "noSpellCheckReplacementsLabel": "No Replacements Found"
+  "noSpellCheckReplacementsLabel": "Nem található javítás",
+  "menuDismissLabel": "Menü bezárása",
+  "lookUpButtonLabel": "Felfelé nézés",
+  "searchWebButtonLabel": "Keresés az interneten",
+  "shareButtonLabel": "Megosztás…",
+  "clearButtonLabel": "Törlés",
+  "cancelButtonLabel": "Mégse",
+  "backButtonLabel": "Vissza",
+  "expansionTileExpandedHint": "duplán koppintva összecsukhatja",
+  "expansionTileCollapsedHint": "duplán koppintva kibonthatja",
+  "expansionTileExpandedTapHint": "Összecsukás",
+  "expansionTileCollapsedTapHint": "Bontsa ki a további részletek megtekintéséhez",
+  "expandedHint": "Összecsukva",
+  "collapsedHint": "Kibontva"
 }

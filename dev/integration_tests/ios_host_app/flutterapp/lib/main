@@ -7,8 +7,10 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ffi_package/ffi_package.dart';
 
 import 'marquee.dart';
+import 'resize.dart';
 
 /// Route names. (See [main] for more details.)
 ///
@@ -17,6 +19,7 @@ const String greenMarqueeRouteName = 'marquee_green';
 const String purpleMarqueeRouteName = 'marquee_purple';
 const String fullscreenRouteName = 'full';
 const String hybridRouteName = 'hybrid';
+const String resizeRouteName = 'resize';
 
 /// Channel used to let the Flutter app know to reset the app to a specific
 /// route.  See the [run] method.
@@ -31,16 +34,17 @@ const BasicMessageChannel<String> _kReloadChannel =
 void main() {
   // Ensures bindings are initialized before doing anything.
   WidgetsFlutterBinding.ensureInitialized();
+  ui.PlatformDispatcher.instance.setSemanticsTreeEnabled(true);
   // Start listening immediately for messages from the iOS side. ObjC calls
   // will be made to let us know when we should be changing the app state.
   _kReloadChannel.setMessageHandler(run);
   // Start off with whatever the initial route is supposed to be.
-  run(ui.window.defaultRouteName);
+  run(ui.PlatformDispatcher.instance.defaultRouteName);
 }
 
 Future<String> run(String? name) async {
   // The platform-specific component will call [setInitialRoute] on the Flutter
-  // view (or view controller for iOS) to set [ui.window.defaultRouteName].
+  // view (or view controller for iOS) to set [ui.PlatformDispatcher.defaultRouteName].
   // We then dispatch based on the route names to show different Flutter
   // widgets.
   // Since we don't really care about Flutter-side navigation in this app, we're
@@ -52,6 +56,9 @@ Future<String> run(String? name) async {
       break;
     case purpleMarqueeRouteName:
       runApp(Marquee(color: Colors.purple[400]));
+      break;
+    case resizeRouteName:
+      runApp(ResizeApp());
       break;
     case fullscreenRouteName:
     case hybridRouteName:
@@ -116,10 +123,15 @@ class _MyHomePageState extends State<MyHomePage> {
   // button on the Flutter page has been tapped.
   int _counter = 0;
 
+  late int sumResult;
+  late Future<int> sumAsyncResult;
+
   @override
   void initState() {
     super.initState();
     _platform.setMessageHandler(_handlePlatformIncrement);
+    sumResult = sum(1, 2);
+    sumAsyncResult = sumAsync(3, 4);
   }
 
   /// Directly increments our internal counter and rebuilds the UI.

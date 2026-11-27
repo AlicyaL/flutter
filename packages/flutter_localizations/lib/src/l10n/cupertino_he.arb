@@ -32,5 +32,18 @@
   "tabSemanticsLabel": "כרטיסייה $tabIndex מתוך $tabCount",
   "modalBarrierDismissLabel": "סגירה",
   "searchTextFieldPlaceholderLabel": "חיפוש",
-  "noSpellCheckReplacementsLabel": "No Replacements Found"
+  "noSpellCheckReplacementsLabel": "לא נמצאו חלופות",
+  "menuDismissLabel": "סגירת התפריט",
+  "lookUpButtonLabel": "חיפוש",
+  "searchWebButtonLabel": "חיפוש באינטרנט",
+  "shareButtonLabel": "שיתוף…",
+  "clearButtonLabel": "ניקוי",
+  "cancelButtonLabel": "ביטול",
+  "backButtonLabel": "למסך הקודם",
+  "expansionTileExpandedHint": "כדי לכווץ, יש ללחוץ לחיצה כפולה",
+  "expansionTileCollapsedHint": "כדי להרחיב, יש ללחוץ לחיצה כפולה",
+  "expansionTileExpandedTapHint": "כיווץ",
+  "expansionTileCollapsedTapHint": "ניתן להרחיב להצגת פרטים נוספים",
+  "expandedHint": "מכווץ",
+  "collapsedHint": "מורחב"
 }

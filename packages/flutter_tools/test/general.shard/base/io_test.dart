@@ -6,26 +6,29 @@ import 'dart:async';
 import 'dart:io' as io;
 
 import 'package:file/memory.dart';
+import 'package:flutter_tools/src/base/exit.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/platform.dart';
+import 'package:path/path.dart' as path; // flutter_ignore: package_path_import
 import 'package:test/fake.dart';
 
 import '../../src/common.dart';
+import '../../src/fs_safety.dart';
 import '../../src/io.dart';
 
 void main() {
-  testWithoutContext('IOOverrides can inject a memory file system', () async {
-    final MemoryFileSystem memoryFileSystem = MemoryFileSystem.test();
-    final FlutterIOOverrides flutterIOOverrides = FlutterIOOverrides(fileSystem: memoryFileSystem);
+  test('IOOverrides can inject a memory file system', () async {
+    final memoryFileSystem = MemoryFileSystem.test();
+    final flutterIOOverrides = FlutterIOOverrides(fileSystem: memoryFileSystem);
     await io.IOOverrides.runWithIOOverrides(() async {
       // statics delegate correctly.
       expect(io.FileSystemEntity.isWatchSupported, memoryFileSystem.isWatchSupported);
       expect(io.Directory.systemTemp.path, memoryFileSystem.systemTempDirectory.path);
 
       // can create and write to files/directories sync.
-      final io.File file = io.File('abc');
+      final file = io.File('abc');
       file.writeAsStringSync('def');
-      final io.Directory directory = io.Directory('foobar');
+      final directory = io.Directory('foobar');
       directory.createSync();
 
       expect(memoryFileSystem.file('abc').existsSync(), true);
@@ -33,9 +36,9 @@ void main() {
       expect(memoryFileSystem.directory('foobar').existsSync(), true);
 
       // can create and write to files/directories async.
-      final io.File fileB = io.File('xyz');
+      final fileB = io.File('xyz');
       await fileB.writeAsString('def');
-      final io.Directory directoryB = io.Directory('barfoo');
+      final directoryB = io.Directory('barfoo');
       await directoryB.create();
 
       expect(memoryFileSystem.file('xyz').existsSync(), true);
@@ -43,36 +46,42 @@ void main() {
       expect(memoryFileSystem.directory('barfoo').existsSync(), true);
 
       // Links
-      final io.Link linkA = io.Link('hhh');
-      final io.Link linkB = io.Link('ggg');
+      final linkA = io.Link('hhh');
+      final linkB = io.Link('ggg');
       io.File('jjj').createSync();
       io.File('lll').createSync();
       await linkA.create('jjj');
       linkB.createSync('lll');
 
-      expect(await memoryFileSystem.link('hhh').resolveSymbolicLinks(), await linkA.resolveSymbolicLinks());
-      expect(memoryFileSystem.link('ggg').resolveSymbolicLinksSync(), linkB.resolveSymbolicLinksSync());
+      expect(
+        await memoryFileSystem.link('hhh').resolveSymbolicLinks(),
+        await linkA.resolveSymbolicLinks(),
+      );
+      expect(
+        memoryFileSystem.link('ggg').resolveSymbolicLinksSync(),
+        linkB.resolveSymbolicLinksSync(),
+      );
     }, flutterIOOverrides);
   });
 
-  testWithoutContext('ProcessSignal signals are properly delegated', () async {
-    final FakeProcessSignal signal = FakeProcessSignal();
-    final ProcessSignal signalUnderTest = ProcessSignal(signal);
+  test('ProcessSignal signals are properly delegated', () async {
+    final signal = FakeProcessSignal();
+    final signalUnderTest = ProcessSignal(signal);
 
     signal.controller.add(signal);
 
     expect(signalUnderTest, await signalUnderTest.watch().first);
   });
 
-  testWithoutContext('ProcessSignal toString() works', () async {
+  test('ProcessSignal toString() works', () async {
     expect(io.ProcessSignal.sigint.toString(), ProcessSignal.sigint.toString());
   });
 
-  testWithoutContext('exit throws a StateError if called without being overridden', () {
+  test('exit throws a StateError if called without being overridden', () {
     expect(() => exit(0), throwsAssertionError);
   });
 
-  testWithoutContext('exit does not throw a StateError if overridden', () {
+  test('exit does not throw a StateError if overridden', () {
     try {
       setExitFunctionForTests((int value) {});
 
@@ -82,17 +91,14 @@ void main() {
     }
   });
 
-  testWithoutContext('test_api defines the Declarer in a known place', () {
+  test('test_api defines the Declarer in a known place', () {
     expect(Zone.current[#test.declarer], isNotNull);
   });
 
-  testWithoutContext('listNetworkInterfaces() uses overrides', () async {
+  test('listNetworkInterfaces() uses overrides', () async {
     setNetworkInterfaceLister(
-      ({
-        bool? includeLoopback,
-        bool? includeLinkLocal,
-        InternetAddressType? type,
-      }) async => <NetworkInterface>[],
+      ({bool? includeLoopback, bool? includeLinkLocal, InternetAddressType? type}) async =>
+          <NetworkInterface>[],
     );
 
     expect(await listNetworkInterfaces(), isEmpty);
@@ -100,22 +106,168 @@ void main() {
     resetNetworkInterfaceLister();
   });
 
-  testWithoutContext('Does not listen to Posix process signals on windows', () async {
-    final FakePlatform windows = FakePlatform(operatingSystem: 'windows');
-    final FakePlatform linux = FakePlatform();
-    final FakeProcessSignal fakeSignalA = FakeProcessSignal();
-    final FakeProcessSignal fakeSignalB = FakeProcessSignal();
+  test('Does not listen to Posix process signals on windows', () async {
+    final windows = FakePlatform(operatingSystem: 'windows');
+    final linux = FakePlatform();
+    final fakeSignalA = FakeProcessSignal();
+    final fakeSignalB = FakeProcessSignal();
     fakeSignalA.controller.add(fakeSignalA);
     fakeSignalB.controller.add(fakeSignalB);
 
     expect(await PosixProcessSignal(fakeSignalA, platform: windows).watch().isEmpty, true);
     expect(await PosixProcessSignal(fakeSignalB, platform: linux).watch().first, isNotNull);
   });
+
+  test('FSGuardIOOverrides isolates filesystem modifications to system temp directory', () {
+    io.IOOverrides.runWithIOOverrides(() {
+      final tempFile = io.File(path.join(io.Directory.systemTemp.path, 'fs_guard_test_safe.txt'));
+      addTearDown(() {
+        if (tempFile.existsSync()) {
+          tempFile.deleteSync();
+        }
+      });
+      // Writing under system temp should succeed
+      tempFile.writeAsStringSync('safe-content');
+      expect(tempFile.readAsStringSync(), 'safe-content');
+
+      // Modifying outside system temp should fail and throw our guarded exception
+      final String root = path.rootPrefix(io.Directory.current.absolute.path);
+      final unsafeFile = io.File(path.join(root, 'tmp_unsafe_outside_temp.txt'));
+      expect(unsafeFile.existsSync(), false);
+      expect(
+        () => unsafeFile.writeAsStringSync('unsafe-content'),
+        throwsA(
+          isA<io.FileSystemException>().having(
+            (e) => e.message,
+            'message',
+            contains('Test attempted to modify file outside of temp directory'),
+          ),
+        ),
+      );
+    }, FSGuardIOOverrides());
+  });
+
+  test('FSGuardIOOverrides resolves symlinks for temp directory', () {
+    final io.Directory baseDir = io.Directory.systemTemp.createTempSync('fs_guard_symlink_test_');
+    addTearDown(() => baseDir.deleteSync(recursive: true));
+
+    final io.Directory targetDir = baseDir.createTempSync('target_');
+    final link = io.Link(path.join(baseDir.path, 'link_to_target'));
+    link.createSync(targetDir.path);
+
+    final mockTemp = io.Directory(link.path);
+    final mockOverrides = MockSystemTempOverrides(mockTemp);
+
+    io.IOOverrides.runWithIOOverrides(() {
+      io.IOOverrides.runWithIOOverrides(() {
+        final resolvedFile = io.File(path.join(targetDir.path, 'test.txt'));
+
+        // This should NOT throw if the guard resolves symlinks.
+        resolvedFile.writeAsStringSync('hello');
+        expect(resolvedFile.readAsStringSync(), 'hello');
+
+        resolvedFile.deleteSync();
+      }, FSGuardIOOverrides());
+    }, mockOverrides);
+  });
+
+  test('Stdio.stdoutWrite does not crash if stdout throws FileSystemException', () async {
+    final mockStdout = CrashingStdout(asyncError: true);
+    final stdio = Stdio.test(stdout: mockStdout, stderr: FakeIOSink());
+
+    Object? printed;
+    var crashed = false;
+    await runZonedGuarded(
+      () async {
+        stdio.stdoutWrite('test message');
+        await Future<void>.delayed(Duration.zero);
+      },
+      (Object error, StackTrace stackTrace) {
+        crashed = true;
+      },
+      zoneSpecification: ZoneSpecification(
+        print: (Zone self, ZoneDelegate parent, Zone association, String line) {
+          printed = line;
+          throw const io.FileSystemException('writeFrom failed', '', io.OSError('Broken pipe', 32));
+        },
+      ),
+    );
+    expect(printed, 'test message');
+    expect(crashed, false);
+  });
+
+  test('Stdio.stdoutWrite does not crash if stdout is already done and print throws', () async {
+    final mockStdout = CrashingStdout(asyncError: false);
+    final stdio = Stdio.test(stdout: mockStdout, stderr: FakeIOSink());
+
+    // Access stdout to register the done listener.
+    stdio.stdout;
+
+    mockStdout.completeDone();
+    await Future<void>.delayed(Duration.zero);
+
+    Object? printed;
+    var crashed = false;
+    runZonedGuarded(
+      () {
+        stdio.stdoutWrite('test message');
+      },
+      (Object error, StackTrace stackTrace) {
+        crashed = true;
+      },
+      zoneSpecification: ZoneSpecification(
+        print: (Zone self, ZoneDelegate parent, Zone association, String line) {
+          printed = line;
+          throw const io.FileSystemException('writeFrom failed', '', io.OSError('Broken pipe', 32));
+        },
+      ),
+    );
+    expect(printed, 'test message');
+    expect(crashed, false);
+  });
 }
 
 class FakeProcessSignal extends Fake implements io.ProcessSignal {
-  final StreamController<io.ProcessSignal> controller = StreamController<io.ProcessSignal>();
+  final controller = StreamController<io.ProcessSignal>();
 
   @override
   Stream<io.ProcessSignal> watch() => controller.stream;
+}
+
+final class MockSystemTempOverrides extends io.IOOverrides {
+  MockSystemTempOverrides(this.mockTemp);
+  final io.Directory mockTemp;
+  @override
+  io.Directory getSystemTempDirectory() => mockTemp;
+}
+
+class CrashingStdout extends Fake implements io.Stdout {
+  CrashingStdout({required this.asyncError});
+
+  final bool asyncError;
+  final _completer = Completer<void>();
+
+  @override
+  void write(Object? object) {
+    if (!asyncError) {
+      throw const io.FileSystemException('writeFrom failed', '', io.OSError('Broken pipe', 32));
+    }
+    Zone.current.handleUncaughtError(
+      const io.FileSystemException('writeFrom failed', '', io.OSError('Broken pipe', 32)),
+      StackTrace.current,
+    );
+  }
+
+  @override
+  Future<void> get done => _completer.future;
+
+  void completeDone() {
+    _completer.complete();
+  }
+}
+
+class FakeIOSink extends Fake implements io.IOSink {
+  final _completer = Completer<void>();
+  @override
+  Future<void> get done => _completer.future;
 }

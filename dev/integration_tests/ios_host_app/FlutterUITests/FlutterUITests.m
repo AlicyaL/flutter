@@ -73,7 +73,17 @@ static const CGFloat kStandardTimeOut = 60.0;
     XCTAssertTrue(newPageAppeared);
 
     [self waitForAndTapElement:app.otherElements[@"Increment via Flutter"]];
-    XCTAssertTrue([app.staticTexts[@"Button tapped 1 time."] waitForExistenceWithTimeout:kStandardTimeOut]);
+    BOOL countIncremented = [app.staticTexts[@"Button tapped 1 time."] waitForExistenceWithTimeout:kStandardTimeOut];
+    if (!countIncremented) {
+        // Sometimes, the element doesn't respond to the tap, it seems to be an iOS 17 Simulator issue where the
+        // simulator reboots. Try to tap the element again.
+        [self waitForAndTapElement:app.otherElements[@"Increment via Flutter"]];
+        countIncremented = [app.staticTexts[@"Button tapped 1 time."] waitForExistenceWithTimeout:kStandardTimeOut];
+        if (!countIncremented) {
+            os_log(OS_LOG_DEFAULT, "%@", app.debugDescription);
+        }
+    }
+    XCTAssertTrue(countIncremented);
 
     // Back navigation.
     [app.buttons[@"POP"] tap];
@@ -114,6 +124,30 @@ static const CGFloat kStandardTimeOut = 60.0;
     // Back navigation.
     [app.navigationBars[@"Dual Flutter Views"].buttons[@"Flutter iOS Demos Home"] tap];
     XCTAssertTrue([app.navigationBars[@"Flutter iOS Demos Home"] waitForExistenceWithTimeout:kStandardTimeOut]);
+}
+
+- (void)testResize {
+  XCUIApplication *app = self.app;
+
+  [self waitForAndTapElement:app.buttons[@"Dynamic Content Resizing"]];
+  XCUIElement *flutterView = app.otherElements[@"flutter_view"];
+
+  CGRect flutterViewFrame = flutterView.frame;
+  CGSize flutterViewSize = flutterViewFrame.size;
+
+  XCTAssertTrue(flutterViewSize.height == 100);
+
+  [self waitForAndTapElement: app.otherElements[@"flutter_view"]];
+
+  XCUIElement *flutterViewPostClick = app.otherElements[@"flutter_view"];
+  CGRect flutterViewFramePostClick = flutterViewPostClick.frame;
+  CGSize flutterViewSizePostClick = flutterViewFramePostClick.size;
+
+  XCTAssertTrue(flutterViewSizePostClick.height == 200);
+
+  // Back navigation.
+  [app.navigationBars[@"Dynamic Content Resizing"].buttons[@"Flutter iOS Demos Home"] tap];
+  XCTAssertTrue([app.navigationBars[@"Flutter iOS Demos Home"] waitForExistenceWithTimeout:kStandardTimeOut]);
 }
 
 - (void)waitForAndTapElement:(XCUIElement *)element {

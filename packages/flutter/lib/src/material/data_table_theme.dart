@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'data_table.dart';
+library;
+
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-import 'material_state.dart';
 import 'theme.dart';
 
 // Examples can assume:
@@ -17,9 +19,8 @@ import 'theme.dart';
 /// widgets.
 ///
 /// Descendant widgets obtain the current [DataTableThemeData] object
-/// using `DataTableTheme.of(context)`. Instances of
-/// [DataTableThemeData] can be customized with
-/// [DataTableThemeData.copyWith].
+/// using [DataTableTheme.of]. Instances of [DataTableThemeData] can
+/// be customized with [DataTableThemeData.copyWith].
 ///
 /// Typically a [DataTableThemeData] is specified as part of the
 /// overall [Theme] with [ThemeData.dataTableTheme].
@@ -57,9 +58,16 @@ class DataTableThemeData with Diagnosticable {
     this.checkboxHorizontalMargin,
     this.headingCellCursor,
     this.dataRowCursor,
-  }) : assert(dataRowMinHeight == null || dataRowMaxHeight == null || dataRowMaxHeight >= dataRowMinHeight),
-       assert(dataRowHeight == null || (dataRowMinHeight == null && dataRowMaxHeight == null),
-         'dataRowHeight ($dataRowHeight) must not be set if dataRowMinHeight ($dataRowMinHeight) or dataRowMaxHeight ($dataRowMaxHeight) are set.'),
+    this.headingRowAlignment,
+  }) : assert(
+         dataRowMinHeight == null ||
+             dataRowMaxHeight == null ||
+             dataRowMaxHeight >= dataRowMinHeight,
+       ),
+       assert(
+         dataRowHeight == null || (dataRowMinHeight == null && dataRowMaxHeight == null),
+         'dataRowHeight ($dataRowHeight) must not be set if dataRowMinHeight ($dataRowMinHeight) or dataRowMaxHeight ($dataRowMaxHeight) are set.',
+       ),
        dataRowMinHeight = dataRowHeight ?? dataRowMinHeight,
        dataRowMaxHeight = dataRowHeight ?? dataRowMaxHeight;
 
@@ -68,7 +76,7 @@ class DataTableThemeData with Diagnosticable {
 
   /// {@macro flutter.material.dataTable.dataRowColor}
   /// {@macro flutter.material.DataTable.dataRowColor}
-  final MaterialStateProperty<Color?>? dataRowColor;
+  final WidgetStateProperty<Color?>? dataRowColor;
 
   /// {@macro flutter.material.dataTable.dataRowHeight}
   @Deprecated(
@@ -88,7 +96,7 @@ class DataTableThemeData with Diagnosticable {
 
   /// {@macro flutter.material.dataTable.headingRowColor}
   /// {@macro flutter.material.DataTable.headingRowColor}
-  final MaterialStateProperty<Color?>? headingRowColor;
+  final WidgetStateProperty<Color?>? headingRowColor;
 
   /// {@macro flutter.material.dataTable.headingRowHeight}
   final double? headingRowHeight;
@@ -109,16 +117,19 @@ class DataTableThemeData with Diagnosticable {
   final double? checkboxHorizontalMargin;
 
   /// If specified, overrides the default value of [DataColumn.mouseCursor].
-  final MaterialStateProperty<MouseCursor?>? headingCellCursor;
+  final WidgetStateProperty<MouseCursor?>? headingCellCursor;
 
   /// If specified, overrides the default value of [DataRow.mouseCursor].
-  final MaterialStateProperty<MouseCursor?>? dataRowCursor;
+  final WidgetStateProperty<MouseCursor?>? dataRowCursor;
+
+  /// If specified, overrides the default value of [DataColumn.headingRowAlignment].
+  final MainAxisAlignment? headingRowAlignment;
 
   /// Creates a copy of this object but with the given fields replaced with the
   /// new values.
   DataTableThemeData copyWith({
     Decoration? decoration,
-    MaterialStateProperty<Color?>? dataRowColor,
+    WidgetStateProperty<Color?>? dataRowColor,
     @Deprecated(
       'Migrate to use dataRowMinHeight and dataRowMaxHeight instead. '
       'This feature was deprecated after v3.7.0-5.0.pre.',
@@ -127,18 +138,21 @@ class DataTableThemeData with Diagnosticable {
     double? dataRowMinHeight,
     double? dataRowMaxHeight,
     TextStyle? dataTextStyle,
-    MaterialStateProperty<Color?>? headingRowColor,
+    WidgetStateProperty<Color?>? headingRowColor,
     double? headingRowHeight,
     TextStyle? headingTextStyle,
     double? horizontalMargin,
     double? columnSpacing,
     double? dividerThickness,
     double? checkboxHorizontalMargin,
-    MaterialStateProperty<MouseCursor?>? headingCellCursor,
-    MaterialStateProperty<MouseCursor?>? dataRowCursor,
+    WidgetStateProperty<MouseCursor?>? headingCellCursor,
+    WidgetStateProperty<MouseCursor?>? dataRowCursor,
+    MainAxisAlignment? headingRowAlignment,
   }) {
-    assert(dataRowHeight == null || (dataRowMinHeight == null && dataRowMaxHeight == null),
-      'dataRowHeight ($dataRowHeight) must not be set if dataRowMinHeight ($dataRowMinHeight) or dataRowMaxHeight ($dataRowMaxHeight) are set.');
+    assert(
+      dataRowHeight == null || (dataRowMinHeight == null && dataRowMaxHeight == null),
+      'dataRowHeight ($dataRowHeight) must not be set if dataRowMinHeight ($dataRowMinHeight) or dataRowMaxHeight ($dataRowMaxHeight) are set.',
+    );
     dataRowMinHeight = dataRowHeight ?? dataRowMinHeight;
     dataRowMaxHeight = dataRowHeight ?? dataRowMaxHeight;
 
@@ -157,12 +171,11 @@ class DataTableThemeData with Diagnosticable {
       checkboxHorizontalMargin: checkboxHorizontalMargin ?? this.checkboxHorizontalMargin,
       headingCellCursor: headingCellCursor ?? this.headingCellCursor,
       dataRowCursor: dataRowCursor ?? this.dataRowCursor,
+      headingRowAlignment: headingRowAlignment ?? this.headingRowAlignment,
     );
   }
 
   /// Linearly interpolate between two [DataTableThemeData]s.
-  ///
-  /// The argument `t` must not be null.
   ///
   /// {@macro dart.ui.shadow.lerp}
   static DataTableThemeData lerp(DataTableThemeData a, DataTableThemeData b, double t) {
@@ -171,19 +184,29 @@ class DataTableThemeData with Diagnosticable {
     }
     return DataTableThemeData(
       decoration: Decoration.lerp(a.decoration, b.decoration, t),
-      dataRowColor: MaterialStateProperty.lerp<Color?>(a.dataRowColor, b.dataRowColor, t, Color.lerp),
+      dataRowColor: WidgetStateProperty.lerp<Color?>(a.dataRowColor, b.dataRowColor, t, Color.lerp),
       dataRowMinHeight: lerpDouble(a.dataRowMinHeight, b.dataRowMinHeight, t),
       dataRowMaxHeight: lerpDouble(a.dataRowMaxHeight, b.dataRowMaxHeight, t),
       dataTextStyle: TextStyle.lerp(a.dataTextStyle, b.dataTextStyle, t),
-      headingRowColor: MaterialStateProperty.lerp<Color?>(a.headingRowColor, b.headingRowColor, t, Color.lerp),
+      headingRowColor: WidgetStateProperty.lerp<Color?>(
+        a.headingRowColor,
+        b.headingRowColor,
+        t,
+        Color.lerp,
+      ),
       headingRowHeight: lerpDouble(a.headingRowHeight, b.headingRowHeight, t),
       headingTextStyle: TextStyle.lerp(a.headingTextStyle, b.headingTextStyle, t),
       horizontalMargin: lerpDouble(a.horizontalMargin, b.horizontalMargin, t),
       columnSpacing: lerpDouble(a.columnSpacing, b.columnSpacing, t),
       dividerThickness: lerpDouble(a.dividerThickness, b.dividerThickness, t),
-      checkboxHorizontalMargin: lerpDouble(a.checkboxHorizontalMargin, b.checkboxHorizontalMargin, t),
+      checkboxHorizontalMargin: lerpDouble(
+        a.checkboxHorizontalMargin,
+        b.checkboxHorizontalMargin,
+        t,
+      ),
       headingCellCursor: t < 0.5 ? a.headingCellCursor : b.headingCellCursor,
       dataRowCursor: t < 0.5 ? a.dataRowCursor : b.dataRowCursor,
+      headingRowAlignment: t < 0.5 ? a.headingRowAlignment : b.headingRowAlignment,
     );
   }
 
@@ -203,6 +226,7 @@ class DataTableThemeData with Diagnosticable {
     checkboxHorizontalMargin,
     headingCellCursor,
     dataRowCursor,
+    headingRowAlignment,
   );
 
   @override
@@ -213,40 +237,78 @@ class DataTableThemeData with Diagnosticable {
     if (other.runtimeType != runtimeType) {
       return false;
     }
-    return other is DataTableThemeData
-      && other.decoration == decoration
-      && other.dataRowColor == dataRowColor
-      && other.dataRowMinHeight == dataRowMinHeight
-      && other.dataRowMaxHeight == dataRowMaxHeight
-      && other.dataTextStyle == dataTextStyle
-      && other.headingRowColor == headingRowColor
-      && other.headingRowHeight == headingRowHeight
-      && other.headingTextStyle == headingTextStyle
-      && other.horizontalMargin == horizontalMargin
-      && other.columnSpacing == columnSpacing
-      && other.dividerThickness == dividerThickness
-      && other.checkboxHorizontalMargin == checkboxHorizontalMargin
-      && other.headingCellCursor == headingCellCursor
-      && other.dataRowCursor == dataRowCursor;
+    return other is DataTableThemeData &&
+        other.decoration == decoration &&
+        other.dataRowColor == dataRowColor &&
+        other.dataRowMinHeight == dataRowMinHeight &&
+        other.dataRowMaxHeight == dataRowMaxHeight &&
+        other.dataTextStyle == dataTextStyle &&
+        other.headingRowColor == headingRowColor &&
+        other.headingRowHeight == headingRowHeight &&
+        other.headingTextStyle == headingTextStyle &&
+        other.horizontalMargin == horizontalMargin &&
+        other.columnSpacing == columnSpacing &&
+        other.dividerThickness == dividerThickness &&
+        other.checkboxHorizontalMargin == checkboxHorizontalMargin &&
+        other.headingCellCursor == headingCellCursor &&
+        other.dataRowCursor == dataRowCursor &&
+        other.headingRowAlignment == headingRowAlignment;
   }
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty<Decoration>('decoration', decoration, defaultValue: null));
-    properties.add(DiagnosticsProperty<MaterialStateProperty<Color?>>('dataRowColor', dataRowColor, defaultValue: null));
+    properties.add(
+      DiagnosticsProperty<WidgetStateProperty<Color?>>(
+        'dataRowColor',
+        dataRowColor,
+        defaultValue: null,
+      ),
+    );
     properties.add(DoubleProperty('dataRowMinHeight', dataRowMinHeight, defaultValue: null));
     properties.add(DoubleProperty('dataRowMaxHeight', dataRowMaxHeight, defaultValue: null));
-    properties.add(DiagnosticsProperty<TextStyle>('dataTextStyle', dataTextStyle, defaultValue: null));
-    properties.add(DiagnosticsProperty<MaterialStateProperty<Color?>>('headingRowColor', headingRowColor, defaultValue: null));
+    properties.add(
+      DiagnosticsProperty<TextStyle>('dataTextStyle', dataTextStyle, defaultValue: null),
+    );
+    properties.add(
+      DiagnosticsProperty<WidgetStateProperty<Color?>>(
+        'headingRowColor',
+        headingRowColor,
+        defaultValue: null,
+      ),
+    );
     properties.add(DoubleProperty('headingRowHeight', headingRowHeight, defaultValue: null));
-    properties.add(DiagnosticsProperty<TextStyle>('headingTextStyle', headingTextStyle, defaultValue: null));
+    properties.add(
+      DiagnosticsProperty<TextStyle>('headingTextStyle', headingTextStyle, defaultValue: null),
+    );
     properties.add(DoubleProperty('horizontalMargin', horizontalMargin, defaultValue: null));
     properties.add(DoubleProperty('columnSpacing', columnSpacing, defaultValue: null));
     properties.add(DoubleProperty('dividerThickness', dividerThickness, defaultValue: null));
-    properties.add(DoubleProperty('checkboxHorizontalMargin', checkboxHorizontalMargin, defaultValue: null));
-    properties.add(DiagnosticsProperty<MaterialStateProperty<MouseCursor?>?>('headingCellCursor', headingCellCursor, defaultValue: null));
-    properties.add(DiagnosticsProperty<MaterialStateProperty<MouseCursor?>?>('dataRowCursor', dataRowCursor, defaultValue: null));
+    properties.add(
+      DoubleProperty('checkboxHorizontalMargin', checkboxHorizontalMargin, defaultValue: null),
+    );
+    properties.add(
+      DiagnosticsProperty<WidgetStateProperty<MouseCursor?>?>(
+        'headingCellCursor',
+        headingCellCursor,
+        defaultValue: null,
+      ),
+    );
+    properties.add(
+      DiagnosticsProperty<WidgetStateProperty<MouseCursor?>?>(
+        'dataRowCursor',
+        dataRowCursor,
+        defaultValue: null,
+      ),
+    );
+    properties.add(
+      EnumProperty<MainAxisAlignment>(
+        'headingRowAlignment',
+        headingRowAlignment,
+        defaultValue: null,
+      ),
+    );
   }
 }
 
@@ -266,13 +328,7 @@ class DataTableThemeData with Diagnosticable {
 class DataTableTheme extends InheritedWidget {
   /// Constructs a data table theme that configures all descendant
   /// [DataTable] widgets.
-  ///
-  /// The [data] must not be null.
-  const DataTableTheme({
-    super.key,
-    required this.data,
-    required super.child,
-  });
+  const DataTableTheme({super.key, required this.data, required super.child});
 
   /// The properties used for all descendant [DataTable] widgets.
   final DataTableThemeData data;
@@ -288,7 +344,8 @@ class DataTableTheme extends InheritedWidget {
   /// DataTableThemeData theme = DataTableTheme.of(context);
   /// ```
   static DataTableThemeData of(BuildContext context) {
-    final DataTableTheme? dataTableTheme = context.dependOnInheritedWidgetOfExactType<DataTableTheme>();
+    final DataTableTheme? dataTableTheme = context
+        .dependOnInheritedWidgetOfExactType<DataTableTheme>();
     return dataTableTheme?.data ?? Theme.of(context).dataTableTheme;
   }
 

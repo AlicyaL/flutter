@@ -2,71 +2,225 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter_tools_core/flutter_tools_core.dart' hide BuildMode;
 import 'package:meta/meta.dart';
 
-import '../android/android_sdk.dart';
+import '../android/android_builder.dart';
+import '../android/gradle.dart';
+import '../artifacts.dart';
+import '../base/common.dart' show throwToolExit;
+import '../base/config.dart';
 import '../base/file_system.dart';
 import '../base/logger.dart';
-import '../base/os.dart';
+import '../base/template.dart';
 import '../build_info.dart';
 import '../build_system/build_system.dart';
-import '../commands/build_linux.dart';
-import '../commands/build_macos.dart';
-import '../commands/build_windows.dart';
+import '../build_system/targets/extension.dart';
+import '../cache.dart';
+import '../context/android_context.dart';
+import '../context/apple_context.dart';
+import '../context/tool_context.dart';
+import '../experimental/extension_build_manager.dart';
+import '../features.dart';
+import '../macos/xcode.dart';
 import '../runner/flutter_command.dart';
+import '../template.dart';
+import '../windows/visual_studio.dart';
 import 'build_aar.dart';
 import 'build_apk.dart';
 import 'build_appbundle.dart';
 import 'build_bundle.dart';
 import 'build_ios.dart';
 import 'build_ios_framework.dart';
+import 'build_linux.dart';
+import 'build_macos.dart';
 import 'build_macos_framework.dart';
+import 'build_swift_package.dart';
 import 'build_web.dart';
+import 'build_windows.dart';
+import 'darwin_add_to_app.dart';
 
 class BuildCommand extends FlutterCommand {
   BuildCommand({
-    required FileSystem fileSystem,
+    required AndroidContext androidContext,
+    required AppleContext appleContext,
     required BuildSystem buildSystem,
-    required OperatingSystemUtils osUtils,
-    required Logger logger,
-    required AndroidSdk? androidSdk,
+    required FeatureFlags featureFlags,
+    required TemplatePathProvider templatePathProvider,
+    required TemplateRenderer templateRenderer,
+    required ToolContext toolContext,
+    AndroidBuilder? androidBuilder,
+    this._extensionBuildManager,
     bool verboseHelp = false,
-  }){
-    _addSubcommand(
-        BuildAarCommand(
-          fileSystem: fileSystem,
-          androidSdk: androidSdk,
-          logger: logger,
-          verboseHelp: verboseHelp,
-        )
+  }) : _appleContext = appleContext,
+       super(toolContext: toolContext, verboseHelp: verboseHelp) {
+    final Xcode xcode = appleContext.xcode;
+
+    final codesign = DarwinAddToAppCodesigning.fromContexts(
+      appleContext: appleContext,
+      toolContext: toolContext,
     );
-    _addSubcommand(BuildApkCommand(logger: logger, verboseHelp: verboseHelp));
-    _addSubcommand(BuildAppBundleCommand(logger: logger, verboseHelp: verboseHelp));
-    _addSubcommand(BuildIOSCommand(logger: logger, verboseHelp: verboseHelp));
-    _addSubcommand(BuildIOSFrameworkCommand(
-      logger: logger,
-      buildSystem: buildSystem,
-      verboseHelp: verboseHelp,
-    ));
-    _addSubcommand(BuildMacOSFrameworkCommand(
-      logger: logger,
-      buildSystem: buildSystem,
-      verboseHelp: verboseHelp,
-    ));
-    _addSubcommand(BuildIOSArchiveCommand(logger: logger, verboseHelp: verboseHelp));
-    _addSubcommand(BuildBundleCommand(logger: logger, verboseHelp: verboseHelp));
-    _addSubcommand(BuildWebCommand(
-      fileSystem: fileSystem,
-      logger: logger,
-      verboseHelp: verboseHelp,
-    ));
-    _addSubcommand(BuildMacosCommand(logger: logger, verboseHelp: verboseHelp));
-    _addSubcommand(BuildLinuxCommand(
-      logger: logger,
-      operatingSystemUtils: osUtils,
-      verboseHelp: verboseHelp
-    ));
-    _addSubcommand(BuildWindowsCommand(logger: logger, verboseHelp: verboseHelp));
+    final AndroidBuilder resolvedAndroidBuilder =
+        androidBuilder ??
+        AndroidGradleBuilder.fromContexts(
+          analytics: analytics,
+          androidContext: androidContext,
+          toolContext: toolContext,
+        );
+    _addSubcommand(
+      BuildAarCommand(
+        androidBuilder: resolvedAndroidBuilder,
+        androidContext: androidContext,
+        buildSystem: buildSystem,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+      ),
+    );
+    _addSubcommand(
+      BuildApkCommand(
+        androidBuilder: resolvedAndroidBuilder,
+        androidContext: androidContext,
+        buildSystem: buildSystem,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+      ),
+    );
+    _addSubcommand(
+      BuildAppBundleCommand(
+        androidBuilder: resolvedAndroidBuilder,
+        androidContext: androidContext,
+        buildSystem: buildSystem,
+        templatePathProvider: templatePathProvider,
+        templateRenderer: templateRenderer,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+      ),
+    );
+    _addSubcommand(
+      BuildIOSCommand(
+        appleContext: appleContext,
+        buildSystem: buildSystem,
+        templateRenderer: templateRenderer,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+      ),
+    );
+    _addSubcommand(
+      BuildIOSFrameworkCommand(
+        appleContext: appleContext,
+        buildSystem: buildSystem,
+        codesign: codesign,
+        templateRenderer: templateRenderer,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+      ),
+    );
+    _addSubcommand(
+      BuildMacOSFrameworkCommand(
+        appleContext: appleContext,
+        buildSystem: buildSystem,
+        codesign: codesign,
+        templateRenderer: templateRenderer,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+      ),
+    );
+    _addSubcommand(
+      BuildSwiftPackage(
+        analytics: analytics,
+        buildSystem: buildSystem,
+        cocoaPods: appleContext.cocoaPods,
+        codesign: codesign,
+        featureFlags: featureFlags,
+        templatePathProvider: templatePathProvider,
+        templateRenderer: templateRenderer,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+        xcode: xcode,
+      ),
+    );
+
+    _addSubcommand(
+      BuildIOSArchiveCommand(
+        appleContext: appleContext,
+        buildSystem: buildSystem,
+        templateRenderer: templateRenderer,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+      ),
+    );
+    _addSubcommand(
+      BuildBundleCommand(
+        androidContext: androidContext,
+        buildSystem: buildSystem,
+        featureFlags: featureFlags,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+      ),
+    );
+    _addSubcommand(
+      BuildWebCommand(
+        buildSystem: buildSystem,
+        featureFlags: featureFlags,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+      ),
+    );
+    _addSubcommand(
+      BuildMacosCommand(
+        appleContext: appleContext,
+        buildSystem: buildSystem,
+        featureFlags: featureFlags,
+        templateRenderer: templateRenderer,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+      ),
+    );
+    _addSubcommand(
+      BuildLinuxCommand(
+        buildSystem: buildSystem,
+        featureFlags: featureFlags,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+      ),
+    );
+    _addSubcommand(
+      BuildWindowsCommand(
+        buildSystem: buildSystem,
+        featureFlags: featureFlags,
+        toolContext: toolContext,
+        verboseHelp: verboseHelp,
+        visualStudio: VisualStudio(toolContext: toolContext),
+      ),
+    );
+  }
+
+  final ExtensionBuildManager? _extensionBuildManager;
+
+  @override
+  Future<void> initializeDynamicOptions() async {
+    if (_extensionBuildManager case final extensionBuildManager?) {
+      final List<ExtensionBuildTarget> targets = await extensionBuildManager.getBuildTargets();
+      for (final target in targets) {
+        if (!subcommands.containsKey(target.name)) {
+          _addSubcommand(
+            ExtensionBuildSubCommand(
+              buildManager: extensionBuildManager,
+              target: target,
+              toolContext: toolContext,
+              verboseHelp: verboseHelp,
+            ),
+          );
+        } else {
+          final String extensionName = extensionBuildManager.extensionNameForBuildTarget(
+            target.name,
+          );
+          toolContext.logger.printWarning(
+            'Skipping custom build target "${target.name}" from extension "$extensionName" because a subcommand with that name already exists.',
+          );
+        }
+      }
+    }
   }
 
   void _addSubcommand(BuildSubCommand command) {
@@ -86,40 +240,96 @@ class BuildCommand extends FlutterCommand {
 
   @override
   Future<FlutterCommandResult> runCommand() async => FlutterCommandResult.fail();
+
+  final AppleContext _appleContext;
+
+  /// The Apple-specific context dependencies, exposed for hermetic testing.
+  @visibleForTesting
+  AppleContext get appleContext => _appleContext;
 }
 
 abstract class BuildSubCommand extends FlutterCommand {
   BuildSubCommand({
-    required Logger logger,
-    required bool verboseHelp
-  }): _logger = logger {
+    required this.logger,
+    required super.verboseHelp,
+    super.outputPreferences,
+    required super.toolContext,
+  }) {
     requiresPubspecYaml();
-    usesFatalWarningsOption(verboseHelp: verboseHelp);
+    CommonOptions.fatalWarnings.addTo(argParser, verboseHelp: verboseHelp);
   }
 
-  final Logger _logger;
+  @protected
+  final Logger logger;
+
+  /// Whether this command is supported and should be shown.
+  bool get supported => true;
+}
+
+/// A dynamically registered `flutter build` subcommand backed by a tool extension.
+class ExtensionBuildSubCommand extends BuildSubCommand {
+  ExtensionBuildSubCommand({
+    required this._buildManager,
+    required this.target,
+    required super.toolContext,
+    required super.verboseHelp,
+  }) : super(logger: toolContext.logger) {
+    registerOptionBundle(const BuildModeOptionsBundle());
+    argParser.addDescriptors(const <OptionDescriptor<Object?>>[
+      CommonOptions.target,
+      CommonOptions.pub,
+    ], verboseHelp: verboseHelp);
+  }
+
+  final ExtensionBuildManager _buildManager;
+
+  /// The custom build target definition provided by the tool extension.
+  final ExtensionBuildTarget target;
 
   @override
-  bool get reportNullSafety => true;
+  String get name => target.name;
 
-  bool get supported => true;
+  @override
+  String get description => target.description;
 
-  /// Display a message describing the current null safety runtime mode
-  /// that was selected.
-  ///
-  /// This is similar to the run message in run_hot.dart
-  @protected
-  void displayNullSafetyMode(BuildInfo buildInfo) {
-    if (buildInfo.nullSafetyMode != NullSafetyMode.sound) {
-      _logger.printStatus('');
-      _logger.printStatus(
-        'Building without sound null safety ⚠️',
-        emphasis: true,
-      );
-      _logger.printStatus(
-        'Dart 3 will only support sound null safety, see https://dart.dev/null-safety',
+  @override
+  Future<FlutterCommandResult> runCommand() async {
+    final ToolContext(:Artifacts artifacts, :Cache cache, :Config config, :FileSystem fs) =
+        toolContext;
+    final Directory projectDir = fs.currentDirectory;
+    final BuildInfo buildInfo = await getBuildInfo();
+    final Directory outputDir = resolveExtensionOutputDir(
+      buildMode: buildInfo.mode,
+      buildOutputDir: projectDir.childDirectory(getBuildDirectory(config, fs)),
+      fileSystem: fs,
+      projectDir: projectDir,
+      target: target,
+    );
+    final Map<String, String> resolvedArtifacts = resolveExtensionBuildTargetArtifacts(
+      artifacts: artifacts,
+      buildMode: buildInfo.mode,
+      target: target,
+    );
+
+    final ExtensionBuildResult result = await _buildManager.build(
+      buildMode: buildInfo.mode,
+      flutterRoot: fs.directory(cache.flutterRoot).uri,
+      mainPath: targetFile,
+      outputDir: outputDir.uri,
+      projectRoot: projectDir.uri,
+      resolvedArtifacts: resolvedArtifacts,
+      targetName: target.name,
+    );
+
+    if (result.success) {
+      return FlutterCommandResult.success();
+    } else {
+      final String? errorMessage = result.errorMessage;
+      throwToolExit(
+        errorMessage != null && errorMessage.isNotEmpty
+            ? 'Build failed: $errorMessage'
+            : 'Build failed.',
       );
     }
-    _logger.printStatus('');
   }
 }

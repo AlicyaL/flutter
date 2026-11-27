@@ -10,33 +10,18 @@ import 'dart:io';
 import 'package:collection/collection.dart';
 
 /// The HTTP verb for a [FakeRequest].
-enum HttpMethod {
-  get,
-  put,
-  delete,
-  post,
-  patch,
-  head,
-}
+enum HttpMethod { get, put, delete, post, patch, head }
 
 HttpMethod _fromMethodString(String value) {
-  final String name = value.toLowerCase();
-  switch (name) {
-    case 'get':
-      return HttpMethod.get;
-    case 'put':
-      return HttpMethod.put;
-    case 'delete':
-      return HttpMethod.delete;
-    case 'post':
-      return HttpMethod.post;
-    case 'patch':
-      return HttpMethod.patch;
-    case 'head':
-      return HttpMethod.head;
-    default:
-      throw StateError('Unrecognized HTTP method $value');
-  }
+  return switch (value.toLowerCase()) {
+    'get' => HttpMethod.get,
+    'put' => HttpMethod.put,
+    'delete' => HttpMethod.delete,
+    'post' => HttpMethod.post,
+    'patch' => HttpMethod.patch,
+    'head' => HttpMethod.head,
+    _ => throw StateError('Unrecognized HTTP method $value'),
+  };
 }
 
 String _toMethodString(HttpMethod method) {
@@ -46,7 +31,7 @@ String _toMethodString(HttpMethod method) {
     HttpMethod.delete => 'DELETE',
     HttpMethod.post => 'POST',
     HttpMethod.patch => 'PATCH',
-    HttpMethod.head => 'HEAD'
+    HttpMethod.head => 'HEAD',
   };
 }
 
@@ -57,7 +42,8 @@ String _toMethodString(HttpMethod method) {
 /// empty response. If [responseError] is non-null, will throw this instead
 /// of returning the response when closing the request.
 class FakeRequest {
-  const FakeRequest(this.uri, {
+  const FakeRequest(
+    this.uri, {
     this.method = HttpMethod.get,
     this.response = FakeResponse.empty,
     this.responseError,
@@ -80,13 +66,18 @@ class FakeResponse {
     this.statusCode = HttpStatus.ok,
     this.body = const <int>[],
     this.headers = const <String, List<String>>{},
+    this.bodyError,
   });
 
-  static const FakeResponse empty = FakeResponse();
+  static const empty = FakeResponse();
 
   final int statusCode;
   final List<int> body;
   final Map<String, List<String>> headers;
+
+  /// If non-null, the response body stream emits this error after [body],
+  /// simulating a connection that drops while receiving data.
+  final Exception? bodyError;
 }
 
 /// A fake implementation of the HttpClient used for testing.
@@ -100,13 +91,12 @@ class FakeHttpClient implements HttpClient {
   ///
   /// This does not enforce any order on the requests, but if multiple
   /// requests match then the first will be selected;
-  FakeHttpClient.list(List<FakeRequest> requests)
-    : _requests = requests.toList();
+  FakeHttpClient.list(List<FakeRequest> requests) : _requests = requests.toList();
 
   /// Creates an HTTP client that always returns an empty 200 request.
   FakeHttpClient.any() : _any = true, _requests = <FakeRequest>[];
 
-  bool _any = false;
+  var _any = false;
   final List<FakeRequest> _requests;
 
   @override
@@ -135,7 +125,8 @@ class FakeHttpClient implements HttpClient {
   }
 
   @override
-  Future<ConnectionTask<Socket>> Function(Uri url, String? proxyHost, int? proxyPort)? connectionFactory;
+  Future<ConnectionTask<Socket>> Function(Uri url, String? proxyHost, int? proxyPort)?
+  connectionFactory;
 
   @override
   Future<bool> Function(Uri url, String scheme, String realm)? authenticate;
@@ -147,14 +138,14 @@ class FakeHttpClient implements HttpClient {
   bool Function(X509Certificate cert, String host, int port)? badCertificateCallback;
 
   @override
-  Function(String line)? keyLog;
+  void Function(String line)? keyLog;
 
   @override
-  void close({bool force = false}) { }
+  void close({bool force = false}) {}
 
   @override
   Future<HttpClientRequest> delete(String host, int port, String path) {
-    final Uri uri = Uri(host: host, port: port, path: path);
+    final uri = Uri(host: host, port: port, path: path);
     return deleteUrl(uri);
   }
 
@@ -168,7 +159,7 @@ class FakeHttpClient implements HttpClient {
 
   @override
   Future<HttpClientRequest> get(String host, int port, String path) {
-    final Uri uri = Uri(host: host, port: port, path: path);
+    final uri = Uri(host: host, port: port, path: path);
     return getUrl(uri);
   }
 
@@ -179,7 +170,7 @@ class FakeHttpClient implements HttpClient {
 
   @override
   Future<HttpClientRequest> head(String host, int port, String path) {
-    final Uri uri = Uri(host: host, port: port, path: path);
+    final uri = Uri(host: host, port: port, path: path);
     return headUrl(uri);
   }
 
@@ -190,7 +181,7 @@ class FakeHttpClient implements HttpClient {
 
   @override
   Future<HttpClientRequest> open(String method, String host, int port, String path) {
-    final Uri uri = Uri(host: host, port: port, path: path);
+    final uri = Uri(host: host, port: port, path: path);
     return openUrl(method, uri);
   }
 
@@ -201,7 +192,7 @@ class FakeHttpClient implements HttpClient {
 
   @override
   Future<HttpClientRequest> patch(String host, int port, String path) {
-    final Uri uri = Uri(host: host, port: port, path: path);
+    final uri = Uri(host: host, port: port, path: path);
     return patchUrl(uri);
   }
 
@@ -212,7 +203,7 @@ class FakeHttpClient implements HttpClient {
 
   @override
   Future<HttpClientRequest> post(String host, int port, String path) {
-    final Uri uri = Uri(host: host, port: port, path: path);
+    final uri = Uri(host: host, port: port, path: path);
     return postUrl(uri);
   }
 
@@ -223,7 +214,7 @@ class FakeHttpClient implements HttpClient {
 
   @override
   Future<HttpClientRequest> put(String host, int port, String path) {
-    final Uri uri = Uri(host: host, port: port, path: path);
+    final uri = Uri(host: host, port: port, path: path);
     return putUrl(uri);
   }
 
@@ -232,7 +223,7 @@ class FakeHttpClient implements HttpClient {
     return _findRequest(HttpMethod.put, url, StackTrace.current);
   }
 
-  int _requestCount = 0;
+  var _requestCount = 0;
 
   _FakeHttpClientRequest _findRequest(HttpMethod method, Uri uri, StackTrace stackTrace) {
     // Ensure the fake client throws similar errors to the real client.
@@ -243,14 +234,7 @@ class FakeHttpClient implements HttpClient {
     }
     final String methodString = _toMethodString(method);
     if (_any) {
-      return _FakeHttpClientRequest(
-        FakeResponse.empty,
-        uri,
-        methodString,
-        null,
-        null,
-        stackTrace,
-      );
+      return _FakeHttpClientRequest(FakeResponse.empty, uri, methodString, null, null, stackTrace);
     }
     FakeRequest? matchedRequest;
     for (final FakeRequest request in _requests) {
@@ -262,7 +246,7 @@ class FakeHttpClient implements HttpClient {
     if (matchedRequest == null) {
       throw StateError(
         'Unexpected request for $method to $uri after $_requestCount requests.\n'
-        'Pending requests: ${_requests.join(',')}'
+        'Pending requests: ${_requests.join(',')}',
       );
     }
     _requestCount += 1;
@@ -279,13 +263,20 @@ class FakeHttpClient implements HttpClient {
 }
 
 class _FakeHttpClientRequest implements HttpClientRequest {
-  _FakeHttpClientRequest(this._response, this._uri, this._method, this._responseError, this._expectedBody, this._stackTrace);
+  _FakeHttpClientRequest(
+    this._response,
+    this._uri,
+    this._method,
+    this._responseError,
+    this._expectedBody,
+    this._stackTrace,
+  );
 
   final FakeResponse _response;
   final String _method;
   final Uri _uri;
   final Object? _responseError;
-  final List<int> _body = <int>[];
+  final _body = <int>[];
   final List<int>? _expectedBody;
   final StackTrace _stackTrace;
 
@@ -318,30 +309,33 @@ class _FakeHttpClientRequest implements HttpClientRequest {
   }
 
   @override
-  void addError(Object error, [StackTrace? stackTrace]) { }
+  void addError(Object error, [StackTrace? stackTrace]) {}
 
   @override
   Future<void> addStream(Stream<List<int>> stream) async {
-    final Completer<void> completer = Completer<void>();
+    final completer = Completer<void>();
     stream.listen(_body.addAll, onDone: completer.complete);
     await completer.future;
   }
 
   @override
   Future<HttpClientResponse> close() async {
-    final Completer<void> completer = Completer<void>();
+    final completer = Completer<void>();
     Timer.run(() {
       if (_expectedBody != null && !const ListEquality<int>().equals(_expectedBody, _body)) {
-        completer.completeError(StateError(
-          'Expected a request with the following body:\n$_expectedBody\n but found:\n$_body'
-        ), _stackTrace);
+        completer.completeError(
+          StateError(
+            'Expected a request with the following body:\n$_expectedBody\n but found:\n$_body',
+          ),
+          _stackTrace,
+        );
       } else {
         completer.complete();
       }
     });
     await completer.future;
     if (_responseError != null) {
-      return Future<HttpClientResponse>.error(_responseError!);
+      return Future<HttpClientResponse>.error(_responseError);
     }
     return _FakeHttpClientResponse(_response);
   }
@@ -356,7 +350,7 @@ class _FakeHttpClientRequest implements HttpClientRequest {
   Future<HttpClientResponse> get done => throw UnimplementedError();
 
   @override
-  Future<void> flush() async { }
+  Future<void> flush() async {}
 
   @override
   final HttpHeaders headers = _FakeHttpHeaders(<String, List<String>>{});
@@ -390,7 +384,7 @@ class _FakeHttpClientRequest implements HttpClientRequest {
 
 class _FakeHttpClientResponse extends Stream<List<int>> implements HttpClientResponse {
   _FakeHttpClientResponse(this._response)
-      : headers = _FakeHttpHeaders(Map<String, List<String>>.from(_response.headers));
+    : headers = _FakeHttpHeaders(Map<String, List<String>>.from(_response.headers));
 
   final FakeResponse _response;
 
@@ -427,10 +421,14 @@ class _FakeHttpClientResponse extends Stream<List<int>> implements HttpClientRes
     void Function()? onDone,
     bool? cancelOnError,
   }) {
-    final Stream<List<int>> response = Stream<List<int>>.fromIterable(<List<int>>[
-      _response.body,
-    ]);
-    return response.listen(onData, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+    return _body().listen(onData, onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }
+
+  Stream<List<int>> _body() async* {
+    yield _response.body;
+    if (_response.bodyError case final Exception error) {
+      throw error;
+    }
   }
 
   @override
@@ -486,13 +484,13 @@ class _FakeHttpHeaders implements HttpHeaders {
   DateTime? expires;
 
   @override
-  void forEach(void Function(String name, List<String> values) action) { }
+  void forEach(void Function(String name, List<String> values) action) {}
 
   @override
   String? host;
 
   @override
-  void noFolding(String name) {  }
+  void noFolding(String name) {}
 
   @override
   void remove(String name, Object value) {

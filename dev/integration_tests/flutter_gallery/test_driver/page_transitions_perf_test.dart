@@ -16,23 +16,23 @@ void main() {
     });
 
     tearDownAll(() async {
-        driver.close();
+      await driver.close();
     });
 
     test('measure', () async {
       final Timeline timeline = await driver.traceAction(() async {
         await driver.tap(find.text('Material'));
 
-        for (int i = 0; i < 10; i++) {
+        for (var i = 0; i < 10; i++) {
           await driver.tap(find.text('Banner'));
           await Future<void>.delayed(const Duration(milliseconds: 500));
           await driver.waitFor(find.byTooltip('Back'));
           await driver.tap(find.byTooltip('Back'));
           await Future<void>.delayed(const Duration(milliseconds: 500));
         }
-      });
+      }, retainPriorEvents: true);
 
-      final TimelineSummary summary = TimelineSummary.summarize(timeline);
+      final summary = TimelineSummary.summarize(timeline);
       await summary.writeTimelineToFile('page_transition_perf', pretty: true);
     }, timeout: Timeout.none);
   });

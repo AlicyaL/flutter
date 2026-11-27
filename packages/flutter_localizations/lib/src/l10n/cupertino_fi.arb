@@ -19,8 +19,21 @@
   "copyButtonLabel": "Kopioi",
   "pasteButtonLabel": "Liitä",
   "selectAllButtonLabel": "Valitse kaikki",
-  "tabSemanticsLabel": "Välilehti $tabIndex/$tabCount",
+  "tabSemanticsLabel": "Välilehti $tabIndex kautta $tabCount",
   "modalBarrierDismissLabel": "Ohita",
   "searchTextFieldPlaceholderLabel": "Hae",
-  "noSpellCheckReplacementsLabel": "No Replacements Found"
+  "noSpellCheckReplacementsLabel": "Korvaavia sanoja ei löydy",
+  "menuDismissLabel": "Hylkää valikko",
+  "lookUpButtonLabel": "Hae",
+  "searchWebButtonLabel": "Hae verkosta",
+  "shareButtonLabel": "Jaa…",
+  "clearButtonLabel": "Tyhjennä",
+  "cancelButtonLabel": "Peru",
+  "backButtonLabel": "Takaisin",
+  "expansionTileExpandedHint": "tiivistä kaksoisnapauttamalla",
+  "expansionTileCollapsedHint": "laajenna kaksoisnapauttamalla",
+  "expansionTileExpandedTapHint": "Tiivistä",
+  "expansionTileCollapsedTapHint": "Katso lisätietoja laajentamalla",
+  "expandedHint": "Tiivistetty",
+  "collapsedHint": "Laajennettu"
 }

@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+@Tags(<String>['flutter-test-driver'])
+library;
+
 import 'package:file/file.dart';
 import 'package:file_testing/file_testing.dart';
 
@@ -22,16 +25,19 @@ void main() {
     tryToDelete(tempDir);
   });
 
-  testWithoutContext('Can collect coverage in machine mode', () async {
-    final TestProject project = TestProject();
+  test('Can collect coverage in machine mode', () async {
+    final project = TestProject();
     await project.setUpIn(tempDir);
-    final FlutterTestTestDriver flutter = FlutterTestTestDriver(tempDir);
+    final flutter = FlutterTestTestDriver(tempDir);
     await flutter.test(coverage: true);
     await flutter.done;
 
     final File lcovFile = tempDir.childDirectory('coverage').childFile('lcov.info');
 
     expect(lcovFile, exists);
-    expect(lcovFile.readAsStringSync(), contains('main.dart')); // either 'SF:lib/main.dart or SF:lib\\main.dart
+    expect(
+      lcovFile.readAsStringSync(),
+      contains('main.dart'),
+    ); // either 'SF:lib/main.dart or SF:lib\\main.dart
   });
 }

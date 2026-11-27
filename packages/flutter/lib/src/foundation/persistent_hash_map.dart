@@ -35,8 +35,7 @@ class PersistentHashMap<K extends Object, V> {
   /// all mappings from the current one plus the given [key] to [value]
   /// mapping.
   PersistentHashMap<K, V> put(K key, V value) {
-    final _TrieNode newRoot =
-        (_root ?? _CompressedNode.empty).put(0, key, key.hashCode, value);
+    final _TrieNode newRoot = (_root ?? _CompressedNode.empty).put(0, key, key.hashCode, value);
     if (newRoot == _root) {
       return this;
     }
@@ -46,14 +45,10 @@ class PersistentHashMap<K extends Object, V> {
   /// Returns value associated with the given [key] or `null` if [key]
   /// is not in the map.
   @pragma('dart2js:as:trust')
-  V? operator[](K key) {
-    if (_root == null) {
-      return null;
-    }
-
+  V? operator [](K key) {
     // Unfortunately can not use unsafeCast<V?>(...) here because it leads
     // to worse code generation on VM.
-    return _root!.get(0, key, key.hashCode) as V?;
+    return _root?.get(0, key, key.hashCode) as V?;
   }
 }
 
@@ -65,7 +60,9 @@ abstract class _TrieNode {
   static const int hashBitsPerLevel = 5;
   static const int hashBitsPerLevelMask = (1 << hashBitsPerLevel) - 1;
 
+  @pragma('dart2js:tryInline')
   @pragma('vm:prefer-inline')
+  @pragma('wasm:prefer-inline')
   static int trieIndex(int hash, int bitIndex) {
     return (hash >>> bitIndex) & hashBitsPerLevelMask;
   }
@@ -99,9 +96,7 @@ class _FullNode extends _TrieNode {
     final int index = _TrieNode.trieIndex(keyHash, bitIndex);
     final _TrieNode node = _unsafeCast<_TrieNode?>(descendants[index]) ?? _CompressedNode.empty;
     final _TrieNode newNode = node.put(bitIndex + _TrieNode.hashBitsPerLevel, key, keyHash, value);
-    return identical(newNode, node)
-        ? this
-        : _FullNode(_copy(descendants)..[index] = newNode);
+    return identical(newNode, node) ? this : _FullNode(_copy(descendants)..[index] = newNode);
   }
 
   @override
@@ -118,7 +113,8 @@ class _FullNode extends _TrieNode {
 /// Instead of storing the full array of outgoing edges this node uses a
 /// compressed representation:
 ///
-///   * [_CompressedNode.occupied] has a bit set for indices which are occupied.
+///   * [_CompressedNode.occupiedIndices] has a bit set for indices which are
+///     occupied.
 ///   * furthermore, each occupied index can either be a `(key, value)` pair
 ///     representing an actual key/value mapping or a `(null, trieNode)` pair
 ///     representing a descendant node.
@@ -134,8 +130,7 @@ class _CompressedNode extends _TrieNode {
   factory _CompressedNode.single(int bitIndex, int keyHash, _TrieNode node) {
     final int bit = 1 << _TrieNode.trieIndex(keyHash, bitIndex);
     // A single (null, node) pair.
-    final List<Object?> keyValuePairs = _makeArray(2)
-      ..[1] = node;
+    final List<Object?> keyValuePairs = _makeArray(2)..[1] = node;
     return _CompressedNode(bit, keyValuePairs);
   }
 
@@ -163,13 +158,12 @@ class _CompressedNode extends _TrieNode {
 
       // Is this a (null, trieNode) pair?
       if (identical(keyOrNull, null)) {
-        final _TrieNode newNode = _unsafeCast<_TrieNode>(valueOrNode).put(
-            bitIndex + _TrieNode.hashBitsPerLevel, key, keyHash, value);
+        final _TrieNode newNode = _unsafeCast<_TrieNode>(valueOrNode)
+            .put(bitIndex + _TrieNode.hashBitsPerLevel, key, keyHash, value);
         if (newNode == valueOrNode) {
           return this;
         }
-        return _CompressedNode(
-            occupiedIndices, _copy(keyValuePairs)..[2 * index + 1] = newNode);
+        return _CompressedNode(occupiedIndices, _copy(keyValuePairs)..[2 * index + 1] = newNode);
       }
 
       if (key == keyOrNull) {
@@ -177,47 +171,53 @@ class _CompressedNode extends _TrieNode {
         // then avoid doing anything otherwise copy and update.
         return identical(value, valueOrNode)
             ? this
-            : _CompressedNode(
-                occupiedIndices, _copy(keyValuePairs)..[2 * index + 1] = value);
+            : _CompressedNode(occupiedIndices, _copy(keyValuePairs)..[2 * index + 1] = value);
       }
 
       // Two different keys at the same index, resolve collision.
       final _TrieNode newNode = _resolveCollision(
-          bitIndex + _TrieNode.hashBitsPerLevel,
-          keyOrNull,
-          valueOrNode,
-          key,
-          keyHash,
-          value);
+        bitIndex + _TrieNode.hashBitsPerLevel,
+        keyOrNull,
+        valueOrNode,
+        key,
+        keyHash,
+        value,
+      );
       return _CompressedNode(
-          occupiedIndices,
-          _copy(keyValuePairs)
-            ..[2 * index] = null
-            ..[2 * index + 1] = newNode);
+        occupiedIndices,
+        _copy(keyValuePairs)
+          ..[2 * index] = null
+          ..[2 * index + 1] = newNode,
+      );
     } else {
       // Adding new key/value mapping.
-      final int occupiedCount = _bitCount(occupiedIndices);
+      final int occupiedCount = occupiedIndices.oneBitCount;
       if (occupiedCount >= 16) {
         // Too many occupied: inflate compressed node into full node and
         // update descendant at the corresponding index.
         return _inflate(bitIndex)
-          ..descendants[_TrieNode.trieIndex(keyHash, bitIndex)] =
-              _CompressedNode.empty.put(
-                  bitIndex + _TrieNode.hashBitsPerLevel, key, keyHash, value);
+          ..descendants[_TrieNode.trieIndex(keyHash, bitIndex)] = _CompressedNode.empty.put(
+            bitIndex + _TrieNode.hashBitsPerLevel,
+            key,
+            keyHash,
+            value,
+          );
       } else {
         // Grow keyValuePairs by inserting key/value pair at the given
         // index.
         final int prefixLength = 2 * index;
         final int totalLength = 2 * occupiedCount;
         final List<Object?> newKeyValuePairs = _makeArray(totalLength + 2);
-        for (int srcIndex = 0; srcIndex < prefixLength; srcIndex++) {
+        for (var srcIndex = 0; srcIndex < prefixLength; srcIndex++) {
           newKeyValuePairs[srcIndex] = keyValuePairs[srcIndex];
         }
         newKeyValuePairs[prefixLength] = key;
         newKeyValuePairs[prefixLength + 1] = value;
-        for (int srcIndex = prefixLength, dstIndex = prefixLength + 2;
-            srcIndex < totalLength;
-            srcIndex++, dstIndex++) {
+        for (
+          int srcIndex = prefixLength, dstIndex = prefixLength + 2;
+          srcIndex < totalLength;
+          srcIndex++, dstIndex++
+        ) {
           newKeyValuePairs[dstIndex] = keyValuePairs[srcIndex];
         }
         return _CompressedNode(occupiedIndices | bit, newKeyValuePairs);
@@ -247,18 +247,19 @@ class _CompressedNode extends _TrieNode {
   /// Convert this node into an equivalent [_FullNode].
   _FullNode _inflate(int bitIndex) {
     final List<Object?> nodes = _makeArray(_FullNode.numElements);
-    int srcIndex = 0;
-    for (int dstIndex = 0; dstIndex < _FullNode.numElements; dstIndex++) {
+    var srcIndex = 0;
+    for (var dstIndex = 0; dstIndex < _FullNode.numElements; dstIndex++) {
       if (((occupiedIndices >>> dstIndex) & 1) != 0) {
         final Object? keyOrNull = keyValuePairs[srcIndex];
         if (keyOrNull == null) {
           nodes[dstIndex] = keyValuePairs[srcIndex + 1];
         } else {
           nodes[dstIndex] = _CompressedNode.empty.put(
-              bitIndex + _TrieNode.hashBitsPerLevel,
-              keyOrNull,
-              keyValuePairs[srcIndex].hashCode,
-              keyValuePairs[srcIndex + 1]);
+            bitIndex + _TrieNode.hashBitsPerLevel,
+            keyOrNull,
+            keyValuePairs[srcIndex].hashCode,
+            keyValuePairs[srcIndex + 1],
+          );
         }
         srcIndex += 2;
       }
@@ -266,22 +267,29 @@ class _CompressedNode extends _TrieNode {
     return _FullNode(nodes);
   }
 
+  @pragma('dart2js:tryInline')
   @pragma('vm:prefer-inline')
+  @pragma('wasm:prefer-inline')
   int _compressedIndex(int bit) {
-    return _bitCount(occupiedIndices & (bit - 1));
+    return (occupiedIndices & (bit - 1)).oneBitCount;
   }
 
-  static _TrieNode _resolveCollision(int bitIndex, Object existingKey,
-      Object? existingValue, Object key, int keyHash, Object? value) {
-    final int existingKeyHash = existingKey.hashCode;
+  static _TrieNode _resolveCollision(
+    int bitIndex,
+    Object existingKey,
+    Object? existingValue,
+    Object key,
+    int keyHash,
+    Object? value,
+  ) {
+    final existingKeyHash = existingKey.hashCode;
     // Check if this is a full hash collision and use _HashCollisionNode
     // in this case.
     return (existingKeyHash == keyHash)
-        ? _HashCollisionNode.fromCollision(
-            keyHash, existingKey, existingValue, key, value)
+        ? _HashCollisionNode.fromCollision(keyHash, existingKey, existingValue, key, value)
         : _CompressedNode.empty
-            .put(bitIndex, existingKey, existingKeyHash, existingValue)
-            .put(bitIndex, key, keyHash, value);
+              .put(bitIndex, existingKey, existingKeyHash, existingValue)
+              .put(bitIndex, key, keyHash, value);
   }
 }
 
@@ -292,7 +300,12 @@ class _HashCollisionNode extends _TrieNode {
   _HashCollisionNode(this.hash, this.keyValuePairs);
 
   factory _HashCollisionNode.fromCollision(
-      int keyHash, Object keyA, Object? valueA, Object keyB, Object? valueB) {
+    int keyHash,
+    Object keyA,
+    Object? valueA,
+    Object keyB,
+    Object? valueB,
+  ) {
     final List<Object?> list = _makeArray(4);
     list[0] = keyA;
     list[1] = valueA;
@@ -312,12 +325,11 @@ class _HashCollisionNode extends _TrieNode {
       if (index != -1) {
         return identical(keyValuePairs[index + 1], val)
             ? this
-            : _HashCollisionNode(
-                keyHash, _copy(keyValuePairs)..[index + 1] = val);
+            : _HashCollisionNode(keyHash, _copy(keyValuePairs)..[index + 1] = val);
       }
       final int length = keyValuePairs.length;
       final List<Object?> newArray = _makeArray(length + 2);
-      for (int i = 0; i < length; i++) {
+      for (var i = 0; i < length; i++) {
         newArray[i] = keyValuePairs[i];
       }
       newArray[length] = key;
@@ -327,8 +339,7 @@ class _HashCollisionNode extends _TrieNode {
 
     // Not a full hash collision, need to introduce a _CompressedNode which
     // uses previously unused bits.
-    return _CompressedNode.single(bitIndex, hash, this)
-        .put(bitIndex, key, keyHash, val);
+    return _CompressedNode.single(bitIndex, hash, this).put(bitIndex, key, keyHash, val);
   }
 
   @override
@@ -339,7 +350,7 @@ class _HashCollisionNode extends _TrieNode {
 
   int _indexOf(Object key) {
     final int length = keyValuePairs.length;
-    for (int i = 0; i < length; i += 2) {
+    for (var i = 0; i < length; i += 2) {
       if (key == keyValuePairs[i]) {
         return i;
       }
@@ -348,30 +359,16 @@ class _HashCollisionNode extends _TrieNode {
   }
 }
 
-/// Returns number of bits set in a 32bit integer.
-///
-/// dart2js safe because we work with 32bit integers.
-@pragma('vm:prefer-inline')
-@pragma('dart2js:tryInline')
-int _bitCount(int n) {
-  assert((n & 0xFFFFFFFF) == n);
-  n = n - ((n >> 1) & 0x55555555);
-  n = (n & 0x33333333) + ((n >>> 2) & 0x33333333);
-  n = (n + (n >> 4)) & 0x0F0F0F0F;
-  n = n + (n >> 8);
-  n = n + (n >> 16);
-  return n & 0x0000003F;
-}
-
 /// Create a copy of the given array.
 ///
 /// Caveat: do not replace with List.of or similar methods. They are
 /// considerably slower.
-@pragma('vm:prefer-inline')
 @pragma('dart2js:tryInline')
+@pragma('vm:prefer-inline')
+@pragma('wasm:prefer-inline')
 List<Object?> _copy(List<Object?> array) {
   final List<Object?> clone = _makeArray(array.length);
-  for (int j = 0; j < array.length; j++) {
+  for (var j = 0; j < array.length; j++) {
     clone[j] = array[j];
   }
   return clone;
@@ -384,17 +381,19 @@ List<Object?> _copy(List<Object?> array) {
 /// (growable array instance pointing to a fixed array instance) and
 /// consequently fixed length arrays are faster to allocated, require less
 /// memory and are faster to access (less indirections).
-@pragma('vm:prefer-inline')
 @pragma('dart2js:tryInline')
+@pragma('vm:prefer-inline')
+@pragma('wasm:prefer-inline')
 List<Object?> _makeArray(int length) {
   return List<Object?>.filled(length, null);
 }
 
 /// This helper method becomes an no-op when compiled with dart2js on
 /// with high level of optimizations enabled.
-@pragma('dart2js:tryInline')
 @pragma('dart2js:as:trust')
+@pragma('dart2js:tryInline')
 @pragma('vm:prefer-inline')
+@pragma('wasm:prefer-inline')
 T _unsafeCast<T>(Object? o) {
   return o as T;
 }

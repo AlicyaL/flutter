@@ -4,23 +4,30 @@
 
 import 'dart:async';
 
-import 'package:dds/dds.dart';
 import 'package:file/memory.dart';
+import 'package:flutter_tools/src/artifacts.dart';
+import 'package:flutter_tools/src/base/dds.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/platform.dart';
 import 'package:flutter_tools/src/build_info.dart';
+import 'package:flutter_tools/src/cache.dart';
+import 'package:flutter_tools/src/context/tool_context.dart';
 import 'package:flutter_tools/src/device.dart';
+import 'package:flutter_tools/src/native_assets.dart';
+import 'package:flutter_tools/src/project.dart';
 import 'package:flutter_tools/src/test/flutter_tester_device.dart';
 import 'package:flutter_tools/src/test/font_config_manager.dart';
 import 'package:flutter_tools/src/vmservice.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:test/fake.dart';
+import 'package:vm_service/vm_service.dart' as vm_service;
 
-import '../src/context.dart';
+import '../src/common.dart';
 import '../src/fake_process_manager.dart';
 import '../src/fake_vm_services.dart';
+import '../src/fakes.dart';
 
 void main() {
   late FakePlatform platform;
@@ -31,67 +38,171 @@ void main() {
   setUp(() {
     fileSystem = MemoryFileSystem.test();
     // Not Windows.
-    platform = FakePlatform(
-      environment: <String, String>{},
-    );
+    platform = FakePlatform(environment: <String, String>{});
     processManager = FakeProcessManager.any();
   });
 
   FlutterTesterTestDevice createDevice({
     List<String> dartEntrypointArgs = const <String>[],
     bool enableVmService = false,
-  }) =>
-    TestFlutterTesterDevice(
-      platform: platform,
-      fileSystem: fileSystem,
-      processManager: processManager,
-      enableVmService: enableVmService,
-      dartEntrypointArgs: dartEntrypointArgs,
-      uriConverter: (String input) => '$input/converted',
+    bool enableDds = true,
+    bool enableImpeller = false,
+    bool enableFlutterGpu = false,
+    bool startPaused = false,
+    FlutterProject? flutterProject,
+    FontConfigManager? fontConfigManager,
+    FakeVmServiceHost? vmServiceHost,
+  }) => TestFlutterTesterDevice(
+    platform: platform,
+    fileSystem: fileSystem,
+    processManager: processManager,
+    enableVmService: enableVmService,
+    enableDds: enableDds,
+    dartEntrypointArgs: dartEntrypointArgs,
+    enableImpeller: enableImpeller,
+    enableFlutterGpu: enableFlutterGpu,
+    startPaused: startPaused,
+    flutterProject: flutterProject,
+    fontConfigManager: fontConfigManager,
+    vmServiceHost: vmServiceHost,
+  );
+
+  test('Missing dir error caught for FontConfigManger.dispose', () async {
+    final fontConfigManager = FontConfigManager(
+      toolContext: FakeToolContext(
+        cache: Cache.test(processManager: processManager),
+        fs: fileSystem,
+        logger: BufferLogger.test(),
+      ),
     );
+
+    final Directory fontsDirectory = fileSystem.file(fontConfigManager.fontConfigFile).parent;
+    fontsDirectory.deleteSync(recursive: true);
+
+    await fontConfigManager.dispose();
+  });
+
+  test('Flutter tester passes through impeller config and environment variables.', () async {
+    processManager = FakeProcessManager.list(<FakeCommand>[]);
+    device = createDevice(enableImpeller: true, enableFlutterGpu: true);
+    processManager.addCommand(
+      FakeCommand(
+        command: const <String>[
+          '/',
+          '--disable-vm-service',
+          '--ipv6',
+          '--enable-checked-mode',
+          '--verify-entry-points',
+          '--enable-impeller',
+          '--enable-flutter-gpu',
+          '--enable-dart-profiling',
+          '--non-interactive',
+          '--use-test-fonts',
+          '--disable-asset-fonts',
+          '--packages=.dart_tool/package_config.json',
+          'example.dill',
+        ],
+        environment: <String, String>{
+          'FLUTTER_TEST': 'true',
+          'FONTCONFIG_FILE': device.fontConfigManager.fontConfigFile.path,
+          'SERVER_PORT': '0',
+          'APP_NAME': '',
+          'FLUTTER_TEST_IMPELLER': 'true',
+        },
+      ),
+    );
+
+    await device.start('example.dill');
+
+    expect(processManager, hasNoRemainingExpectations);
+  });
+
+  test('The PATH environment variable contains native assets build dir on Windows', () async {
+    platform = FakePlatform(
+      environment: <String, String>{'PATH': r'C:\existing\path'},
+      operatingSystem: 'windows',
+    );
+    processManager = FakeProcessManager.list(<FakeCommand>[]);
+    final FlutterProject project = FlutterProject.fromDirectoryTest(fileSystem.currentDirectory);
+    device = createDevice(enableImpeller: true, enableFlutterGpu: true, flutterProject: project);
+    processManager.addCommand(
+      FakeCommand(
+        command: const <String>[
+          '/',
+          '--disable-vm-service',
+          '--ipv6',
+          '--enable-checked-mode',
+          '--verify-entry-points',
+          '--enable-impeller',
+          '--enable-flutter-gpu',
+          '--enable-dart-profiling',
+          '--non-interactive',
+          '--use-test-fonts',
+          '--disable-asset-fonts',
+          '--packages=.dart_tool/package_config.json',
+          'example.dill',
+        ],
+        environment: <String, String>{
+          'FLUTTER_TEST': 'true',
+          'FONTCONFIG_FILE': device.fontConfigManager.fontConfigFile.path,
+          'SERVER_PORT': '0',
+          'APP_NAME': '',
+          'FLUTTER_TEST_IMPELLER': 'true',
+          'PATH':
+              '${device.nativeAssetsBuilder!.windowsBuildDirectory(project, toolContext: FakeToolContext(fs: fileSystem))};${platform.environment['PATH']}',
+        },
+      ),
+    );
+
+    await device.start('example.dill');
+
+    expect(processManager, hasNoRemainingExpectations);
+  });
 
   group('The FLUTTER_TEST environment variable is passed to the test process', () {
     setUp(() {
       processManager = FakeProcessManager.list(<FakeCommand>[]);
       device = createDevice();
 
-      fileSystem
-          .file('.dart_tool/package_config.json')
+      fileSystem.file('.dart_tool/package_config.json')
         ..createSync(recursive: true)
         ..writeAsStringSync('{"configVersion":2,"packages":[]}');
     });
 
     FakeCommand flutterTestCommand(String expectedFlutterTestValue) {
-      return FakeCommand(command: const <String>[
-        '/',
-        '--disable-vm-service',
-        '--ipv6',
-        '--enable-checked-mode',
-        '--verify-entry-points',
-        '--enable-software-rendering',
-        '--skia-deterministic-rendering',
-        '--enable-dart-profiling',
-        '--non-interactive',
-        '--use-test-fonts',
-        '--disable-asset-fonts',
-        '--packages=.dart_tool/package_config.json',
-        'example.dill',
-      ], environment: <String, String>{
-        'FLUTTER_TEST': expectedFlutterTestValue,
-        'FONTCONFIG_FILE': device.fontConfigManager.fontConfigFile.path,
-        'SERVER_PORT': '0',
-        'APP_NAME': '',
-      });
+      return FakeCommand(
+        command: const <String>[
+          '/',
+          '--disable-vm-service',
+          '--ipv6',
+          '--enable-checked-mode',
+          '--verify-entry-points',
+          '--enable-software-rendering',
+          '--skia-deterministic-rendering',
+          '--enable-dart-profiling',
+          '--non-interactive',
+          '--use-test-fonts',
+          '--disable-asset-fonts',
+          '--packages=.dart_tool/package_config.json',
+          'example.dill',
+        ],
+        environment: <String, String>{
+          'FLUTTER_TEST': expectedFlutterTestValue,
+          'FONTCONFIG_FILE': device.fontConfigManager.fontConfigFile.path,
+          'SERVER_PORT': '0',
+          'APP_NAME': '',
+        },
+      );
     }
 
-    testUsingContext('as true when not originally set', () async {
+    test('as true when not originally set', () async {
       processManager.addCommand(flutterTestCommand('true'));
 
       await device.start('example.dill');
       expect(processManager, hasNoRemainingExpectations);
     });
 
-    testUsingContext('as true when set to true', () async {
+    test('as true when set to true', () async {
       platform.environment = <String, String>{'FLUTTER_TEST': 'true'};
       processManager.addCommand(flutterTestCommand('true'));
 
@@ -99,7 +210,7 @@ void main() {
       expect(processManager, hasNoRemainingExpectations);
     });
 
-    testUsingContext('as false when set to false', () async {
+    test('as false when set to false', () async {
       platform.environment = <String, String>{'FLUTTER_TEST': 'false'};
       processManager.addCommand(flutterTestCommand('false'));
 
@@ -107,7 +218,7 @@ void main() {
       expect(processManager, hasNoRemainingExpectations);
     });
 
-    testUsingContext('unchanged when set', () async {
+    test('unchanged when set', () async {
       platform.environment = <String, String>{'FLUTTER_TEST': 'neither true nor false'};
       processManager.addCommand(flutterTestCommand('neither true nor false'));
 
@@ -144,7 +255,7 @@ void main() {
       device = createDevice(dartEntrypointArgs: <String>['--foo', '--bar']);
     });
 
-    testUsingContext('Can pass additional arguments to tester binary', () async {
+    test('Can pass additional arguments to tester binary', () async {
       await device.start('example.dill');
 
       expect(processManager, hasNoRemainingExpectations);
@@ -152,6 +263,7 @@ void main() {
   });
 
   group('DDS', () {
+    late DDSLauncherCallback originalDdsLauncher;
     setUp(() {
       processManager = FakeProcessManager.list(<FakeCommand>[
         const FakeCommand(
@@ -175,27 +287,119 @@ void main() {
         ),
       ]);
       device = createDevice(enableVmService: true);
+      originalDdsLauncher = ddsLauncherCallback;
+      ddsLauncherCallback =
+          ({
+            required Uri remoteVmServiceUri,
+            String? appName = 'Fake App',
+            Uri? serviceUri,
+            bool enableAuthCodes = true,
+            bool serveDevTools = false,
+            Uri? devToolsServerAddress,
+            bool enableServicePortFallback = false,
+            List<String> cachedUserTags = const <String>[],
+            String? dartExecutable,
+            String? google3WorkspaceRoot,
+          }) async {
+            expect(appName, contains('Kind: Flutter'));
+            expect(appName, contains('Device: flutter tester'));
+            return FakeDartDevelopmentServiceLauncher(uri: Uri.parse('http://localhost:1234'));
+          };
     });
 
-    testUsingContext('skips setting VM Service port and uses the input port for DDS instead', () async {
+    tearDown(() {
+      ddsLauncherCallback = originalDdsLauncher;
+    });
+
+    test('skips setting VM Service port and uses the input port for DDS instead', () async {
       await device.start('example.dill');
       await device.vmServiceUri;
 
-      final Uri uri = await (device as TestFlutterTesterDevice).ddsServiceUriFuture();
-      expect(uri.port, 1234);
+      final Uri? uri = await (device as TestFlutterTesterDevice).vmServiceUri;
+      expect(uri!.port, 1234);
     });
+  });
 
-    testUsingContext('sets up UriConverter from context', () async {
-      await device.start('example.dill');
-      await device.vmServiceUri;
+  // Regression test for https://github.com/flutter/flutter/issues/192470.
+  test('waits for the UI isolate to reach PauseStart when startPaused is true', () async {
+    processManager = FakeProcessManager.list(<FakeCommand>[
+      const FakeCommand(
+        command: <String>[
+          '/',
+          '--vm-service-port=1234',
+          '--start-paused',
+          '--ipv6',
+          '--enable-checked-mode',
+          '--verify-entry-points',
+          '--enable-software-rendering',
+          '--skia-deterministic-rendering',
+          '--enable-dart-profiling',
+          '--non-interactive',
+          '--use-test-fonts',
+          '--disable-asset-fonts',
+          '--packages=.dart_tool/package_config.json',
+          'example.dill',
+        ],
+        stdout: 'The Dart VM service is listening on http://localhost:1234',
+        stderr: 'failure',
+      ),
+    ]);
+    final isolate = vm_service.Isolate(
+      id: '1',
+      pauseEvent: vm_service.Event(kind: vm_service.EventKind.kNone, timestamp: 0),
+      breakpoints: <vm_service.Breakpoint>[],
+      libraries: <vm_service.LibraryRef>[],
+      livePorts: 0,
+      name: 'main',
+      number: '1',
+      pauseOnExit: false,
+      runnable: true,
+      startTime: 0,
+      isSystemIsolate: false,
+      isolateFlags: <vm_service.IsolateFlag>[],
+    );
+    final fakeFlutterView = FlutterView(id: 'a', uiIsolate: isolate);
+    final fakeVmServiceHost = FakeVmServiceHost(
+      requests: <VmServiceExpectation>[
+        const FakeVmServiceRequest(
+          method: 'streamListen',
+          args: <String, Object>{'streamId': 'Debug'},
+        ),
+        FakeVmServiceRequest(
+          method: kListViewsMethod,
+          jsonResponse: <String, Object>{
+            'views': <Object>[fakeFlutterView.toJson()],
+          },
+        ),
+        FakeVmServiceRequest(
+          method: 'getIsolate',
+          jsonResponse: isolate.toJson(),
+          args: <String, Object>{'isolateId': '1'},
+        ),
+        FakeVmServiceStreamResponse(
+          streamId: 'Debug',
+          event: vm_service.Event(
+            kind: vm_service.EventKind.kPauseStart,
+            isolate: isolate,
+            timestamp: 1,
+          ),
+        ),
+      ],
+    );
+    device = createDevice(
+      enableVmService: true,
+      enableDds: false,
+      startPaused: true,
+      fontConfigManager: FakeFontConfigManager(fileSystem),
+      vmServiceHost: fakeVmServiceHost,
+    );
 
-      final FakeDartDevelopmentService dds = (device as TestFlutterTesterDevice).dds
-      as FakeDartDevelopmentService;
-      final String? result = dds
-          .uriConverter
-          ?.call('test');
-      expect(result, 'test/converted');
-    });
+    await device.start('example.dill');
+    final Uri? uri = await device.vmServiceUri;
+
+    expect(uri!.port, 1234);
+    expect(fakeVmServiceHost.hasRemainingExpectations, isFalse);
+    expect(processManager, hasNoRemainingExpectations);
   });
 }
 
@@ -204,53 +408,61 @@ void main() {
 /// Uses a mock HttpServer. We don't want to bind random ports in our CI hosts.
 class TestFlutterTesterDevice extends FlutterTesterTestDevice {
   TestFlutterTesterDevice({
-    required super.platform,
-    required super.fileSystem,
-    required super.processManager,
+    required Platform platform,
+    required FileSystem fileSystem,
+    required ProcessManager processManager,
     required super.enableVmService,
     required List<String> dartEntrypointArgs,
-    required UriConverter uriConverter,
+    required bool enableImpeller,
+    required bool enableFlutterGpu,
+    bool enableDds = true,
+    bool startPaused = false,
+    super.flutterProject,
+    FontConfigManager? fontConfigManager,
+    this.vmServiceHost,
   }) : super(
-    id: 999,
-    shellPath: '/',
-    logger: BufferLogger.test(),
-    debuggingOptions: DebuggingOptions.enabled(
-      const BuildInfo(
-        BuildMode.debug,
-        '',
-        treeShakeIcons: false,
-      ),
-      hostVmServicePort: 1234,
-      dartEntrypointArgs: dartEntrypointArgs,
-    ),
-    machine: false,
-    host: InternetAddress.loopbackIPv6,
-    testAssetDirectory: null,
-    flutterProject: null,
-    icudtlPath: null,
-    compileExpression: null,
-    fontConfigManager: FontConfigManager(),
-    uriConverter: uriConverter,
-  );
-  late DartDevelopmentService dds;
+         id: 999,
+         toolContext: FakeToolContext(
+           artifacts: Artifacts.test(),
+           flutterVersion: FakeFlutterVersion(),
+           fs: fileSystem,
+           logger: BufferLogger.test(),
+           platform: platform,
+           processManager: processManager,
+         ),
+         flutterTesterBinPath: '/',
+         debuggingOptions: DebuggingOptions.enabled(
+           const BuildInfo(
+             BuildMode.debug,
+             '',
+             treeShakeIcons: false,
+             packageConfigPath: '.dart_tool/package_config.json',
+           ),
+           enableDds: enableDds,
+           startPaused: startPaused,
+           hostVmServicePort: 1234,
+           dartEntrypointArgs: dartEntrypointArgs,
+           enableImpeller: enableImpeller ? ImpellerStatus.enabled : ImpellerStatus.platformDefault,
+           enableFlutterGpu: enableFlutterGpu,
+         ),
+         machine: false,
+         host: InternetAddress.loopbackIPv6,
+         testAssetDirectory: null,
+         icudtlPath: null,
+         compileExpression: null,
+         fontConfigManager:
+             fontConfigManager ??
+             FontConfigManager(
+               toolContext: FakeToolContext(
+                 cache: Cache.test(processManager: FakeProcessManager.any()),
+                 fs: fileSystem,
+                 logger: BufferLogger.test(),
+               ),
+             ),
+         nativeAssetsBuilder: FakeNativeAssetsBuilder(),
+       );
 
-  final Completer<Uri> _ddsServiceUriCompleter = Completer<Uri>();
-
-  Future<Uri> ddsServiceUriFuture() => _ddsServiceUriCompleter.future;
-
-  @override
-  Future<DartDevelopmentService> startDds(
-    Uri uri, {
-    UriConverter? uriConverter,
-  }) async {
-    _ddsServiceUriCompleter.complete(uri);
-    dds = FakeDartDevelopmentService(
-      Uri.parse('http://localhost:${debuggingOptions.hostVmServicePort}'),
-      Uri.parse('http://localhost:8080'),
-      uriConverter: uriConverter,
-    );
-    return dds;
-  }
+  final FakeVmServiceHost? vmServiceHost;
 
   @override
   Future<FlutterVmService> connectToVmServiceImpl(
@@ -258,31 +470,33 @@ class TestFlutterTesterDevice extends FlutterTesterTestDevice {
     CompileExpression? compileExpression,
     required Logger logger,
   }) async {
-    return FakeVmServiceHost(requests: <VmServiceExpectation>[
-      const FakeVmServiceRequest(method: '_serveObservatory'),
-    ]).vmService;
+    return (vmServiceHost ?? FakeVmServiceHost(requests: <VmServiceExpectation>[])).vmService;
   }
 
   @override
   Future<HttpServer> bind(InternetAddress? host, int port) async => FakeHttpServer();
 
   @override
-  Future<StreamChannel<String>> get remoteChannel async => StreamChannelController<String>().foreign;
+  Future<StreamChannel<String>> get remoteChannel async =>
+      StreamChannelController<String>().foreign;
 }
 
-class FakeDartDevelopmentService extends Fake implements DartDevelopmentService {
-  FakeDartDevelopmentService(this.uri, this.original, {this.uriConverter});
-
-  final Uri original;
-  final UriConverter? uriConverter;
-
-  @override
-  final Uri uri;
-
-  @override
-  Uri get remoteVmServiceUri => original;
-}
 class FakeHttpServer extends Fake implements HttpServer {
   @override
   int get port => 0;
+}
+
+class FakeFontConfigManager extends Fake implements FontConfigManager {
+  FakeFontConfigManager(this._fileSystem);
+
+  final FileSystem _fileSystem;
+
+  @override
+  late final File fontConfigFile = _fileSystem.file('fonts.conf');
+}
+
+class FakeNativeAssetsBuilder extends Fake implements TestCompilerNativeAssetsBuilder {
+  @override
+  String windowsBuildDirectory(FlutterProject project, {required ToolContext toolContext}) =>
+      r'C:\native_assets\path';
 }

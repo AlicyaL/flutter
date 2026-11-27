@@ -20,11 +20,22 @@ import '../material_localizations.dart';
 // bottom of this file, and used by the [_MaterialLocalizationsDelegate.load]
 // method defined in `flutter_localizations/lib/src/material_localizations.dart`.
 
+// TODO(goderbauer): Extend the generator to properly format the output.
+// dart format off
+
 /// The translations for Afrikaans (`af`).
+@Deprecated(
+  'Use MaterialLocalizationAf from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationAf extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Afrikaans.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationAf from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationAf({
     super.localeName = 'af',
     required super.fullYearFormat,
@@ -60,13 +71,16 @@ class MaterialLocalizationAf extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Kanselleer';
 
   @override
+  String get clearButtonTooltip => 'Vee teks uit';
+
+  @override
   String get closeButtonLabel => 'Maak toe';
 
   @override
   String get closeButtonTooltip => 'Maak toe';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Uitgevou';
 
   @override
   String get collapsedIconTapHint => 'Vou uit';
@@ -126,22 +140,22 @@ class MaterialLocalizationAf extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigasiekieslys';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Ingevou';
 
   @override
   String get expandedIconTapHint => 'Vou in';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'dubbeltik om uit te vou';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Vou uit vir meer besonderhede';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'dubbeltik om in te vou';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Vou in';
 
   @override
   String get firstPageTooltip => 'Eerste bladsy';
@@ -330,7 +344,13 @@ class MaterialLocalizationAf extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Lisensies';
 
   @override
+  String get lookUpButtonLabel => 'Kyk op';
+
+  @override
   String get menuBarMenuLabel => 'Kieslysbalkkieslys';
+
+  @override
+  String get menuDismissLabel => 'Maak kieslys toe';
 
   @override
   String get modalBarrierDismissLabel => 'Maak toe';
@@ -417,7 +437,7 @@ class MaterialLocalizationAf extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Stoor';
 
   @override
-  String get scanTextButtonLabel => 'Skena umbhalo';
+  String get scanTextButtonLabel => 'Skandeer teks';
 
   @override
   String get scrimLabel => 'Skerm';
@@ -432,10 +452,16 @@ class MaterialLocalizationAf extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Soek';
 
   @override
+  String get searchWebButtonLabel => 'Deursoek web';
+
+  @override
   String get selectAllButtonLabel => 'Kies alles';
 
   @override
   String get selectYearSemanticsLabel => 'Kies jaar';
+
+  @override
+  String get selectedDateLabel => 'Gekies';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -454,6 +480,9 @@ class MaterialLocalizationAf extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Deel';
 
   @override
   String get showAccountsLabel => 'Wys rekeninge';
@@ -499,10 +528,18 @@ class MaterialLocalizationAf extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Amharic (`am`).
+@Deprecated(
+  'Use MaterialLocalizationAm from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationAm extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Amharic.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationAm from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationAm({
     super.localeName = 'am',
     required super.fullYearFormat,
@@ -538,13 +575,16 @@ class MaterialLocalizationAm extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'ይቅር';
 
   @override
+  String get clearButtonTooltip => 'ጽሁፍን አጽዳ';
+
+  @override
   String get closeButtonLabel => 'ዝጋ';
 
   @override
   String get closeButtonTooltip => 'ዝጋ';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'ተዘርግቷል';
 
   @override
   String get collapsedIconTapHint => 'ዘርጋ';
@@ -604,25 +644,25 @@ class MaterialLocalizationAm extends GlobalMaterialLocalizations {
   String get drawerLabel => 'የዳሰሳ ምናሌ';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'ተሰብስቧል';
 
   @override
   String get expandedIconTapHint => 'ሰብስብ';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'ለመዘርጋት ድርብ ሁለቴ መታ ያድርጉ';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'ለተጨማሪ ዝርዝሮች ይዘርጉ';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ለመሰብሰብ ሁለቴ መታ ያድርጉ';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'ሰብስብ';
 
   @override
-  String get firstPageTooltip => 'የመጀመሪያው ገጽ';
+  String get firstPageTooltip => 'የመጀመሪያው ገፅ';
 
   @override
   String get hideAccountsLabel => 'መለያዎችን ደብቅ';
@@ -784,7 +824,7 @@ class MaterialLocalizationAm extends GlobalMaterialLocalizations {
   String get keyboardKeySpace => 'ክፍተት';
 
   @override
-  String get lastPageTooltip => 'የመጨረሻው ገጽ';
+  String get lastPageTooltip => 'የመጨረሻው ገፅ';
 
   @override
   String? get licensesPackageDetailTextFew => null;
@@ -808,7 +848,13 @@ class MaterialLocalizationAm extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'ፈቃዶች';
 
   @override
+  String get lookUpButtonLabel => 'ይመልከቱ';
+
+  @override
   String get menuBarMenuLabel => 'የምናሌ አሞሌ ምናሌ';
+
+  @override
+  String get menuDismissLabel => 'ምናሌን አሰናብት';
 
   @override
   String get modalBarrierDismissLabel => 'አሰናብት';
@@ -820,7 +866,7 @@ class MaterialLocalizationAm extends GlobalMaterialLocalizations {
   String get nextMonthTooltip => 'ቀጣይ ወር';
 
   @override
-  String get nextPageTooltip => 'ቀጣይ ገጽ';
+  String get nextPageTooltip => 'ቀጣይ ገፅ';
 
   @override
   String get okButtonLabel => 'እሺ';
@@ -847,7 +893,7 @@ class MaterialLocalizationAm extends GlobalMaterialLocalizations {
   String get previousMonthTooltip => 'ቀዳሚ ወር';
 
   @override
-  String get previousPageTooltip => 'ቀዳሚ ገጽ';
+  String get previousPageTooltip => 'ቀዳሚ ገፅ';
 
   @override
   String get refreshIndicatorSemanticLabel => 'አድስ';
@@ -895,7 +941,7 @@ class MaterialLocalizationAm extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'አስቀምጥ';
 
   @override
-  String get scanTextButtonLabel => 'ጽሑፍ ይቃኙ';
+  String get scanTextButtonLabel => 'ጽሁፍን ቃኝ';
 
   @override
   String get scrimLabel => 'ገዳቢ';
@@ -910,10 +956,16 @@ class MaterialLocalizationAm extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'ይፈልጉ';
 
   @override
+  String get searchWebButtonLabel => 'ድርን ፈልግ';
+
+  @override
   String get selectAllButtonLabel => 'ሁሉንም ምረጥ';
 
   @override
   String get selectYearSemanticsLabel => 'ዓመት ይምረጡ';
+
+  @override
+  String get selectedDateLabel => 'ተመርጧል';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -932,6 +984,9 @@ class MaterialLocalizationAm extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'አጋራ';
 
   @override
   String get showAccountsLabel => 'መለያዎችን አሳይ';
@@ -977,10 +1032,18 @@ class MaterialLocalizationAm extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Arabic (`ar`).
+@Deprecated(
+  'Use MaterialLocalizationAr from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationAr extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Arabic.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationAr from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationAr({
     super.localeName = 'ar',
     required super.fullYearFormat,
@@ -1016,13 +1079,16 @@ class MaterialLocalizationAr extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'الإلغاء';
 
   @override
+  String get clearButtonTooltip => 'محو النص';
+
+  @override
   String get closeButtonLabel => 'الإغلاق';
 
   @override
   String get closeButtonTooltip => 'إغلاق';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'موسَّع';
 
   @override
   String get collapsedIconTapHint => 'توسيع';
@@ -1082,22 +1148,22 @@ class MaterialLocalizationAr extends GlobalMaterialLocalizations {
   String get drawerLabel => 'قائمة تنقل';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'مصغَّر';
 
   @override
   String get expandedIconTapHint => 'تصغير';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'انقر مرّتين للتوسيع';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'وسِّع المربّع لعرض مزيد من التفاصيل.';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'يُرجى النقر مرّتين للتصغير.';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'تصغير';
 
   @override
   String get firstPageTooltip => 'الصفحة الأولى';
@@ -1286,7 +1352,13 @@ class MaterialLocalizationAr extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'التراخيص';
 
   @override
+  String get lookUpButtonLabel => 'بحث عام';
+
+  @override
   String get menuBarMenuLabel => 'قائمة شريط القوائم';
+
+  @override
+  String get menuDismissLabel => 'إغلاق القائمة';
 
   @override
   String get modalBarrierDismissLabel => 'رفض';
@@ -1373,7 +1445,7 @@ class MaterialLocalizationAr extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'الحفظ';
 
   @override
-  String get scanTextButtonLabel => 'مسح النص';
+  String get scanTextButtonLabel => 'مسح النص ضوئيًا';
 
   @override
   String get scrimLabel => 'تمويه';
@@ -1388,10 +1460,16 @@ class MaterialLocalizationAr extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'بحث';
 
   @override
+  String get searchWebButtonLabel => 'البحث على الويب';
+
+  @override
   String get selectAllButtonLabel => 'اختيار الكل';
 
   @override
   String get selectYearSemanticsLabel => 'اختيار العام';
+
+  @override
+  String get selectedDateLabel => 'التاريخ المحدّد';
 
   @override
   String? get selectedRowCountTitleFew => r'تم اختيار $selectedRowCount عنصر';
@@ -1410,6 +1488,9 @@ class MaterialLocalizationAr extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'لم يتم اختيار أي عنصر';
+
+  @override
+  String get shareButtonLabel => 'مشاركة';
 
   @override
   String get showAccountsLabel => 'إظهار الحسابات';
@@ -1455,10 +1536,18 @@ class MaterialLocalizationAr extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Assamese (`as`).
+@Deprecated(
+  'Use MaterialLocalizationAs from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Assamese.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationAs from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationAs({
     super.localeName = 'as',
     required super.fullYearFormat,
@@ -1494,13 +1583,16 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'বাতিল কৰক';
 
   @override
+  String get clearButtonTooltip => 'পাঠ মচক';
+
+  @override
   String get closeButtonLabel => 'বন্ধ কৰক';
 
   @override
   String get closeButtonTooltip => 'বন্ধ কৰক';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'বিস্তাৰ কৰা আছে';
 
   @override
   String get collapsedIconTapHint => 'বিস্তাৰ কৰক';
@@ -1521,10 +1613,10 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get dateHelpText => 'mm/dd/yyyy';
 
   @override
-  String get dateInputLabel => 'তাৰিখটো দিয়ক';
+  String get dateInputLabel => 'তাৰিখ দিয়ক';
 
   @override
-  String get dateOutOfRangeLabel => 'সীমাৰ বাহিৰত।';
+  String get dateOutOfRangeLabel => 'পৰিসৰৰ বাহিৰত।';
 
   @override
   String get datePickerHelpText => 'তাৰিখ বাছনি কৰক';
@@ -1554,28 +1646,28 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get dialModeButtonLabel => 'ডায়েল বাছনিকৰ্তাৰ ম’ডলৈ সলনি কৰক';
 
   @override
-  String get dialogLabel => "ডায়ল'গ";
+  String get dialogLabel => 'ডায়লগ';
 
   @override
   String get drawerLabel => 'নেভিগেশ্বন মেনু';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'সংকোচন কৰা আছে';
 
   @override
   String get expandedIconTapHint => 'সংকোচন কৰক';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'বিস্তাৰ কৰিবলৈ দুবাৰ টিপক';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'অধিক সবিশেষ জানিবলৈ বিস্তাৰ কৰক';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'সংকোচন কৰিবলৈ দুবাৰ টিপক';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'সংকোচন কৰক';
 
   @override
   String get firstPageTooltip => 'প্রথম পৃষ্ঠা';
@@ -1605,16 +1697,16 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get keyboardKeyAltGraph => 'AltGr';
 
   @override
-  String get keyboardKeyBackspace => 'বেকস্পেচ';
+  String get keyboardKeyBackspace => 'Backspace';
 
   @override
-  String get keyboardKeyCapsLock => 'কেপ্‌ছ লক';
+  String get keyboardKeyCapsLock => 'Caps Lock';
 
   @override
-  String get keyboardKeyChannelDown => 'চেনেল ডাউন';
+  String get keyboardKeyChannelDown => 'Channel Down';
 
   @override
-  String get keyboardKeyChannelUp => 'চেনেল আপ';
+  String get keyboardKeyChannelUp => 'Channel Up';
 
   @override
   String get keyboardKeyControl => 'Ctrl';
@@ -1623,7 +1715,7 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get keyboardKeyDelete => 'Del';
 
   @override
-  String get keyboardKeyEject => 'ইজেক্ট';
+  String get keyboardKeyEject => 'Eject';
 
   @override
   String get keyboardKeyEnd => 'End';
@@ -1641,7 +1733,7 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get keyboardKeyInsert => 'Insert';
 
   @override
-  String get keyboardKeyMeta => 'মেটা';
+  String get keyboardKeyMeta => 'Meta';
 
   @override
   String get keyboardKeyMetaMacOs => 'Command';
@@ -1653,64 +1745,64 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get keyboardKeyNumLock => 'Num Lock';
 
   @override
-  String get keyboardKeyNumpad0 => 'নং ০';
+  String get keyboardKeyNumpad0 => 'Num 0';
 
   @override
-  String get keyboardKeyNumpad1 => 'নং ১';
+  String get keyboardKeyNumpad1 => 'Num 1';
 
   @override
-  String get keyboardKeyNumpad2 => 'নং ২';
+  String get keyboardKeyNumpad2 => 'Num 2';
 
   @override
-  String get keyboardKeyNumpad3 => 'নং ৩';
+  String get keyboardKeyNumpad3 => 'Num 3';
 
   @override
-  String get keyboardKeyNumpad4 => 'নং ৪';
+  String get keyboardKeyNumpad4 => 'Num 4';
 
   @override
-  String get keyboardKeyNumpad5 => 'নং ৫';
+  String get keyboardKeyNumpad5 => 'Num 5';
 
   @override
-  String get keyboardKeyNumpad6 => 'নং ৬';
+  String get keyboardKeyNumpad6 => 'Num 6';
 
   @override
-  String get keyboardKeyNumpad7 => 'নং ৭';
+  String get keyboardKeyNumpad7 => 'Num 7';
 
   @override
-  String get keyboardKeyNumpad8 => 'নং ৮';
+  String get keyboardKeyNumpad8 => 'Num 8';
 
   @override
-  String get keyboardKeyNumpad9 => 'নং ৯';
+  String get keyboardKeyNumpad9 => 'Num 9';
 
   @override
-  String get keyboardKeyNumpadAdd => 'নং +';
+  String get keyboardKeyNumpadAdd => 'Num +';
 
   @override
-  String get keyboardKeyNumpadComma => 'নং ,';
+  String get keyboardKeyNumpadComma => 'Num ,';
 
   @override
-  String get keyboardKeyNumpadDecimal => 'নং .';
+  String get keyboardKeyNumpadDecimal => 'Num .';
 
   @override
-  String get keyboardKeyNumpadDivide => 'নং /';
+  String get keyboardKeyNumpadDivide => 'Num /';
 
   @override
   String get keyboardKeyNumpadEnter => 'Num Enter';
 
   @override
-  String get keyboardKeyNumpadEqual => 'নং =';
+  String get keyboardKeyNumpadEqual => 'Num =';
 
   @override
-  String get keyboardKeyNumpadMultiply => 'নং *';
+  String get keyboardKeyNumpadMultiply => 'Num *';
 
   @override
-  String get keyboardKeyNumpadParenLeft => 'নং (';
+  String get keyboardKeyNumpadParenLeft => 'Num (';
 
   @override
-  String get keyboardKeyNumpadParenRight => 'নং )';
+  String get keyboardKeyNumpadParenRight => 'Num )';
 
   @override
-  String get keyboardKeyNumpadSubtract => 'নং -';
+  String get keyboardKeyNumpadSubtract => 'Num -';
 
   @override
   String get keyboardKeyPageDown => 'PgDown';
@@ -1719,25 +1811,25 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get keyboardKeyPageUp => 'PgUp';
 
   @override
-  String get keyboardKeyPower => 'পাৱাৰ';
+  String get keyboardKeyPower => 'Power';
 
   @override
-  String get keyboardKeyPowerOff => 'পাৱাৰ অফ';
+  String get keyboardKeyPowerOff => 'Power Off';
 
   @override
-  String get keyboardKeyPrintScreen => 'প্ৰিণ্ট স্ক্ৰীন';
+  String get keyboardKeyPrintScreen => 'Print Screen';
 
   @override
-  String get keyboardKeyScrollLock => 'স্ক্ৰ’ল লক';
+  String get keyboardKeyScrollLock => 'Scroll Lock';
 
   @override
-  String get keyboardKeySelect => 'ছিলেক্ট';
+  String get keyboardKeySelect => 'Select';
 
   @override
-  String get keyboardKeyShift => 'শ্বিফ্ট';
+  String get keyboardKeyShift => 'Shift';
 
   @override
-  String get keyboardKeySpace => 'স্পেচ';
+  String get keyboardKeySpace => 'Space';
 
   @override
   String get lastPageTooltip => 'অন্তিম পৃষ্ঠা';
@@ -1761,10 +1853,16 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String? get licensesPackageDetailTextZero => 'No licenses';
 
   @override
-  String get licensesPageTitle => 'অনুজ্ঞাপত্ৰসমূহ';
+  String get licensesPageTitle => 'অনুজ্ঞাপত্ৰ';
+
+  @override
+  String get lookUpButtonLabel => 'ওপৰলৈ চাওক';
 
   @override
   String get menuBarMenuLabel => 'মেনু বাৰ মেনু';
+
+  @override
+  String get menuDismissLabel => 'অগ্ৰাহ্য কৰাৰ মেনু';
 
   @override
   String get modalBarrierDismissLabel => 'অগ্ৰাহ্য কৰক';
@@ -1788,13 +1886,13 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get pageRowsInfoTitleRaw => r'$rowCountৰ $firstRow–$lastRow';
 
   @override
-  String get pageRowsInfoTitleApproximateRaw => r'$rowCountৰ $firstRow–$lastRow';
+  String get pageRowsInfoTitleApproximateRaw => r'প্ৰায় $rowCountৰ $firstRow–$lastRow';
 
   @override
   String get pasteButtonLabel => "পে'ষ্ট কৰক";
 
   @override
-  String get popupMenuLabel => "প'পআপ মেনু";
+  String get popupMenuLabel => 'পপআপ মেনু';
 
   @override
   String get postMeridiemAbbreviation => 'অপৰাহ্ন';
@@ -1815,10 +1913,10 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountMany => null;
 
   @override
-  String? get remainingTextFieldCharacterCountOne => '১টা বর্ণ বাকী আছে';
+  String? get remainingTextFieldCharacterCountOne => '১ টা বর্ণসংখ্যা বাকী আছে';
 
   @override
-  String get remainingTextFieldCharacterCountOther => r'$remainingCountটা বর্ণ বাকী আছে';
+  String get remainingTextFieldCharacterCountOther => r'$remainingCount টা বর্ণসংখ্যা বাকী আছে';
 
   @override
   String? get remainingTextFieldCharacterCountTwo => null;
@@ -1827,19 +1925,19 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountZero => null;
 
   @override
-  String get reorderItemDown => 'তললৈ স্থানান্তৰ কৰক';
+  String get reorderItemDown => 'তললৈ নিয়ক';
 
   @override
   String get reorderItemLeft => 'বাওঁফাললৈ স্থানান্তৰ কৰক';
 
   @override
-  String get reorderItemRight => 'সোঁফাললৈ স্থানান্তৰ কৰক';
+  String get reorderItemRight => 'সোঁফাললৈ নিয়ক';
 
   @override
-  String get reorderItemToEnd => 'শেষলৈ স্থানান্তৰ কৰক';
+  String get reorderItemToEnd => 'শেষলৈ নিয়ক';
 
   @override
-  String get reorderItemToStart => 'আৰম্ভণিলৈ স্থানান্তৰ কৰক';
+  String get reorderItemToStart => 'আৰম্ভণিলৈ নিয়ক';
 
   @override
   String get reorderItemUp => 'ওপৰলৈ নিয়ক';
@@ -1851,7 +1949,7 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'ছেভ কৰক';
 
   @override
-  String get scanTextButtonLabel => 'স্কেন টেক্সট';
+  String get scanTextButtonLabel => 'পাঠ স্কেন কৰক';
 
   @override
   String get scrimLabel => 'স্ক্ৰিম';
@@ -1866,10 +1964,16 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'সন্ধান কৰক';
 
   @override
-  String get selectAllButtonLabel => 'সকলো বাছনি কৰক';
+  String get searchWebButtonLabel => 'ৱেবত সন্ধান কৰক';
+
+  @override
+  String get selectAllButtonLabel => 'আটাইবোৰ বাছনি কৰক';
 
   @override
   String get selectYearSemanticsLabel => 'বছৰ বাছনি কৰক';
+
+  @override
+  String get selectedDateLabel => 'বাছনি কৰা হৈছে';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -1878,16 +1982,19 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String? get selectedRowCountTitleMany => null;
 
   @override
-  String? get selectedRowCountTitleOne => "১টা বস্তু বাছনি কৰা হ'ল";
+  String? get selectedRowCountTitleOne => '১ টা বস্তু বাছনি কৰা হ’ল';
 
   @override
-  String get selectedRowCountTitleOther => r'$selectedRowCountটা বস্তু বাছনি কৰা হ’ল';
+  String get selectedRowCountTitleOther => r'$selectedRowCount টা বস্তু বাছনি কৰা হ’ল';
 
   @override
   String? get selectedRowCountTitleTwo => null;
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'শ্বেয়াৰ কৰক';
 
   @override
   String get showAccountsLabel => 'একাউণ্টসমূহ দেখুৱাওক';
@@ -1899,7 +2006,7 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get signedInLabel => 'ছাইন ইন কৰা হ’ল';
 
   @override
-  String get tabLabelRaw => r'$tabCountৰ $tabIndexটা টেব';
+  String get tabLabelRaw => r'$tabCount টাৰ ভিতৰত $tabIndex টা টেব';
 
   @override
   TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.H_colon_mm;
@@ -1911,7 +2018,7 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
   String get timePickerHourLabel => 'ঘণ্টা';
 
   @override
-  String get timePickerHourModeAnnouncement => 'সময় বাছনি কৰক';
+  String get timePickerHourModeAnnouncement => 'ঘণ্টা বাছনি কৰক';
 
   @override
   String get timePickerInputHelpText => 'সময় দিয়ক';
@@ -1933,10 +2040,18 @@ class MaterialLocalizationAs extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Azerbaijani (`az`).
+@Deprecated(
+  'Use MaterialLocalizationAz from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationAz extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Azerbaijani.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationAz from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationAz({
     super.localeName = 'az',
     required super.fullYearFormat,
@@ -1972,13 +2087,16 @@ class MaterialLocalizationAz extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Ləğv edin';
 
   @override
+  String get clearButtonTooltip => 'Mətni silin';
+
+  @override
   String get closeButtonLabel => 'Bağlayın';
 
   @override
   String get closeButtonTooltip => 'Bağlayın';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Genişləndirildi';
 
   @override
   String get collapsedIconTapHint => 'Genişləndirin';
@@ -2038,22 +2156,22 @@ class MaterialLocalizationAz extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Naviqasiya menyusu';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Yığcamlaşdırıldı';
 
   @override
   String get expandedIconTapHint => 'Yığcamlaşdırın';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'genişləndirmək üçün iki dəfə toxunun';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Daha çox detallar üçün genişləndirin';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'yığcamlaşdırmaq üçün iki dəfə toxunun';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Yığcamlaşdırın';
 
   @override
   String get firstPageTooltip => 'Birinci səhifə';
@@ -2242,7 +2360,13 @@ class MaterialLocalizationAz extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Lisenziyalar';
 
   @override
+  String get lookUpButtonLabel => 'Axtarın';
+
+  @override
   String get menuBarMenuLabel => 'Menyu paneli menyusu';
+
+  @override
+  String get menuDismissLabel => 'Menyunu qapadın';
 
   @override
   String get modalBarrierDismissLabel => 'İmtina edin';
@@ -2251,7 +2375,7 @@ class MaterialLocalizationAz extends GlobalMaterialLocalizations {
   String get moreButtonTooltip => 'Daha çox';
 
   @override
-  String get nextMonthTooltip => 'Növbəti ay';
+  String get nextMonthTooltip => 'Gələn ay';
 
   @override
   String get nextPageTooltip => 'Növbəti səhifə';
@@ -2344,10 +2468,16 @@ class MaterialLocalizationAz extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Axtarın';
 
   @override
+  String get searchWebButtonLabel => 'Vebdə axtarın';
+
+  @override
   String get selectAllButtonLabel => 'Hamısını seçin';
 
   @override
   String get selectYearSemanticsLabel => 'İl seçin';
+
+  @override
+  String get selectedDateLabel => 'Seçilib';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -2366,6 +2496,9 @@ class MaterialLocalizationAz extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Paylaşın';
 
   @override
   String get showAccountsLabel => 'Hesabları göstərin';
@@ -2411,10 +2544,18 @@ class MaterialLocalizationAz extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Belarusian (`be`).
+@Deprecated(
+  'Use MaterialLocalizationBe from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationBe extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Belarusian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationBe from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationBe({
     super.localeName = 'be',
     required super.fullYearFormat,
@@ -2450,13 +2591,16 @@ class MaterialLocalizationBe extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Скасаваць';
 
   @override
+  String get clearButtonTooltip => 'Выдаліць тэкст';
+
+  @override
   String get closeButtonLabel => 'Закрыць';
 
   @override
   String get closeButtonTooltip => 'Закрыць';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Разгорнута';
 
   @override
   String get collapsedIconTapHint => 'Разгарнуць';
@@ -2516,22 +2660,22 @@ class MaterialLocalizationBe extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Меню навігацыі';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Згорнута';
 
   @override
   String get expandedIconTapHint => 'Згарнуць';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'двойчы націснуць, каб разгарнуць';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Разгарніце, каб даведацца больш';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'двойчы націснуць, каб згарнуць';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Згарнуць';
 
   @override
   String get firstPageTooltip => 'На першую старонку';
@@ -2720,7 +2864,13 @@ class MaterialLocalizationBe extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Ліцэнзіі';
 
   @override
+  String get lookUpButtonLabel => 'Знайсці';
+
+  @override
   String get menuBarMenuLabel => 'Меню "Панэль меню"';
+
+  @override
+  String get menuDismissLabel => 'Закрыць меню';
 
   @override
   String get modalBarrierDismissLabel => 'Адхіліць';
@@ -2807,7 +2957,7 @@ class MaterialLocalizationBe extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Захаваць';
 
   @override
-  String get scanTextButtonLabel => 'Сканаваць тэкст';
+  String get scanTextButtonLabel => 'Сканіраваць тэкст';
 
   @override
   String get scrimLabel => 'Палатно';
@@ -2822,10 +2972,16 @@ class MaterialLocalizationBe extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Пошук';
 
   @override
+  String get searchWebButtonLabel => 'Пошук у сетцы';
+
+  @override
   String get selectAllButtonLabel => 'Выбраць усе';
 
   @override
   String get selectYearSemanticsLabel => 'Выберыце год';
+
+  @override
+  String get selectedDateLabel => 'Выбрана';
 
   @override
   String? get selectedRowCountTitleFew => r'Выбрана $selectedRowCount элементы';
@@ -2844,6 +3000,9 @@ class MaterialLocalizationBe extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Абагуліць';
 
   @override
   String get showAccountsLabel => 'Паказаць уліковыя запісы';
@@ -2889,10 +3048,18 @@ class MaterialLocalizationBe extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Bulgarian (`bg`).
+@Deprecated(
+  'Use MaterialLocalizationBg from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationBg extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Bulgarian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationBg from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationBg({
     super.localeName = 'bg',
     required super.fullYearFormat,
@@ -2928,13 +3095,16 @@ class MaterialLocalizationBg extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Отказ';
 
   @override
+  String get clearButtonTooltip => 'Изчистване на текста';
+
+  @override
   String get closeButtonLabel => 'Затваряне';
 
   @override
   String get closeButtonTooltip => 'Затваряне';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Разгънато';
 
   @override
   String get collapsedIconTapHint => 'Разгъване';
@@ -2994,22 +3164,22 @@ class MaterialLocalizationBg extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Меню за навигация';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Свито';
 
   @override
   String get expandedIconTapHint => 'Свиване';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'докоснете два пъти за разгъване';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Разгъване за още подробности';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'докоснете два пъти за свиване';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Свиване';
 
   @override
   String get firstPageTooltip => 'Първа страница';
@@ -3198,7 +3368,13 @@ class MaterialLocalizationBg extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Лицензи';
 
   @override
+  String get lookUpButtonLabel => 'Look Up';
+
+  @override
   String get menuBarMenuLabel => 'Меню на лентата с менюта';
+
+  @override
+  String get menuDismissLabel => 'Отхвърляне на менюто';
 
   @override
   String get modalBarrierDismissLabel => 'Отхвърляне';
@@ -3258,7 +3434,7 @@ class MaterialLocalizationBg extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Преместване надолу';
@@ -3285,7 +3461,7 @@ class MaterialLocalizationBg extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Запазване';
 
   @override
-  String get scanTextButtonLabel => 'Сканиране на текст';
+  String get scanTextButtonLabel => 'Сканирайте текст';
 
   @override
   String get scrimLabel => 'Скрим';
@@ -3300,10 +3476,16 @@ class MaterialLocalizationBg extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Търсене';
 
   @override
+  String get searchWebButtonLabel => 'Търсене в мрежата';
+
+  @override
   String get selectAllButtonLabel => 'Избиране на всички';
 
   @override
   String get selectYearSemanticsLabel => 'Избиране на година';
+
+  @override
+  String get selectedDateLabel => 'Избрано';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -3322,6 +3504,9 @@ class MaterialLocalizationBg extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Споделяне';
 
   @override
   String get showAccountsLabel => 'Показване на профилите';
@@ -3367,10 +3552,18 @@ class MaterialLocalizationBg extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Bengali Bangla (`bn`).
+@Deprecated(
+  'Use MaterialLocalizationBn from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationBn extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Bengali Bangla.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationBn from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationBn({
     super.localeName = 'bn',
     required super.fullYearFormat,
@@ -3406,13 +3599,16 @@ class MaterialLocalizationBn extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'বাতিল করুন';
 
   @override
+  String get clearButtonTooltip => 'টেক্সট মুছুন';
+
+  @override
   String get closeButtonLabel => 'বন্ধ করুন';
 
   @override
   String get closeButtonTooltip => 'বন্ধ করুন';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'বড় করা হয়েছে';
 
   @override
   String get collapsedIconTapHint => 'বড় করুন';
@@ -3472,22 +3668,22 @@ class MaterialLocalizationBn extends GlobalMaterialLocalizations {
   String get drawerLabel => 'নেভিগেশান মেনু';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'আড়াল করা হয়েছে';
 
   @override
   String get expandedIconTapHint => 'আড়াল করুন';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'বড় করে দেখতে ডবল ট্যাপ করুন';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'আরও বিবরণ পেতে বড় করে দেখুন';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'আড়াল করতে ডবল ট্যাপ করুন';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'আড়াল করুন';
 
   @override
   String get firstPageTooltip => 'প্রথম পৃষ্ঠা';
@@ -3676,7 +3872,13 @@ class MaterialLocalizationBn extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'লাইসেন্স';
 
   @override
+  String get lookUpButtonLabel => 'লুক-আপ';
+
+  @override
   String get menuBarMenuLabel => 'মেনু বার মেনু';
+
+  @override
+  String get menuDismissLabel => 'বাতিল করার মেনু';
 
   @override
   String get modalBarrierDismissLabel => 'খারিজ করুন';
@@ -3763,7 +3965,7 @@ class MaterialLocalizationBn extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'সেভ করুন';
 
   @override
-  String get scanTextButtonLabel => 'পাঠ্য স্ক্যান করুন';
+  String get scanTextButtonLabel => 'টেক্সট স্ক্যান করুন';
 
   @override
   String get scrimLabel => 'স্ক্রিম';
@@ -3778,10 +3980,16 @@ class MaterialLocalizationBn extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'খুঁজুন';
 
   @override
+  String get searchWebButtonLabel => 'ওয়েবে সার্চ করুন';
+
+  @override
   String get selectAllButtonLabel => 'সব বেছে নিন';
 
   @override
   String get selectYearSemanticsLabel => 'বছর বেছে নিন';
+
+  @override
+  String get selectedDateLabel => 'বেছে নেওয়া হয়েছে';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -3800,6 +4008,9 @@ class MaterialLocalizationBn extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'শেয়ার করুন';
 
   @override
   String get showAccountsLabel => 'অ্যাকাউন্টগুলি দেখান';
@@ -3844,11 +4055,523 @@ class MaterialLocalizationBn extends GlobalMaterialLocalizations {
   String get viewLicensesButtonLabel => 'লাইসেন্স দেখুন';
 }
 
+/// The translations for Tibetan (`bo`).
+@Deprecated(
+  'Use MaterialLocalizationBo from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
+class MaterialLocalizationBo extends GlobalMaterialLocalizations {
+  /// Create an instance of the translation bundle for Tibetan.
+  ///
+  /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationBo from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
+  const MaterialLocalizationBo({
+    super.localeName = 'bo',
+    required super.fullYearFormat,
+    required super.compactDateFormat,
+    required super.shortDateFormat,
+    required super.mediumDateFormat,
+    required super.longDateFormat,
+    required super.yearMonthFormat,
+    required super.shortMonthDayFormat,
+    required super.decimalFormat,
+    required super.twoDigitZeroPaddedFormat,
+  });
+
+  @override
+  String get aboutListTileTitleRaw => r'སྐོར། $applicationName';
+
+  @override
+  String get alertDialogLabel => 'གསལ་བརྡ།';
+
+  @override
+  String get anteMeridiemAbbreviation => 'སྔ་དྲོ';
+
+  @override
+  String get backButtonTooltip => 'ཕྱིར་ལོག';
+
+  @override
+  String get bottomSheetLabel => 'ཤོག་ལྷེ་འོག་མ།';
+
+  @override
+  String get calendarModeButtonLabel => 'ལོ་ཐོར་བསྒྱུར་བ།';
+
+  @override
+  String get cancelButtonLabel => 'ཕྱིར་འཐེན།';
+
+  @override
+  String get clearButtonTooltip => 'ཡི་གེ་གཙང་བཟོ།';
+
+  @override
+  String get closeButtonLabel => 'སྒོ་རྒྱག་པ།';
+
+  @override
+  String get closeButtonTooltip => 'སྒོ་རྒྱག་པ།';
+
+  @override
+  String get collapsedHint => 'ཁྱབ་སྤེལ་ཟིན།';
+
+  @override
+  String get collapsedIconTapHint => 'ཁྱབ་སྤེལ།';
+
+  @override
+  String get continueButtonLabel => 'མུ་མཐུད་པ།';
+
+  @override
+  String get copyButtonLabel => 'བཤུས།';
+
+  @override
+  String get currentDateLabel => 'དེ་རིང་།';
+
+  @override
+  String get cutButtonLabel => 'གཅོད།';
+
+  @override
+  String get dateHelpText => 'ལོ། ལོ། ལོ། ལོ།/ཟླ། ཟླ།/ཚེས། ཚེས།';
+
+  @override
+  String get dateInputLabel => 'ཟླ་ཚེས་ནང་འཇུག';
+
+  @override
+  String get dateOutOfRangeLabel => 'ཁྱབ་ཚོད་ནང་མ་ཚུད།';
+
+  @override
+  String get datePickerHelpText => 'ཟླ་ཚེས་འདེམས་པ།';
+
+  @override
+  String get dateRangeEndDateSemanticLabelRaw => r'ཟླ་ཚེས་མཇུག་བསྡུ། $fullDate';
+
+  @override
+  String get dateRangeEndLabel => 'ཟླ་ཚེས་མཇུག་བསྡུ།';
+
+  @override
+  String get dateRangePickerHelpText => 'ཁྱབ་ཚོད་འདེམས་པ།';
+
+  @override
+  String get dateRangeStartDateSemanticLabelRaw => r'ཟླ་ཚེས་འགོ་འཛུགས། $fullDate';
+
+  @override
+  String get dateRangeStartLabel => 'ཟླ་ཚེས་འགོ་འཛུགས།';
+
+  @override
+  String get dateSeparator => '/';
+
+  @override
+  String get deleteButtonTooltip => 'བསུབ་པ།';
+
+  @override
+  String get dialModeButtonLabel => 'ཆུ་ཚོད་འདེམས་སྒྲུག་ལ་བསྒྱུར་བ།';
+
+  @override
+  String get dialogLabel => 'ཟིན་དེབ།';
+
+  @override
+  String get drawerLabel => 'ཕྱོགས་སྟོན་ཐོ་གཞུང་།';
+
+  @override
+  String get expandedHint => 'ཕྱོགས་བསྡུས།';
+
+  @override
+  String get expandedIconTapHint => 'ཕྱོགས་བསྡུ།';
+
+  @override
+  String get expansionTileCollapsedHint => 'ཁྱབ་སྤེལ་ཆེད་ཐེངས་གཉིས་གནོན།';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'ཞིབ་རྒྱས་ཆེད་ཁྱབ་སྤེལ།';
+
+  @override
+  String get expansionTileExpandedHint => 'ཕྱོགས་བསྡུའི་ཆེད་ཐེངས་གཉིས་གནོན།';
+
+  @override
+  String get expansionTileExpandedTapHint => 'ཕྱོགས་བསྡུ།';
+
+  @override
+  String get firstPageTooltip => 'ཤོག་ངོ་ཐོག་མ།';
+
+  @override
+  String get hideAccountsLabel => 'ཁ་བྱང་བསྐུང་བ།';
+
+  @override
+  String get inputDateModeButtonLabel => 'ནང་འཇུག་ལ་བསྒྱུར་བ།';
+
+  @override
+  String get inputTimeModeButtonLabel => 'ཡི་གེ་ནང་འཇུག་ལ་བསྒྱུར་བ།';
+
+  @override
+  String get invalidDateFormatLabel => 'སྒྲོམ་གཞི་ནོར་འཁྲུལ།';
+
+  @override
+  String get invalidDateRangeLabel => 'ཁྱབ་ཚོད་ནོར་འཁྲུལ།';
+
+  @override
+  String get invalidTimeLabel => 'ཆུ་ཚོད་ནོར་འཁྲུལ་མེད་པར་ནང་འཇུག';
+
+  @override
+  String get keyboardKeyAlt => 'ཨལ་ཊི།';
+
+  @override
+  String get keyboardKeyAltGraph => 'ཨལ་ཊི་ཇི་ཨར།';
+
+  @override
+  String get keyboardKeyBackspace => 'ཕྱིར་འགྲོ།';
+
+  @override
+  String get keyboardKeyCapsLock => 'ཡིག་ཆེན།';
+
+  @override
+  String get keyboardKeyChannelDown => 'བརྒྱུད་ལམ་གཤམ།';
+
+  @override
+  String get keyboardKeyChannelUp => 'བརྒྱུད་ལམ་སྟེང་།';
+
+  @override
+  String get keyboardKeyControl => 'སྟངས་འཛིན།';
+
+  @override
+  String get keyboardKeyDelete => 'བསུབ།';
+
+  @override
+  String get keyboardKeyEject => 'ཕྱིར་འདོན།';
+
+  @override
+  String get keyboardKeyEnd => 'རྫོགས།';
+
+  @override
+  String get keyboardKeyEscape => 'ཕྱིར་ཐོན།';
+
+  @override
+  String get keyboardKeyFn => 'བྱེད་སྒོ།';
+
+  @override
+  String get keyboardKeyHome => 'ཁྱིམ།';
+
+  @override
+  String get keyboardKeyInsert => 'ནང་འཛུལ།';
+
+  @override
+  String get keyboardKeyMeta => 'བརྗེས་སྒྱུར།';
+
+  @override
+  String get keyboardKeyMetaMacOs => 'བཀའ་རྒྱ།';
+
+  @override
+  String get keyboardKeyMetaWindows => 'སྒེའུ་ཁུང་།';
+
+  @override
+  String get keyboardKeyNumLock => 'ཨང་གྲངས་མཐེབ་གནོན།';
+
+  @override
+  String get keyboardKeyNumpad0 => 'ཨང་གྲངས། 0';
+
+  @override
+  String get keyboardKeyNumpad1 => 'ཨང་གྲངས། 1';
+
+  @override
+  String get keyboardKeyNumpad2 => 'ཨང་གྲངས། 2';
+
+  @override
+  String get keyboardKeyNumpad3 => 'ཨང་གྲངས། 3';
+
+  @override
+  String get keyboardKeyNumpad4 => 'ཨང་གྲངས། 4';
+
+  @override
+  String get keyboardKeyNumpad5 => 'ཨང་གྲངས། 5';
+
+  @override
+  String get keyboardKeyNumpad6 => 'ཨང་གྲངས། 6';
+
+  @override
+  String get keyboardKeyNumpad7 => 'ཨང་གྲངས། 7';
+
+  @override
+  String get keyboardKeyNumpad8 => 'ཨང་གྲངས། 8';
+
+  @override
+  String get keyboardKeyNumpad9 => 'ཨང་གྲངས། 9';
+
+  @override
+  String get keyboardKeyNumpadAdd => 'ཨང་གྲངས། +';
+
+  @override
+  String get keyboardKeyNumpadComma => 'ཨང་གྲངས། ,';
+
+  @override
+  String get keyboardKeyNumpadDecimal => 'ཨང་གྲངས། .';
+
+  @override
+  String get keyboardKeyNumpadDivide => 'ཨང་གྲངས། /';
+
+  @override
+  String get keyboardKeyNumpadEnter => 'ཨང་གྲངས་ནང་འཇུག';
+
+  @override
+  String get keyboardKeyNumpadEqual => 'ཨང་གྲངས། =';
+
+  @override
+  String get keyboardKeyNumpadMultiply => 'ཨང་གྲངས། *';
+
+  @override
+  String get keyboardKeyNumpadParenLeft => 'ཨང་གྲངས། (';
+
+  @override
+  String get keyboardKeyNumpadParenRight => 'ཨང་གྲངས། )';
+
+  @override
+  String get keyboardKeyNumpadSubtract => 'ཨང་གྲངས། -';
+
+  @override
+  String get keyboardKeyPageDown => 'ཤོག་ངོ་འོག་འགྲོ།';
+
+  @override
+  String get keyboardKeyPageUp => 'ཤོག་ངོའི་སྒང་འགྲོ།';
+
+  @override
+  String get keyboardKeyPower => 'གློག་སྤར།';
+
+  @override
+  String get keyboardKeyPowerOff => 'གློག་གསོད།';
+
+  @override
+  String get keyboardKeyPrintScreen => 'ཤོག་ངོ་བཤུས།';
+
+  @override
+  String get keyboardKeyScrollLock => 'གོང་འོག་འགྲོ་བྱེད།';
+
+  @override
+  String get keyboardKeySelect => 'འདེམས།';
+
+  @override
+  String get keyboardKeyShift => 'བརྗེ་སྒྱུར་མཐེབ་གནོན་ཤིབ་ཊི།';
+
+  @override
+  String get keyboardKeySpace => 'བར་སྟོང་།';
+
+  @override
+  String get lastPageTooltip => 'ཤོག་ངོ་མཐའ་མ།';
+
+  @override
+  String? get licensesPackageDetailTextFew => null;
+
+  @override
+  String? get licensesPackageDetailTextMany => null;
+
+  @override
+  String? get licensesPackageDetailTextOne => 'ལག་ཁྱེར། 1';
+
+  @override
+  String get licensesPackageDetailTextOther => r'$licenseCount ལག་ཁྱེར་ཁག';
+
+  @override
+  String? get licensesPackageDetailTextTwo => null;
+
+  @override
+  String? get licensesPackageDetailTextZero => null;
+
+  @override
+  String get licensesPageTitle => 'ལག་ཁྱེར་ཁག';
+
+  @override
+  String get lookUpButtonLabel => 'འཚོལ་བ།';
+
+  @override
+  String get menuBarMenuLabel => 'ཐོ་གཞུང་གི་མཐེབ་གནོན་ཐོ་གཞུང་།';
+
+  @override
+  String get menuDismissLabel => 'ཐོ་གཞུང་འདོར་བ།';
+
+  @override
+  String get modalBarrierDismissLabel => 'འདོར་བ།';
+
+  @override
+  String get moreButtonTooltip => 'ཇེ་མང་།';
+
+  @override
+  String get nextMonthTooltip => 'ཟླ་བ་རྗེས་མ།';
+
+  @override
+  String get nextPageTooltip => 'ཤོག་ངོ་རྗེས་མ།';
+
+  @override
+  String get okButtonLabel => 'འདོད།';
+
+  @override
+  String get openAppDrawerTooltip => 'ཕྱོགས་སྟོན་ཐོ་གཞུང་ཁ་ཕྱེ་བ།';
+
+  @override
+  String get pageRowsInfoTitleRaw => r'$firstRow–$lastRow ཡི་ $rowCount';
+
+  @override
+  String get pageRowsInfoTitleApproximateRaw => r'$firstRow–$lastRow ཡི་སྐོར། $rowCount';
+
+  @override
+  String get pasteButtonLabel => 'འཕོས་པ།';
+
+  @override
+  String get popupMenuLabel => 'བསྐུང་སྟོན་ཐོ་གཞུང་།';
+
+  @override
+  String get postMeridiemAbbreviation => 'ཕྱི་དྲོ།';
+
+  @override
+  String get previousMonthTooltip => 'ཟླ་བ་སྔོན་མ།';
+
+  @override
+  String get previousPageTooltip => 'ཤོག་ངོ་སྔོན་མ།';
+
+  @override
+  String get refreshIndicatorSemanticLabel => 'བསྐྱར་གསོ།';
+
+  @override
+  String? get remainingTextFieldCharacterCountFew => null;
+
+  @override
+  String? get remainingTextFieldCharacterCountMany => null;
+
+  @override
+  String? get remainingTextFieldCharacterCountOne => 'ཡིག་འབྲུ་ 1 ལྷག་ལུས།';
+
+  @override
+  String get remainingTextFieldCharacterCountOther => r'$remainingCount ཡིག་འབྲུ་ལྷག་ལུས་རྣམས།';
+
+  @override
+  String? get remainingTextFieldCharacterCountTwo => null;
+
+  @override
+  String? get remainingTextFieldCharacterCountZero => null;
+
+  @override
+  String get reorderItemDown => 'འོག་ལ་འགྲོ།';
+
+  @override
+  String get reorderItemLeft => 'གཡོན་ལ་འགྲོ།';
+
+  @override
+  String get reorderItemRight => 'གཡས་ལ་འགྲོ།';
+
+  @override
+  String get reorderItemToEnd => 'མཇུག་བསྡུ་སར་འགྲོ།';
+
+  @override
+  String get reorderItemToStart => 'འགོ་འཛུགས་སར་འགྲོ།';
+
+  @override
+  String get reorderItemUp => 'སྒང་ལ་འགྲོ།';
+
+  @override
+  String get rowsPerPageTitle => 'ཤོག་ལྷེ་རེའི་འཕྲེད་ཐིག:';
+
+  @override
+  String get saveButtonLabel => 'ཉར་ཚགས།';
+
+  @override
+  String get scanTextButtonLabel => 'ཡི་གེ་བཤེར་འབེབས།';
+
+  @override
+  String get scrimLabel => 'ཤོག་ཚོས།';
+
+  @override
+  String get scrimOnTapHintRaw => r'སྒོ་རྒྱག་པ། $modalRouteContentName';
+
+  @override
+  ScriptCategory get scriptCategory => ScriptCategory.dense;
+
+  @override
+  String get searchFieldLabel => 'འཚོལ་བཤེར།';
+
+  @override
+  String get searchWebButtonLabel => 'དྲ་ཐོག་འཚོལ་བཤེར།';
+
+  @override
+  String get selectAllButtonLabel => 'ཚང་འདེམས།';
+
+  @override
+  String get selectYearSemanticsLabel => 'ལོ་འདེམས།';
+
+  @override
+  String get selectedDateLabel => 'བདམས་པ།';
+
+  @override
+  String? get selectedRowCountTitleFew => null;
+
+  @override
+  String? get selectedRowCountTitleMany => null;
+
+  @override
+  String? get selectedRowCountTitleOne => 'ཅ་དངོས་ 1 བདམས་པ།';
+
+  @override
+  String get selectedRowCountTitleOther => r'$selectedRowCount ཅ་དངོས་དུ་མ་བདམས་པ།';
+
+  @override
+  String? get selectedRowCountTitleTwo => null;
+
+  @override
+  String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'མཉམ་སྤྱོད།';
+
+  @override
+  String get showAccountsLabel => 'ཁ་བྱང་སྟོན་པ།';
+
+  @override
+  String get showMenuTooltip => 'ཐོ་གཞུང་སྟོན་པ།';
+
+  @override
+  String get signedInLabel => 'དྲ་འཛུལ་ཟིན།';
+
+  @override
+  String get tabLabelRaw => r'འཛར་གནོན་ $tabIndex ཡི $tabCount';
+
+  @override
+  TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.HH_colon_mm;
+
+  @override
+  String get timePickerDialHelpText => 'ཆུ་ཚོད་འདེམས་པ།';
+
+  @override
+  String get timePickerHourLabel => 'ཆུ་ཚོད།';
+
+  @override
+  String get timePickerHourModeAnnouncement => 'ཆུ་ཚོད་འདེམས་པ།';
+
+  @override
+  String get timePickerInputHelpText => 'ཆུ་ཚོད་ནང་འཇུག';
+
+  @override
+  String get timePickerMinuteLabel => 'སྐར་མ།';
+
+  @override
+  String get timePickerMinuteModeAnnouncement => 'སྐར་མ་འདེམས་པ།';
+
+  @override
+  String get unspecifiedDate => 'ཟླ་ཚེས།';
+
+  @override
+  String get unspecifiedDateRange => 'ཟླ་ཚེས་ཁྱབ་ཚོད།';
+
+  @override
+  String get viewLicensesButtonLabel => 'ལག་ཁྱེར་ཁག་ལྟ་བ།';
+}
+
 /// The translations for Bosnian (`bs`).
+@Deprecated(
+  'Use MaterialLocalizationBs from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationBs extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Bosnian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationBs from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationBs({
     super.localeName = 'bs',
     required super.fullYearFormat,
@@ -3884,13 +4607,16 @@ class MaterialLocalizationBs extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Otkaži';
 
   @override
+  String get clearButtonTooltip => 'Brisanje teksta';
+
+  @override
   String get closeButtonLabel => 'Zatvori';
 
   @override
   String get closeButtonTooltip => 'Zatvaranje';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Prošireno';
 
   @override
   String get collapsedIconTapHint => 'Proširi';
@@ -3950,22 +4676,22 @@ class MaterialLocalizationBs extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Meni za navigaciju';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Suženo';
 
   @override
   String get expandedIconTapHint => 'Suzi';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'proširivanje dvostrukim dodirom';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Proširivanje za više detalja';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'sužavanje dvostrukim dodirom';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Sužavanje';
 
   @override
   String get firstPageTooltip => 'Prva stranica';
@@ -4154,7 +4880,13 @@ class MaterialLocalizationBs extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licence';
 
   @override
+  String get lookUpButtonLabel => 'Pogled nagore';
+
+  @override
   String get menuBarMenuLabel => 'Meni trake menija';
+
+  @override
+  String get menuDismissLabel => 'Odbacivanje menija';
 
   @override
   String get modalBarrierDismissLabel => 'Odbaci';
@@ -4214,7 +4946,7 @@ class MaterialLocalizationBs extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Pomjeri nadolje';
@@ -4256,10 +4988,16 @@ class MaterialLocalizationBs extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Pretražite';
 
   @override
+  String get searchWebButtonLabel => 'Pretraži Web';
+
+  @override
   String get selectAllButtonLabel => 'Odaberi sve';
 
   @override
   String get selectYearSemanticsLabel => 'Odaberite godinu';
+
+  @override
+  String get selectedDateLabel => 'Odabrano';
 
   @override
   String? get selectedRowCountTitleFew => r'Odabrane su $selectedRowCount stavke';
@@ -4278,6 +5016,9 @@ class MaterialLocalizationBs extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Dijeli';
 
   @override
   String get showAccountsLabel => 'Prikaži račune';
@@ -4323,10 +5064,18 @@ class MaterialLocalizationBs extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Catalan Valencian (`ca`).
+@Deprecated(
+  'Use MaterialLocalizationCa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationCa extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Catalan Valencian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationCa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationCa({
     super.localeName = 'ca',
     required super.fullYearFormat,
@@ -4362,13 +5111,16 @@ class MaterialLocalizationCa extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Cancel·la';
 
   @override
+  String get clearButtonTooltip => 'Esborra el text';
+
+  @override
   String get closeButtonLabel => 'Tanca';
 
   @override
   String get closeButtonTooltip => 'Tanca';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => "S'ha desplegat";
 
   @override
   String get collapsedIconTapHint => 'Desplega';
@@ -4428,22 +5180,22 @@ class MaterialLocalizationCa extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menú de navegació';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => "S'ha replegat";
 
   @override
   String get expandedIconTapHint => 'Replega';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'fes doble toc per desplegar';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Desplega per obtenir més informació';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'fes doble toc per replegar';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Replega';
 
   @override
   String get firstPageTooltip => 'Primera pàgina';
@@ -4632,7 +5384,13 @@ class MaterialLocalizationCa extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Llicències';
 
   @override
+  String get lookUpButtonLabel => 'Mira amunt';
+
+  @override
   String get menuBarMenuLabel => 'Menú de la barra de menú';
+
+  @override
+  String get menuDismissLabel => 'Ignora el menú';
 
   @override
   String get modalBarrierDismissLabel => 'Ignora';
@@ -4692,7 +5450,7 @@ class MaterialLocalizationCa extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Mou avall';
@@ -4719,7 +5477,7 @@ class MaterialLocalizationCa extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Desa';
 
   @override
-  String get scanTextButtonLabel => 'Escaneja el text';
+  String get scanTextButtonLabel => 'Escaneja text';
 
   @override
   String get scrimLabel => 'Fons atenuat';
@@ -4734,10 +5492,16 @@ class MaterialLocalizationCa extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Cerca';
 
   @override
+  String get searchWebButtonLabel => 'Cerca al web';
+
+  @override
   String get selectAllButtonLabel => 'Selecciona-ho tot';
 
   @override
   String get selectYearSemanticsLabel => 'Selecciona un any';
+
+  @override
+  String get selectedDateLabel => 'Seleccionat';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -4756,6 +5520,9 @@ class MaterialLocalizationCa extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Comparteix';
 
   @override
   String get showAccountsLabel => 'Mostra els comptes';
@@ -4801,10 +5568,18 @@ class MaterialLocalizationCa extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Czech (`cs`).
+@Deprecated(
+  'Use MaterialLocalizationCs from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationCs extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Czech.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationCs from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationCs({
     super.localeName = 'cs',
     required super.fullYearFormat,
@@ -4831,7 +5606,7 @@ class MaterialLocalizationCs extends GlobalMaterialLocalizations {
   String get backButtonTooltip => 'Zpět';
 
   @override
-  String get bottomSheetLabel => 'Spodní tabulka';
+  String get bottomSheetLabel => 'Spodní panel';
 
   @override
   String get calendarModeButtonLabel => 'Přepnout na kalendář';
@@ -4840,13 +5615,16 @@ class MaterialLocalizationCs extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Zrušit';
 
   @override
+  String get clearButtonTooltip => 'Vymazat text';
+
+  @override
   String get closeButtonLabel => 'Zavřít';
 
   @override
   String get closeButtonTooltip => 'Zavřít';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Rozbaleno';
 
   @override
   String get collapsedIconTapHint => 'Rozbalit';
@@ -4906,22 +5684,22 @@ class MaterialLocalizationCs extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigační nabídka';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Sbaleno';
 
   @override
   String get expandedIconTapHint => 'Sbalit';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'dvojitým klepnutím rozbalíte';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Rozbalte pro další podrobnosti';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'dvojitým klepnutím sbalíte';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Sbalit';
 
   @override
   String get firstPageTooltip => 'První stránka';
@@ -5110,7 +5888,13 @@ class MaterialLocalizationCs extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licence';
 
   @override
+  String get lookUpButtonLabel => 'Vyhledat';
+
+  @override
   String get menuBarMenuLabel => 'Nabídka na liště s nabídkou';
+
+  @override
+  String get menuDismissLabel => 'Zavřít nabídku';
 
   @override
   String get modalBarrierDismissLabel => 'Zavřít';
@@ -5170,7 +5954,7 @@ class MaterialLocalizationCs extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Přesunout dolů';
@@ -5197,7 +5981,7 @@ class MaterialLocalizationCs extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Uložit';
 
   @override
-  String get scanTextButtonLabel => 'Naskenujte text';
+  String get scanTextButtonLabel => 'Naskenovat text';
 
   @override
   String get scrimLabel => 'Scrim';
@@ -5212,10 +5996,16 @@ class MaterialLocalizationCs extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Hledat';
 
   @override
+  String get searchWebButtonLabel => 'Vyhledávat na webu';
+
+  @override
   String get selectAllButtonLabel => 'Vybrat vše';
 
   @override
   String get selectYearSemanticsLabel => 'Vyberte rok';
+
+  @override
+  String get selectedDateLabel => 'Vybráno';
 
   @override
   String? get selectedRowCountTitleFew => r'Jsou vybrány $selectedRowCount položky';
@@ -5234,6 +6024,9 @@ class MaterialLocalizationCs extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Sdílet';
 
   @override
   String get showAccountsLabel => 'Zobrazit účty';
@@ -5279,10 +6072,18 @@ class MaterialLocalizationCs extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Welsh (`cy`).
+@Deprecated(
+  'Use MaterialLocalizationCy from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationCy extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Welsh.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationCy from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationCy({
     super.localeName = 'cy',
     required super.fullYearFormat,
@@ -5318,13 +6119,16 @@ class MaterialLocalizationCy extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Canslo';
 
   @override
+  String get clearButtonTooltip => "Clirio'r testun";
+
+  @override
   String get closeButtonLabel => 'Cau';
 
   @override
   String get closeButtonTooltip => 'Cau';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => "Wedi'i ehangu";
 
   @override
   String get collapsedIconTapHint => 'Ehangu';
@@ -5384,22 +6188,22 @@ class MaterialLocalizationCy extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Dewislen llywio';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => "Wedi'i grebachu";
 
   @override
   String get expandedIconTapHint => 'Crebachu';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'tapiwch ddwywaith i ehangu';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Ehangwch am ragor o fanylion';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'tapiwch ddwywaith i grebachu';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Crebachu';
 
   @override
   String get firstPageTooltip => 'Tudalen gyntaf';
@@ -5573,7 +6377,7 @@ class MaterialLocalizationCy extends GlobalMaterialLocalizations {
   String? get licensesPackageDetailTextMany => r'$licenseCount thrwydded';
 
   @override
-  String? get licensesPackageDetailTextOne => '1 trwydded';
+  String? get licensesPackageDetailTextOne => '1 drwydded';
 
   @override
   String get licensesPackageDetailTextOther => r'$licenseCount trwydded';
@@ -5588,7 +6392,13 @@ class MaterialLocalizationCy extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Trwyddedau';
 
   @override
+  String get lookUpButtonLabel => 'Chwilio';
+
+  @override
   String get menuBarMenuLabel => 'Dewislen bar dewislen';
+
+  @override
+  String get menuDismissLabel => "Diystyru'r ddewislen";
 
   @override
   String get modalBarrierDismissLabel => 'Diystyru';
@@ -5675,7 +6485,7 @@ class MaterialLocalizationCy extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Cadw';
 
   @override
-  String get scanTextButtonLabel => 'Scan text';
+  String get scanTextButtonLabel => 'Sganio testun';
 
   @override
   String get scrimLabel => 'Scrim';
@@ -5690,28 +6500,37 @@ class MaterialLocalizationCy extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Chwilio';
 
   @override
-  String get selectAllButtonLabel => 'Dewis y Cyfan';
+  String get searchWebButtonLabel => "Chwilio'r We";
+
+  @override
+  String get selectAllButtonLabel => 'Dewis y cyfan';
 
   @override
   String get selectYearSemanticsLabel => 'Dewiswch flwyddyn';
 
   @override
-  String? get selectedRowCountTitleFew => r"Mae $selectedRowCount eitem wedi'u dewis";
+  String get selectedDateLabel => "Wedi'i ddewis";
 
   @override
-  String? get selectedRowCountTitleMany => r"Mae $selectedRowCount eitem wedi'u dewis";
+  String? get selectedRowCountTitleFew => r"$selectedRowCount eitem wedi'u dewis";
 
   @override
-  String? get selectedRowCountTitleOne => "Mae 1 eitem wedi'i dewis";
+  String? get selectedRowCountTitleMany => r"$selectedRowCount eitem wedi'u dewis";
 
   @override
-  String get selectedRowCountTitleOther => r"Mae $selectedRowCount eitem wedi'u dewis";
+  String? get selectedRowCountTitleOne => "1 eitem wedi'i dewis";
 
   @override
-  String? get selectedRowCountTitleTwo => r"Mae $selectedRowCount eitem wedi'u dewis";
+  String get selectedRowCountTitleOther => r"$selectedRowCount eitem wedi'u dewis";
+
+  @override
+  String? get selectedRowCountTitleTwo => r"$selectedRowCount eitem wedi'u dewis";
 
   @override
   String? get selectedRowCountTitleZero => "Nid oes unrhyw eitemau wedi'u dewis";
+
+  @override
+  String get shareButtonLabel => 'Rhannu';
 
   @override
   String get showAccountsLabel => 'Dangos cyfrifon';
@@ -5757,10 +6576,18 @@ class MaterialLocalizationCy extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Danish (`da`).
+@Deprecated(
+  'Use MaterialLocalizationDa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationDa extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Danish.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationDa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationDa({
     super.localeName = 'da',
     required super.fullYearFormat,
@@ -5796,13 +6623,16 @@ class MaterialLocalizationDa extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Annuller';
 
   @override
+  String get clearButtonTooltip => 'Ryd tekst';
+
+  @override
   String get closeButtonLabel => 'Luk';
 
   @override
   String get closeButtonTooltip => 'Luk';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Udvidet';
 
   @override
   String get collapsedIconTapHint => 'Udvid';
@@ -5862,22 +6692,22 @@ class MaterialLocalizationDa extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigationsmenu';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Skjult';
 
   @override
   String get expandedIconTapHint => 'Skjul';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'tryk to gange for at udvide';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Udvid for at få flere oplysninger';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'tryk to gange for at skjule';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Skjul';
 
   @override
   String get firstPageTooltip => 'Første side';
@@ -6066,10 +6896,16 @@ class MaterialLocalizationDa extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licenser';
 
   @override
+  String get lookUpButtonLabel => 'Slå op';
+
+  @override
   String get menuBarMenuLabel => 'Menuen for menulinjen';
 
   @override
-  String get modalBarrierDismissLabel => 'Afvis';
+  String get menuDismissLabel => 'Luk menu';
+
+  @override
+  String get modalBarrierDismissLabel => 'Luk';
 
   @override
   String get moreButtonTooltip => 'Mere';
@@ -6126,7 +6962,7 @@ class MaterialLocalizationDa extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Flyt ned';
@@ -6168,10 +7004,16 @@ class MaterialLocalizationDa extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Søg';
 
   @override
+  String get searchWebButtonLabel => 'Søg på nettet';
+
+  @override
   String get selectAllButtonLabel => 'Markér alt';
 
   @override
   String get selectYearSemanticsLabel => 'Vælg år';
+
+  @override
+  String get selectedDateLabel => 'Valgt';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -6192,6 +7034,9 @@ class MaterialLocalizationDa extends GlobalMaterialLocalizations {
   String? get selectedRowCountTitleZero => null;
 
   @override
+  String get shareButtonLabel => 'Del';
+
+  @override
   String get showAccountsLabel => 'Vis konti';
 
   @override
@@ -6204,7 +7049,7 @@ class MaterialLocalizationDa extends GlobalMaterialLocalizations {
   String get tabLabelRaw => r'Fane $tabIndex af $tabCount';
 
   @override
-  TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.HH_colon_mm;
+  TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.HH_dot_mm;
 
   @override
   String get timePickerDialHelpText => 'Vælg tidspunkt';
@@ -6235,10 +7080,18 @@ class MaterialLocalizationDa extends GlobalMaterialLocalizations {
 }
 
 /// The translations for German (`de`).
+@Deprecated(
+  'Use MaterialLocalizationDe from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationDe extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for German.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationDe from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationDe({
     super.localeName = 'de',
     required super.fullYearFormat,
@@ -6274,13 +7127,16 @@ class MaterialLocalizationDe extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Abbrechen';
 
   @override
+  String get clearButtonTooltip => 'Text löschen';
+
+  @override
   String get closeButtonLabel => 'Schließen';
 
   @override
   String get closeButtonTooltip => 'Schließen';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Maximiert';
 
   @override
   String get collapsedIconTapHint => 'Maximieren';
@@ -6340,22 +7196,22 @@ class MaterialLocalizationDe extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigationsmenü';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Minimiert';
 
   @override
   String get expandedIconTapHint => 'Minimieren';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'Zum Maximieren doppeltippen';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Für weitere Details maximieren';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'Zum Minimieren doppeltippen';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Minimieren';
 
   @override
   String get firstPageTooltip => 'Erste Seite';
@@ -6544,7 +7400,13 @@ class MaterialLocalizationDe extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Lizenzen';
 
   @override
+  String get lookUpButtonLabel => 'Nachschlagen';
+
+  @override
   String get menuBarMenuLabel => 'Menü in der Menüleiste';
+
+  @override
+  String get menuDismissLabel => 'Menü schließen';
 
   @override
   String get modalBarrierDismissLabel => 'Schließen';
@@ -6604,7 +7466,7 @@ class MaterialLocalizationDe extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Nach unten verschieben';
@@ -6646,10 +7508,16 @@ class MaterialLocalizationDe extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Suchen';
 
   @override
+  String get searchWebButtonLabel => 'Im Web suchen';
+
+  @override
   String get selectAllButtonLabel => 'Alle auswählen';
 
   @override
   String get selectYearSemanticsLabel => 'Jahr auswählen';
+
+  @override
+  String get selectedDateLabel => 'Ausgewählt';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -6668,6 +7536,9 @@ class MaterialLocalizationDe extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'Keine Objekte ausgewählt';
+
+  @override
+  String get shareButtonLabel => 'Teilen';
 
   @override
   String get showAccountsLabel => 'Konten anzeigen';
@@ -6713,10 +7584,18 @@ class MaterialLocalizationDe extends GlobalMaterialLocalizations {
 }
 
 /// The translations for German, as used in Switzerland (`de_CH`).
+@Deprecated(
+  'Use MaterialLocalizationDeCh from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationDeCh extends MaterialLocalizationDe {
   /// Create an instance of the translation bundle for German, as used in Switzerland.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationDeCh from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationDeCh({
     super.localeName = 'de_CH',
     required super.fullYearFormat,
@@ -6777,10 +7656,18 @@ class MaterialLocalizationDeCh extends MaterialLocalizationDe {
 }
 
 /// The translations for Modern Greek (`el`).
+@Deprecated(
+  'Use MaterialLocalizationEl from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEl extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Modern Greek.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEl from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEl({
     super.localeName = 'el',
     required super.fullYearFormat,
@@ -6816,13 +7703,16 @@ class MaterialLocalizationEl extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Ακύρωση';
 
   @override
+  String get clearButtonTooltip => 'Διαγραφή κειμένου';
+
+  @override
   String get closeButtonLabel => 'Κλείσιμο';
 
   @override
   String get closeButtonTooltip => 'Κλείσιμο';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Αναπτύχθηκε';
 
   @override
   String get collapsedIconTapHint => 'Ανάπτυξη';
@@ -6882,22 +7772,22 @@ class MaterialLocalizationEl extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Μενού πλοήγησης';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Συμπτύχθηκε';
 
   @override
   String get expandedIconTapHint => 'Σύμπτυξη';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'πατήστε δύο φορές για ανάπτυξη';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Ανάπτυξη για περισσότερες λεπτομέρειες';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'πατήστε δύο φορές για σύμπτυξη';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Σύμπτυξη';
 
   @override
   String get firstPageTooltip => 'Πρώτη σελίδα';
@@ -7086,7 +7976,13 @@ class MaterialLocalizationEl extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Άδειες';
 
   @override
+  String get lookUpButtonLabel => 'Look Up';
+
+  @override
   String get menuBarMenuLabel => 'Μενού γραμμής μενού';
+
+  @override
+  String get menuDismissLabel => 'Παράβλεψη μενού';
 
   @override
   String get modalBarrierDismissLabel => 'Παράβλεψη';
@@ -7146,7 +8042,7 @@ class MaterialLocalizationEl extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Μετακίνηση προς τα κάτω';
@@ -7188,10 +8084,16 @@ class MaterialLocalizationEl extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Αναζήτηση';
 
   @override
+  String get searchWebButtonLabel => 'Αναζήτηση στον ιστό';
+
+  @override
   String get selectAllButtonLabel => 'Επιλογή όλων';
 
   @override
   String get selectYearSemanticsLabel => 'Επιλογή έτους';
+
+  @override
+  String get selectedDateLabel => 'Επιλεγμένο';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -7210,6 +8112,9 @@ class MaterialLocalizationEl extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Κοινή χρήση';
 
   @override
   String get showAccountsLabel => 'Εμφάνιση λογαριασμών';
@@ -7255,10 +8160,18 @@ class MaterialLocalizationEl extends GlobalMaterialLocalizations {
 }
 
 /// The translations for English (`en`).
+@Deprecated(
+  'Use MaterialLocalizationEn from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEn extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for English.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEn from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEn({
     super.localeName = 'en',
     required super.fullYearFormat,
@@ -7292,6 +8205,9 @@ class MaterialLocalizationEn extends GlobalMaterialLocalizations {
 
   @override
   String get cancelButtonLabel => 'Cancel';
+
+  @override
+  String get clearButtonTooltip => 'Clear text';
 
   @override
   String get closeButtonLabel => 'Close';
@@ -7564,7 +8480,13 @@ class MaterialLocalizationEn extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licenses';
 
   @override
+  String get lookUpButtonLabel => 'Look Up';
+
+  @override
   String get menuBarMenuLabel => 'Menu bar menu';
+
+  @override
+  String get menuDismissLabel => 'Dismiss menu';
 
   @override
   String get modalBarrierDismissLabel => 'Dismiss';
@@ -7666,10 +8588,16 @@ class MaterialLocalizationEn extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Search';
 
   @override
+  String get searchWebButtonLabel => 'Search Web';
+
+  @override
   String get selectAllButtonLabel => 'Select all';
 
   @override
   String get selectYearSemanticsLabel => 'Select year';
+
+  @override
+  String get selectedDateLabel => 'Selected';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -7688,6 +8616,9 @@ class MaterialLocalizationEn extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'No items selected';
+
+  @override
+  String get shareButtonLabel => 'Share';
 
   @override
   String get showAccountsLabel => 'Show accounts';
@@ -7733,10 +8664,18 @@ class MaterialLocalizationEn extends GlobalMaterialLocalizations {
 }
 
 /// The translations for English, as used in Australia (`en_AU`).
+@Deprecated(
+  'Use MaterialLocalizationEnAu from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEnAu extends MaterialLocalizationEn {
   /// Create an instance of the translation bundle for English, as used in Australia.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEnAu from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEnAu({
     super.localeName = 'en_AU',
     required super.fullYearFormat,
@@ -7749,6 +8688,15 @@ class MaterialLocalizationEnAu extends MaterialLocalizationEn {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get lookUpButtonLabel => 'Look up';
+
+  @override
+  String get expansionTileExpandedHint => 'double-tap to collapse';
+
+  @override
+  String get expansionTileCollapsedHint => 'double-tap to expand';
 
   @override
   String get bottomSheetLabel => 'Bottom sheet';
@@ -7821,10 +8769,18 @@ class MaterialLocalizationEnAu extends MaterialLocalizationEn {
 }
 
 /// The translations for English, as used in Canada (`en_CA`).
+@Deprecated(
+  'Use MaterialLocalizationEnCa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEnCa extends MaterialLocalizationEn {
   /// Create an instance of the translation bundle for English, as used in Canada.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEnCa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEnCa({
     super.localeName = 'en_CA',
     required super.fullYearFormat,
@@ -7839,101 +8795,22 @@ class MaterialLocalizationEnCa extends MaterialLocalizationEn {
   });
 
   @override
-  String get keyboardKeyCapsLock => 'Caps lock';
-
-  @override
-  String get keyboardKeyChannelUp => 'Channel up';
-
-  @override
-  String get keyboardKeyChannelDown => 'Channel down';
-
-  @override
-  String get keyboardKeyNumLock => 'Num lock';
-
-  @override
-  String get keyboardKeyScrollLock => 'Scroll lock';
-
-  @override
-  String get keyboardKeyPrintScreen => 'Print screen';
-
-  @override
-  String get keyboardKeyPowerOff => 'Power off';
-
-  @override
-  String get keyboardKeyNumpadEnter => 'Num enter';
-
-  @override
-  String get timePickerDialHelpText => 'SELECT TIME';
-
-  @override
-  String get timePickerInputHelpText => 'ENTER TIME';
-
-  @override
-  String get dateInputLabel => 'Enter date';
-
-  @override
-  String get dateRangePickerHelpText => 'SELECT RANGE';
-
-  @override
-  String get datePickerHelpText => 'SELECT DATE';
-
-  @override
-  String get saveButtonLabel => 'SAVE';
-
-  @override
-  String get dateRangeEndLabel => 'End date';
-
-  @override
-  String get dateRangeStartLabel => 'Start date';
-
-  @override
-  String get unspecifiedDateRange => 'Date range';
-
-  @override
-  String get dateHelpText => 'dd/mm/yyyy';
-
-  @override
-  String get licensesPageTitle => 'Licences';
-
-  @override
   String? get licensesPackageDetailTextZero => 'No licences';
-
-  @override
-  String? get licensesPackageDetailTextOne => '1 licence';
-
-  @override
-  String get licensesPackageDetailTextOther => r'$licenseCount licences';
-
-  @override
-  String get cancelButtonLabel => 'CANCEL';
-
-  @override
-  String get closeButtonLabel => 'CLOSE';
-
-  @override
-  String get continueButtonLabel => 'CONTINUE';
-
-  @override
-  String get viewLicensesButtonLabel => 'VIEW LICENCES';
-
-  @override
-  String get popupMenuLabel => 'Pop-up menu';
-
-  @override
-  String get dialogLabel => 'Dialogue';
-
-  @override
-  String get reorderItemLeft => 'Move to the left';
-
-  @override
-  String get reorderItemRight => 'Move to the right';
 }
 
 /// The translations for English, as used in the United Kingdom (`en_GB`).
+@Deprecated(
+  'Use MaterialLocalizationEnGb from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEnGb extends MaterialLocalizationEn {
   /// Create an instance of the translation bundle for English, as used in the United Kingdom.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEnGb from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEnGb({
     super.localeName = 'en_GB',
     required super.fullYearFormat,
@@ -7946,6 +8823,15 @@ class MaterialLocalizationEnGb extends MaterialLocalizationEn {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get lookUpButtonLabel => 'Look up';
+
+  @override
+  String get expansionTileExpandedHint => 'double-tap to collapse';
+
+  @override
+  String get expansionTileCollapsedHint => 'double-tap to expand';
 
   @override
   String get bottomSheetLabel => 'Bottom sheet';
@@ -8021,10 +8907,18 @@ class MaterialLocalizationEnGb extends MaterialLocalizationEn {
 }
 
 /// The translations for English, as used in Ireland (`en_IE`).
+@Deprecated(
+  'Use MaterialLocalizationEnIe from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEnIe extends MaterialLocalizationEn {
   /// Create an instance of the translation bundle for English, as used in Ireland.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEnIe from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEnIe({
     super.localeName = 'en_IE',
     required super.fullYearFormat,
@@ -8037,6 +8931,15 @@ class MaterialLocalizationEnIe extends MaterialLocalizationEn {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get lookUpButtonLabel => 'Look up';
+
+  @override
+  String get expansionTileExpandedHint => 'double-tap to collapse';
+
+  @override
+  String get expansionTileCollapsedHint => 'double-tap to expand';
 
   @override
   String get bottomSheetLabel => 'Bottom sheet';
@@ -8112,10 +9015,18 @@ class MaterialLocalizationEnIe extends MaterialLocalizationEn {
 }
 
 /// The translations for English, as used in India (`en_IN`).
+@Deprecated(
+  'Use MaterialLocalizationEnIn from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEnIn extends MaterialLocalizationEn {
   /// Create an instance of the translation bundle for English, as used in India.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEnIn from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEnIn({
     super.localeName = 'en_IN',
     required super.fullYearFormat,
@@ -8128,6 +9039,15 @@ class MaterialLocalizationEnIn extends MaterialLocalizationEn {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get lookUpButtonLabel => 'Look up';
+
+  @override
+  String get expansionTileExpandedHint => 'double-tap to collapse';
+
+  @override
+  String get expansionTileCollapsedHint => 'double-tap to expand';
 
   @override
   String get bottomSheetLabel => 'Bottom sheet';
@@ -8200,10 +9120,18 @@ class MaterialLocalizationEnIn extends MaterialLocalizationEn {
 }
 
 /// The translations for English, as used in New Zealand (`en_NZ`).
+@Deprecated(
+  'Use MaterialLocalizationEnNz from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEnNz extends MaterialLocalizationEn {
   /// Create an instance of the translation bundle for English, as used in New Zealand.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEnNz from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEnNz({
     super.localeName = 'en_NZ',
     required super.fullYearFormat,
@@ -8216,6 +9144,15 @@ class MaterialLocalizationEnNz extends MaterialLocalizationEn {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get lookUpButtonLabel => 'Look up';
+
+  @override
+  String get expansionTileExpandedHint => 'double-tap to collapse';
+
+  @override
+  String get expansionTileCollapsedHint => 'double-tap to expand';
 
   @override
   String get bottomSheetLabel => 'Bottom sheet';
@@ -8288,10 +9225,18 @@ class MaterialLocalizationEnNz extends MaterialLocalizationEn {
 }
 
 /// The translations for English, as used in Singapore (`en_SG`).
+@Deprecated(
+  'Use MaterialLocalizationEnSg from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEnSg extends MaterialLocalizationEn {
   /// Create an instance of the translation bundle for English, as used in Singapore.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEnSg from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEnSg({
     super.localeName = 'en_SG',
     required super.fullYearFormat,
@@ -8304,6 +9249,15 @@ class MaterialLocalizationEnSg extends MaterialLocalizationEn {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get lookUpButtonLabel => 'Look up';
+
+  @override
+  String get expansionTileExpandedHint => 'double-tap to collapse';
+
+  @override
+  String get expansionTileCollapsedHint => 'double-tap to expand';
 
   @override
   String get bottomSheetLabel => 'Bottom sheet';
@@ -8376,10 +9330,18 @@ class MaterialLocalizationEnSg extends MaterialLocalizationEn {
 }
 
 /// The translations for English, as used in South Africa (`en_ZA`).
+@Deprecated(
+  'Use MaterialLocalizationEnZa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEnZa extends MaterialLocalizationEn {
   /// Create an instance of the translation bundle for English, as used in South Africa.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEnZa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEnZa({
     super.localeName = 'en_ZA',
     required super.fullYearFormat,
@@ -8392,6 +9354,15 @@ class MaterialLocalizationEnZa extends MaterialLocalizationEn {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get lookUpButtonLabel => 'Look up';
+
+  @override
+  String get expansionTileExpandedHint => 'double-tap to collapse';
+
+  @override
+  String get expansionTileCollapsedHint => 'double-tap to expand';
 
   @override
   String get bottomSheetLabel => 'Bottom sheet';
@@ -8467,10 +9438,18 @@ class MaterialLocalizationEnZa extends MaterialLocalizationEn {
 }
 
 /// The translations for Spanish Castilian (`es`).
+@Deprecated(
+  'Use MaterialLocalizationEs from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEs extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Spanish Castilian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEs from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEs({
     super.localeName = 'es',
     required super.fullYearFormat,
@@ -8506,13 +9485,16 @@ class MaterialLocalizationEs extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Cancelar';
 
   @override
+  String get clearButtonTooltip => 'Borrar texto';
+
+  @override
   String get closeButtonLabel => 'Cerrar';
 
   @override
   String get closeButtonTooltip => 'Cerrar';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Desplegado';
 
   @override
   String get collapsedIconTapHint => 'Mostrar';
@@ -8572,22 +9554,22 @@ class MaterialLocalizationEs extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menú de navegación';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Contraído';
 
   @override
   String get expandedIconTapHint => 'Ocultar';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'toca dos veces para desplegar';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Desplegar para ver más detalles';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'toca dos veces para contraer';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Contraer';
 
   @override
   String get firstPageTooltip => 'Primera página';
@@ -8776,7 +9758,13 @@ class MaterialLocalizationEs extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licencias';
 
   @override
+  String get lookUpButtonLabel => 'Buscador visual';
+
+  @override
   String get menuBarMenuLabel => 'Menú de la barra de menú';
+
+  @override
+  String get menuDismissLabel => 'Cerrar menú';
 
   @override
   String get modalBarrierDismissLabel => 'Cerrar';
@@ -8836,7 +9824,7 @@ class MaterialLocalizationEs extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Mover hacia abajo';
@@ -8878,10 +9866,16 @@ class MaterialLocalizationEs extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Buscar';
 
   @override
+  String get searchWebButtonLabel => 'Buscar en la Web';
+
+  @override
   String get selectAllButtonLabel => 'Seleccionar todo';
 
   @override
   String get selectYearSemanticsLabel => 'Seleccionar año';
+
+  @override
+  String get selectedDateLabel => 'Seleccionada';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -8900,6 +9894,9 @@ class MaterialLocalizationEs extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'No se han seleccionado elementos';
+
+  @override
+  String get shareButtonLabel => 'Compartir';
 
   @override
   String get showAccountsLabel => 'Mostrar cuentas';
@@ -8945,10 +9942,18 @@ class MaterialLocalizationEs extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Spanish Castilian, as used in Latin America and the Caribbean (`es_419`).
+@Deprecated(
+  'Use MaterialLocalizationEs419 from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEs419 extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Latin America and the Caribbean.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEs419 from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEs419({
     super.localeName = 'es_419',
     required super.fullYearFormat,
@@ -8961,6 +9966,27 @@ class MaterialLocalizationEs419 extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -9114,10 +10140,18 @@ class MaterialLocalizationEs419 extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Argentina (`es_AR`).
+@Deprecated(
+  'Use MaterialLocalizationEsAr from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsAr extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Argentina.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsAr from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsAr({
     super.localeName = 'es_AR',
     required super.fullYearFormat,
@@ -9130,6 +10164,27 @@ class MaterialLocalizationEsAr extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -9283,10 +10338,18 @@ class MaterialLocalizationEsAr extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Bolivia (`es_BO`).
+@Deprecated(
+  'Use MaterialLocalizationEsBo from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsBo extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Bolivia.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsBo from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsBo({
     super.localeName = 'es_BO',
     required super.fullYearFormat,
@@ -9299,6 +10362,27 @@ class MaterialLocalizationEsBo extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -9452,10 +10536,18 @@ class MaterialLocalizationEsBo extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Chile (`es_CL`).
+@Deprecated(
+  'Use MaterialLocalizationEsCl from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsCl extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Chile.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsCl from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsCl({
     super.localeName = 'es_CL',
     required super.fullYearFormat,
@@ -9468,6 +10560,27 @@ class MaterialLocalizationEsCl extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -9621,10 +10734,18 @@ class MaterialLocalizationEsCl extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Colombia (`es_CO`).
+@Deprecated(
+  'Use MaterialLocalizationEsCo from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsCo extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Colombia.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsCo from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsCo({
     super.localeName = 'es_CO',
     required super.fullYearFormat,
@@ -9637,6 +10758,27 @@ class MaterialLocalizationEsCo extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -9790,10 +10932,18 @@ class MaterialLocalizationEsCo extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Costa Rica (`es_CR`).
+@Deprecated(
+  'Use MaterialLocalizationEsCr from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsCr extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Costa Rica.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsCr from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsCr({
     super.localeName = 'es_CR',
     required super.fullYearFormat,
@@ -9806,6 +10956,27 @@ class MaterialLocalizationEsCr extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -9959,10 +11130,18 @@ class MaterialLocalizationEsCr extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in the Dominican Republic (`es_DO`).
+@Deprecated(
+  'Use MaterialLocalizationEsDo from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsDo extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in the Dominican Republic.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsDo from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsDo({
     super.localeName = 'es_DO',
     required super.fullYearFormat,
@@ -9975,6 +11154,27 @@ class MaterialLocalizationEsDo extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -10128,10 +11328,18 @@ class MaterialLocalizationEsDo extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Ecuador (`es_EC`).
+@Deprecated(
+  'Use MaterialLocalizationEsEc from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsEc extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Ecuador.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsEc from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsEc({
     super.localeName = 'es_EC',
     required super.fullYearFormat,
@@ -10144,6 +11352,27 @@ class MaterialLocalizationEsEc extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -10297,10 +11526,18 @@ class MaterialLocalizationEsEc extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Guatemala (`es_GT`).
+@Deprecated(
+  'Use MaterialLocalizationEsGt from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsGt extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Guatemala.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsGt from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsGt({
     super.localeName = 'es_GT',
     required super.fullYearFormat,
@@ -10313,6 +11550,27 @@ class MaterialLocalizationEsGt extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -10466,10 +11724,18 @@ class MaterialLocalizationEsGt extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Honduras (`es_HN`).
+@Deprecated(
+  'Use MaterialLocalizationEsHn from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsHn extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Honduras.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsHn from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsHn({
     super.localeName = 'es_HN',
     required super.fullYearFormat,
@@ -10482,6 +11748,27 @@ class MaterialLocalizationEsHn extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -10635,10 +11922,18 @@ class MaterialLocalizationEsHn extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Mexico (`es_MX`).
+@Deprecated(
+  'Use MaterialLocalizationEsMx from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsMx extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Mexico.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsMx from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsMx({
     super.localeName = 'es_MX',
     required super.fullYearFormat,
@@ -10651,6 +11946,27 @@ class MaterialLocalizationEsMx extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -10804,10 +12120,18 @@ class MaterialLocalizationEsMx extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Nicaragua (`es_NI`).
+@Deprecated(
+  'Use MaterialLocalizationEsNi from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsNi extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Nicaragua.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsNi from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsNi({
     super.localeName = 'es_NI',
     required super.fullYearFormat,
@@ -10820,6 +12144,27 @@ class MaterialLocalizationEsNi extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -10973,10 +12318,18 @@ class MaterialLocalizationEsNi extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Panama (`es_PA`).
+@Deprecated(
+  'Use MaterialLocalizationEsPa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsPa extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Panama.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsPa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsPa({
     super.localeName = 'es_PA',
     required super.fullYearFormat,
@@ -10989,6 +12342,27 @@ class MaterialLocalizationEsPa extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -11142,10 +12516,18 @@ class MaterialLocalizationEsPa extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Peru (`es_PE`).
+@Deprecated(
+  'Use MaterialLocalizationEsPe from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsPe extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Peru.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsPe from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsPe({
     super.localeName = 'es_PE',
     required super.fullYearFormat,
@@ -11158,6 +12540,27 @@ class MaterialLocalizationEsPe extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -11311,10 +12714,18 @@ class MaterialLocalizationEsPe extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Puerto Rico (`es_PR`).
+@Deprecated(
+  'Use MaterialLocalizationEsPr from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsPr extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Puerto Rico.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsPr from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsPr({
     super.localeName = 'es_PR',
     required super.fullYearFormat,
@@ -11327,6 +12738,27 @@ class MaterialLocalizationEsPr extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -11480,10 +12912,18 @@ class MaterialLocalizationEsPr extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Paraguay (`es_PY`).
+@Deprecated(
+  'Use MaterialLocalizationEsPy from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsPy extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Paraguay.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsPy from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsPy({
     super.localeName = 'es_PY',
     required super.fullYearFormat,
@@ -11496,6 +12936,27 @@ class MaterialLocalizationEsPy extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -11649,10 +13110,18 @@ class MaterialLocalizationEsPy extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in El Salvador (`es_SV`).
+@Deprecated(
+  'Use MaterialLocalizationEsSv from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsSv extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in El Salvador.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsSv from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsSv({
     super.localeName = 'es_SV',
     required super.fullYearFormat,
@@ -11665,6 +13134,27 @@ class MaterialLocalizationEsSv extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -11818,10 +13308,18 @@ class MaterialLocalizationEsSv extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in the United States (`es_US`).
+@Deprecated(
+  'Use MaterialLocalizationEsUs from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsUs extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in the United States.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsUs from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsUs({
     super.localeName = 'es_US',
     required super.fullYearFormat,
@@ -11834,6 +13332,27 @@ class MaterialLocalizationEsUs extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -11990,10 +13509,18 @@ class MaterialLocalizationEsUs extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Uruguay (`es_UY`).
+@Deprecated(
+  'Use MaterialLocalizationEsUy from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsUy extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Uruguay.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsUy from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsUy({
     super.localeName = 'es_UY',
     required super.fullYearFormat,
@@ -12006,6 +13533,27 @@ class MaterialLocalizationEsUy extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -12159,10 +13707,18 @@ class MaterialLocalizationEsUy extends MaterialLocalizationEs {
 }
 
 /// The translations for Spanish Castilian, as used in Venezuela (`es_VE`).
+@Deprecated(
+  'Use MaterialLocalizationEsVe from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEsVe extends MaterialLocalizationEs {
   /// Create an instance of the translation bundle for Spanish Castilian, as used in Venezuela.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEsVe from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEsVe({
     super.localeName = 'es_VE',
     required super.fullYearFormat,
@@ -12175,6 +13731,27 @@ class MaterialLocalizationEsVe extends MaterialLocalizationEs {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => 'Analizar texto';
+
+  @override
+  String get lookUpButtonLabel => 'Mirar hacia arriba';
+
+  @override
+  String get menuDismissLabel => 'Descartar menú';
+
+  @override
+  String get expansionTileExpandedHint => 'presiona dos veces para contraer';
+
+  @override
+  String get expansionTileCollapsedHint => 'presiona dos veces para expandir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para ver más detalles';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get scrimLabel => 'Lámina';
@@ -12328,10 +13905,18 @@ class MaterialLocalizationEsVe extends MaterialLocalizationEs {
 }
 
 /// The translations for Estonian (`et`).
+@Deprecated(
+  'Use MaterialLocalizationEt from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEt extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Estonian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEt from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEt({
     super.localeName = 'et',
     required super.fullYearFormat,
@@ -12367,13 +13952,16 @@ class MaterialLocalizationEt extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Tühista';
 
   @override
+  String get clearButtonTooltip => 'Kustutage tekst';
+
+  @override
   String get closeButtonLabel => 'Sule';
 
   @override
   String get closeButtonTooltip => 'Sule';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Laiendatud';
 
   @override
   String get collapsedIconTapHint => 'Laienda';
@@ -12433,22 +14021,22 @@ class MaterialLocalizationEt extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigeerimismenüü';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Ahendatud';
 
   @override
   String get expandedIconTapHint => 'Ahenda';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'topeltpuudutage laiendamiseks';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Laiendage lisateabe nägemiseks';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'topeltpuudutage ahendamiseks';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Ahenda';
 
   @override
   String get firstPageTooltip => 'Esimene leht';
@@ -12637,7 +14225,13 @@ class MaterialLocalizationEt extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Litsentsid';
 
   @override
+  String get lookUpButtonLabel => 'Look Up';
+
+  @override
   String get menuBarMenuLabel => 'Menüüriba menüü';
+
+  @override
+  String get menuDismissLabel => 'Sulge menüü';
 
   @override
   String get modalBarrierDismissLabel => 'Loobu';
@@ -12697,7 +14291,7 @@ class MaterialLocalizationEt extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Teisalda alla';
@@ -12724,7 +14318,7 @@ class MaterialLocalizationEt extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Salvesta';
 
   @override
-  String get scanTextButtonLabel => 'Skanni teksti';
+  String get scanTextButtonLabel => 'Skanni tekst';
 
   @override
   String get scrimLabel => 'Sirm';
@@ -12739,10 +14333,16 @@ class MaterialLocalizationEt extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Otsing';
 
   @override
+  String get searchWebButtonLabel => 'Otsi veebist';
+
+  @override
   String get selectAllButtonLabel => 'Vali kõik';
 
   @override
   String get selectYearSemanticsLabel => 'Valige aasta';
+
+  @override
+  String get selectedDateLabel => 'Valitud';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -12761,6 +14361,9 @@ class MaterialLocalizationEt extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Jagamine';
 
   @override
   String get showAccountsLabel => 'Kuva kontod';
@@ -12806,10 +14409,18 @@ class MaterialLocalizationEt extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Basque (`eu`).
+@Deprecated(
+  'Use MaterialLocalizationEu from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationEu extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Basque.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationEu from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationEu({
     super.localeName = 'eu',
     required super.fullYearFormat,
@@ -12845,13 +14456,16 @@ class MaterialLocalizationEu extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Utzi';
 
   @override
+  String get clearButtonTooltip => 'Garbitu testua';
+
+  @override
   String get closeButtonLabel => 'Itxi';
 
   @override
   String get closeButtonTooltip => 'Itxi';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Zabalduta';
 
   @override
   String get collapsedIconTapHint => 'Zabaldu';
@@ -12911,22 +14525,22 @@ class MaterialLocalizationEu extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Nabigazio-menua';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Tolestuta';
 
   @override
   String get expandedIconTapHint => 'Tolestu';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'zabaltzeko, sakatu birritan';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Zabaldu hau xehetasun gehiago lortzeko';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'tolesteko, sakatu birritan';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Tolestu';
 
   @override
   String get firstPageTooltip => 'Lehenengo orria';
@@ -13115,7 +14729,13 @@ class MaterialLocalizationEu extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Lizentziak';
 
   @override
+  String get lookUpButtonLabel => 'Bilatu';
+
+  @override
   String get menuBarMenuLabel => 'Menu-barraren menua';
+
+  @override
+  String get menuDismissLabel => 'Baztertu menua';
 
   @override
   String get modalBarrierDismissLabel => 'Baztertu';
@@ -13217,10 +14837,16 @@ class MaterialLocalizationEu extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Bilatu';
 
   @override
+  String get searchWebButtonLabel => 'Bilatu sarean';
+
+  @override
   String get selectAllButtonLabel => 'Hautatu guztiak';
 
   @override
   String get selectYearSemanticsLabel => 'Hautatu urtea';
+
+  @override
+  String get selectedDateLabel => 'Hautatuta';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -13241,6 +14867,9 @@ class MaterialLocalizationEu extends GlobalMaterialLocalizations {
   String? get selectedRowCountTitleZero => null;
 
   @override
+  String get shareButtonLabel => 'Partekatu';
+
+  @override
   String get showAccountsLabel => 'Erakutsi kontuak';
 
   @override
@@ -13253,7 +14882,7 @@ class MaterialLocalizationEu extends GlobalMaterialLocalizations {
   String get tabLabelRaw => r'$tabIndex/$tabCount fitxa';
 
   @override
-  TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.H_colon_mm;
+  TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.HH_colon_mm;
 
   @override
   String get timePickerDialHelpText => 'Hautatu ordua';
@@ -13284,10 +14913,18 @@ class MaterialLocalizationEu extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Persian (`fa`).
+@Deprecated(
+  'Use MaterialLocalizationFa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Persian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationFa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationFa({
     super.localeName = 'fa',
     required super.fullYearFormat,
@@ -13311,7 +14948,7 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get anteMeridiemAbbreviation => 'ق.ظ.';
 
   @override
-  String get backButtonTooltip => 'برگشت';
+  String get backButtonTooltip => 'برگشتن';
 
   @override
   String get bottomSheetLabel => 'برگ زیرین';
@@ -13323,22 +14960,25 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'لغو';
 
   @override
+  String get clearButtonTooltip => 'پاک کردن نوشتار';
+
+  @override
   String get closeButtonLabel => 'بستن';
 
   @override
   String get closeButtonTooltip => 'بستن';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'ازهم بازشده';
 
   @override
-  String get collapsedIconTapHint => 'بزرگ کردن';
+  String get collapsedIconTapHint => 'ازهم باز کردن';
 
   @override
   String get continueButtonLabel => 'ادامه';
 
   @override
-  String get copyButtonLabel => 'کپی';
+  String get copyButtonLabel => 'کپی کردن';
 
   @override
   String get currentDateLabel => 'امروز';
@@ -13347,7 +14987,7 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get cutButtonLabel => 'برش';
 
   @override
-  String get dateHelpText => 'روز/ماه/سال';
+  String get dateHelpText => 'رر/م‌م/س‌س‌س‌س';
 
   @override
   String get dateInputLabel => 'تاریخ را وارد کنید';
@@ -13380,31 +15020,31 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get deleteButtonTooltip => 'حذف';
 
   @override
-  String get dialModeButtonLabel => 'رفتن به حالت انتخابگر صفحه ساعت';
+  String get dialModeButtonLabel => 'رفتن به حالت انتخاب‌گر صفحه ساعت';
 
   @override
   String get dialogLabel => 'کادر گفتگو';
 
   @override
-  String get drawerLabel => 'منوی پیمایش';
+  String get drawerLabel => 'منو پیمایش';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'جمع‌شده';
 
   @override
-  String get expandedIconTapHint => 'کوچک کردن';
+  String get expandedIconTapHint => 'جمع کردن';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'برای ازهم بازکردن، دو تک‌ضرب بزنید';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'ازهم بازکردن برای جزئیات بیشتر';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'برای جمع کردن، دو تک‌ضرب بزنید';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'جمع کردن';
 
   @override
   String get firstPageTooltip => 'صفحه اول';
@@ -13413,7 +15053,7 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get hideAccountsLabel => 'پنهان کردن حساب‌ها';
 
   @override
-  String get inputDateModeButtonLabel => 'رفتن به ورودی';
+  String get inputDateModeButtonLabel => 'تغییر به ورودی';
 
   @override
   String get inputTimeModeButtonLabel => 'رفتن به حالت ورودی نوشتاری';
@@ -13431,13 +15071,13 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get keyboardKeyAlt => 'دگرساز';
 
   @override
-  String get keyboardKeyAltGraph => 'دگرساز راست';
+  String get keyboardKeyAltGraph => 'AltGr';
 
   @override
   String get keyboardKeyBackspace => 'پس‌بَر';
 
   @override
-  String get keyboardKeyCapsLock => 'حالت حروف بزرگ';
+  String get keyboardKeyCapsLock => 'Caps Lock';
 
   @override
   String get keyboardKeyChannelDown => 'کانال پایین';
@@ -13446,7 +15086,7 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get keyboardKeyChannelUp => 'کانال بالا';
 
   @override
-  String get keyboardKeyControl => 'مهار';
+  String get keyboardKeyControl => 'Ctrl';
 
   @override
   String get keyboardKeyDelete => 'حذف';
@@ -13458,7 +15098,7 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get keyboardKeyEnd => 'پایان';
 
   @override
-  String get keyboardKeyEscape => 'گریز';
+  String get keyboardKeyEscape => 'Esc';
 
   @override
   String get keyboardKeyFn => 'عملکرد';
@@ -13467,79 +15107,79 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get keyboardKeyHome => 'صفحه اصلی';
 
   @override
-  String get keyboardKeyInsert => 'درج';
+  String get keyboardKeyInsert => 'Insert';
 
   @override
   String get keyboardKeyMeta => 'متا';
 
   @override
-  String get keyboardKeyMetaMacOs => 'فرمان';
+  String get keyboardKeyMetaMacOs => 'Command';
 
   @override
   String get keyboardKeyMetaWindows => 'Win';
 
   @override
-  String get keyboardKeyNumLock => 'قفل اعداد';
+  String get keyboardKeyNumLock => 'Num Lock';
 
   @override
-  String get keyboardKeyNumpad0 => 'عدد ۰';
+  String get keyboardKeyNumpad0 => 'Numpad 0';
 
   @override
-  String get keyboardKeyNumpad1 => 'عدد ۱';
+  String get keyboardKeyNumpad1 => 'Numpad 1';
 
   @override
-  String get keyboardKeyNumpad2 => 'عدد ۲';
+  String get keyboardKeyNumpad2 => 'Numpad 2';
 
   @override
-  String get keyboardKeyNumpad3 => 'عدد ۳';
+  String get keyboardKeyNumpad3 => 'Numpad 3';
 
   @override
-  String get keyboardKeyNumpad4 => 'عدد ۴';
+  String get keyboardKeyNumpad4 => 'Numpad 4';
 
   @override
-  String get keyboardKeyNumpad5 => 'عدد ۵';
+  String get keyboardKeyNumpad5 => 'Numpad 5';
 
   @override
-  String get keyboardKeyNumpad6 => 'عدد ۶';
+  String get keyboardKeyNumpad6 => 'Numpad 6';
 
   @override
-  String get keyboardKeyNumpad7 => 'عدد ۷';
+  String get keyboardKeyNumpad7 => 'Numpad 7';
 
   @override
-  String get keyboardKeyNumpad8 => 'عدد ۸';
+  String get keyboardKeyNumpad8 => 'Numpad 8';
 
   @override
-  String get keyboardKeyNumpad9 => 'عدد ۹';
+  String get keyboardKeyNumpad9 => 'Numpad 9';
 
   @override
-  String get keyboardKeyNumpadAdd => 'عدد +';
+  String get keyboardKeyNumpadAdd => 'Numpad +‎';
 
   @override
-  String get keyboardKeyNumpadComma => 'عدد ,';
+  String get keyboardKeyNumpadComma => 'Numpad ,‎';
 
   @override
-  String get keyboardKeyNumpadDecimal => 'عدد .';
+  String get keyboardKeyNumpadDecimal => 'Numpad .‎';
 
   @override
-  String get keyboardKeyNumpadDivide => 'عدد /';
+  String get keyboardKeyNumpadDivide => 'Numpad /‎';
 
   @override
-  String get keyboardKeyNumpadEnter => 'ورود اعداد';
+  String get keyboardKeyNumpadEnter => 'Numpad Enter';
 
   @override
-  String get keyboardKeyNumpadEqual => 'عدد =';
+  String get keyboardKeyNumpadEqual => 'Numpad =‎';
 
   @override
-  String get keyboardKeyNumpadMultiply => 'عدد *';
+  String get keyboardKeyNumpadMultiply => 'Numpad *‎';
 
   @override
-  String get keyboardKeyNumpadParenLeft => 'عدد (';
+  String get keyboardKeyNumpadParenLeft => 'Numpad (‎';
 
   @override
-  String get keyboardKeyNumpadParenRight => 'عدد )';
+  String get keyboardKeyNumpadParenRight => 'Numpad )‎';
 
   @override
-  String get keyboardKeyNumpadSubtract => 'عدد -';
+  String get keyboardKeyNumpadSubtract => 'Numpad -‎';
 
   @override
   String get keyboardKeyPageDown => 'صفحه پایین';
@@ -13563,7 +15203,7 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get keyboardKeySelect => 'انتخاب';
 
   @override
-  String get keyboardKeyShift => 'کلید تبدیل';
+  String get keyboardKeyShift => 'Shift';
 
   @override
   String get keyboardKeySpace => 'فاصله';
@@ -13590,13 +15230,19 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String? get licensesPackageDetailTextZero => 'No licenses';
 
   @override
-  String get licensesPageTitle => 'مجوزها';
+  String get licensesPageTitle => 'پروانه‌ها';
 
   @override
-  String get menuBarMenuLabel => 'منوی نوار منو';
+  String get lookUpButtonLabel => 'جستجو';
 
   @override
-  String get modalBarrierDismissLabel => 'نپذیرفتن';
+  String get menuBarMenuLabel => 'منو نوار منو';
+
+  @override
+  String get menuDismissLabel => 'بستن منو';
+
+  @override
+  String get modalBarrierDismissLabel => 'بستن';
 
   @override
   String get moreButtonTooltip => 'بیشتر';
@@ -13611,7 +15257,7 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get okButtonLabel => 'تأیید';
 
   @override
-  String get openAppDrawerTooltip => 'باز کردن منوی پیمایش';
+  String get openAppDrawerTooltip => 'باز کردن منو پیمایش';
 
   @override
   String get pageRowsInfoTitleRaw => r'$firstRow–$lastRow از $rowCount';
@@ -13623,7 +15269,7 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get pasteButtonLabel => 'جای‌گذاری';
 
   @override
-  String get popupMenuLabel => 'منوی بازشو';
+  String get popupMenuLabel => 'منو بازشو';
 
   @override
   String get postMeridiemAbbreviation => 'ب.ظ.';
@@ -13653,7 +15299,7 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'انتقال به پایین';
@@ -13680,7 +15326,7 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'ذخیره';
 
   @override
-  String get scanTextButtonLabel => 'اسکن متن';
+  String get scanTextButtonLabel => 'اسکن کردن نوشتار';
 
   @override
   String get scrimLabel => 'رویه';
@@ -13695,10 +15341,16 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'جستجو';
 
   @override
+  String get searchWebButtonLabel => 'جستجو در وب';
+
+  @override
   String get selectAllButtonLabel => 'انتخاب همه';
 
   @override
   String get selectYearSemanticsLabel => 'انتخاب سال';
+
+  @override
+  String get selectedDateLabel => 'انتخاب‌شده';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -13717,6 +15369,9 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'هم‌رسانی کردن';
 
   @override
   String get showAccountsLabel => 'نشان دادن حساب‌ها';
@@ -13762,10 +15417,18 @@ class MaterialLocalizationFa extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Finnish (`fi`).
+@Deprecated(
+  'Use MaterialLocalizationFi from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationFi extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Finnish.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationFi from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationFi({
     super.localeName = 'fi',
     required super.fullYearFormat,
@@ -13801,13 +15464,16 @@ class MaterialLocalizationFi extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Peru';
 
   @override
+  String get clearButtonTooltip => 'Tyhjennä teksti';
+
+  @override
   String get closeButtonLabel => 'Sulje';
 
   @override
   String get closeButtonTooltip => 'Sulje';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Laajennettu';
 
   @override
   String get collapsedIconTapHint => 'Laajenna';
@@ -13867,22 +15533,22 @@ class MaterialLocalizationFi extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigointivalikko';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Tiivistetty';
 
   @override
   String get expandedIconTapHint => 'Tiivistä';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'laajenna kaksoisnapauttamalla';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Katso lisätietoja laajentamalla';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'tiivistä kaksoisnapauttamalla';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Tiivistä';
 
   @override
   String get firstPageTooltip => 'Ensimmäinen sivu';
@@ -14071,7 +15737,13 @@ class MaterialLocalizationFi extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Lisenssit';
 
   @override
+  String get lookUpButtonLabel => 'Hae';
+
+  @override
   String get menuBarMenuLabel => 'Valikkopalkki';
+
+  @override
+  String get menuDismissLabel => 'Hylkää valikko';
 
   @override
   String get modalBarrierDismissLabel => 'Ohita';
@@ -14131,7 +15803,7 @@ class MaterialLocalizationFi extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Siirrä alas';
@@ -14173,10 +15845,16 @@ class MaterialLocalizationFi extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Haku';
 
   @override
+  String get searchWebButtonLabel => 'Hae verkosta';
+
+  @override
   String get selectAllButtonLabel => 'Valitse kaikki';
 
   @override
   String get selectYearSemanticsLabel => 'Valitse vuosi';
+
+  @override
+  String get selectedDateLabel => 'Valittu';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -14197,6 +15875,9 @@ class MaterialLocalizationFi extends GlobalMaterialLocalizations {
   String? get selectedRowCountTitleZero => null;
 
   @override
+  String get shareButtonLabel => 'Jaa';
+
+  @override
   String get showAccountsLabel => 'Näytä tilit';
 
   @override
@@ -14206,7 +15887,7 @@ class MaterialLocalizationFi extends GlobalMaterialLocalizations {
   String get signedInLabel => 'Kirjautunut sisään';
 
   @override
-  String get tabLabelRaw => r'Välilehti $tabIndex/$tabCount';
+  String get tabLabelRaw => r'Välilehti $tabIndex kautta $tabCount';
 
   @override
   TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.HH_dot_mm;
@@ -14240,10 +15921,18 @@ class MaterialLocalizationFi extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Filipino Pilipino (`fil`).
+@Deprecated(
+  'Use MaterialLocalizationFil from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationFil extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Filipino Pilipino.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationFil from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationFil({
     super.localeName = 'fil',
     required super.fullYearFormat,
@@ -14279,13 +15968,16 @@ class MaterialLocalizationFil extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Kanselahin';
 
   @override
+  String get clearButtonTooltip => 'I-clear ang text';
+
+  @override
   String get closeButtonLabel => 'Isara';
 
   @override
   String get closeButtonTooltip => 'Isara';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Naka-expand';
 
   @override
   String get collapsedIconTapHint => 'I-expand';
@@ -14345,22 +16037,22 @@ class MaterialLocalizationFil extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menu ng navigation';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Naka-collapse';
 
   @override
   String get expandedIconTapHint => 'I-collapse';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'i-double tap para i-expand';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'I-expand para sa higit pang detalye';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'i-double tap para i-collapse';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'I-collapse';
 
   @override
   String get firstPageTooltip => 'Unang page';
@@ -14549,7 +16241,13 @@ class MaterialLocalizationFil extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Mga Lisensya';
 
   @override
+  String get lookUpButtonLabel => 'Tumingin sa Itaas';
+
+  @override
   String get menuBarMenuLabel => 'Menu sa menu bar';
+
+  @override
+  String get menuDismissLabel => 'I-dismiss ang menu';
 
   @override
   String get modalBarrierDismissLabel => 'I-dismiss';
@@ -14609,7 +16307,7 @@ class MaterialLocalizationFil extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Ilipat pababa';
@@ -14651,10 +16349,16 @@ class MaterialLocalizationFil extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Maghanap';
 
   @override
+  String get searchWebButtonLabel => 'Maghanap sa Web';
+
+  @override
   String get selectAllButtonLabel => 'Piliin lahat';
 
   @override
   String get selectYearSemanticsLabel => 'Pumili ng taon';
+
+  @override
+  String get selectedDateLabel => 'Napili';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -14673,6 +16377,9 @@ class MaterialLocalizationFil extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'I-share';
 
   @override
   String get showAccountsLabel => 'Ipakita ang mga account';
@@ -14718,10 +16425,18 @@ class MaterialLocalizationFil extends GlobalMaterialLocalizations {
 }
 
 /// The translations for French (`fr`).
+@Deprecated(
+  'Use MaterialLocalizationFr from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationFr extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for French.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationFr from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationFr({
     super.localeName = 'fr',
     required super.fullYearFormat,
@@ -14757,13 +16472,16 @@ class MaterialLocalizationFr extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Annuler';
 
   @override
+  String get clearButtonTooltip => 'Effacer le texte';
+
+  @override
   String get closeButtonLabel => 'Fermer';
 
   @override
   String get closeButtonTooltip => 'Fermer';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Développé';
 
   @override
   String get collapsedIconTapHint => 'Développer';
@@ -14823,22 +16541,22 @@ class MaterialLocalizationFr extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menu de navigation';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Réduit';
 
   @override
   String get expandedIconTapHint => 'Réduire';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'appuyez deux fois pour développer';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Développer pour en savoir plus';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'appuyez deux fois pour réduire';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Réduire';
 
   @override
   String get firstPageTooltip => 'Première page';
@@ -15027,7 +16745,13 @@ class MaterialLocalizationFr extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licences';
 
   @override
+  String get lookUpButtonLabel => 'Recherche visuelle';
+
+  @override
   String get menuBarMenuLabel => 'Menu de la barre de menu';
+
+  @override
+  String get menuDismissLabel => 'Fermer le menu';
 
   @override
   String get modalBarrierDismissLabel => 'Ignorer';
@@ -15087,7 +16811,7 @@ class MaterialLocalizationFr extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Déplacer vers le bas';
@@ -15114,7 +16838,7 @@ class MaterialLocalizationFr extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Enregistrer';
 
   @override
-  String get scanTextButtonLabel => 'Numériser du texte';
+  String get scanTextButtonLabel => 'Scanner du texte';
 
   @override
   String get scrimLabel => 'Fond';
@@ -15129,10 +16853,16 @@ class MaterialLocalizationFr extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Rechercher';
 
   @override
+  String get searchWebButtonLabel => 'Rechercher sur le Web';
+
+  @override
   String get selectAllButtonLabel => 'Tout sélectionner';
 
   @override
   String get selectYearSemanticsLabel => 'Sélectionner une année';
+
+  @override
+  String get selectedDateLabel => 'Sélectionnée';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -15151,6 +16881,9 @@ class MaterialLocalizationFr extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'Aucun élément sélectionné';
+
+  @override
+  String get shareButtonLabel => 'Partager';
 
   @override
   String get showAccountsLabel => 'Afficher les comptes';
@@ -15196,10 +16929,18 @@ class MaterialLocalizationFr extends GlobalMaterialLocalizations {
 }
 
 /// The translations for French, as used in Canada (`fr_CA`).
+@Deprecated(
+  'Use MaterialLocalizationFrCa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationFrCa extends MaterialLocalizationFr {
   /// Create an instance of the translation bundle for French, as used in Canada.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationFrCa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationFrCa({
     super.localeName = 'fr_CA',
     required super.fullYearFormat,
@@ -15212,6 +16953,24 @@ class MaterialLocalizationFrCa extends MaterialLocalizationFr {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get lookUpButtonLabel => 'Regarder en haut';
+
+  @override
+  String get scanTextButtonLabel => 'Balayer un texte';
+
+  @override
+  String get menuDismissLabel => 'Ignorer le menu';
+
+  @override
+  String get expansionTileExpandedHint => 'toucher deux fois pour réduire';
+
+  @override
+  String get expansionTileCollapsedHint => 'toucher deux fois pour développer';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Développer le panneau pour plus de détails';
 
   @override
   String get scrimLabel => 'Grille';
@@ -15236,9 +16995,6 @@ class MaterialLocalizationFrCa extends MaterialLocalizationFr {
 
   @override
   String get keyboardKeyInsert => 'Insér.';
-
-  @override
-  String get keyboardKeyEscape => 'Échapp.';
 
   @override
   String get keyboardKeyEject => 'Éject.';
@@ -15337,11 +17093,523 @@ class MaterialLocalizationFrCa extends MaterialLocalizationFr {
   TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.frenchCanadian;
 }
 
+/// The translations for Irish (`ga`).
+@Deprecated(
+  'Use MaterialLocalizationGa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
+class MaterialLocalizationGa extends GlobalMaterialLocalizations {
+  /// Create an instance of the translation bundle for Irish.
+  ///
+  /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationGa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
+  const MaterialLocalizationGa({
+    super.localeName = 'ga',
+    required super.fullYearFormat,
+    required super.compactDateFormat,
+    required super.shortDateFormat,
+    required super.mediumDateFormat,
+    required super.longDateFormat,
+    required super.yearMonthFormat,
+    required super.shortMonthDayFormat,
+    required super.decimalFormat,
+    required super.twoDigitZeroPaddedFormat,
+  });
+
+  @override
+  String get aboutListTileTitleRaw => r'Maidir le $applicationName';
+
+  @override
+  String get alertDialogLabel => 'Foláireamh';
+
+  @override
+  String get anteMeridiemAbbreviation => 'R.N.';
+
+  @override
+  String get backButtonTooltip => 'Siar';
+
+  @override
+  String get bottomSheetLabel => 'Bileog Íochtarach';
+
+  @override
+  String get calendarModeButtonLabel => 'Athraigh go féilire';
+
+  @override
+  String get cancelButtonLabel => 'Cealaigh';
+
+  @override
+  String get clearButtonTooltip => 'Glan an téacs';
+
+  @override
+  String get closeButtonLabel => 'Dún';
+
+  @override
+  String get closeButtonTooltip => 'Dún';
+
+  @override
+  String get collapsedHint => 'Leathnaithe';
+
+  @override
+  String get collapsedIconTapHint => 'Leathnaigh';
+
+  @override
+  String get continueButtonLabel => 'Lean ar aghaidh';
+
+  @override
+  String get copyButtonLabel => 'Cóipeáil';
+
+  @override
+  String get currentDateLabel => 'Inniu';
+
+  @override
+  String get cutButtonLabel => 'Gearr';
+
+  @override
+  String get dateHelpText => 'll/mm/bbbb';
+
+  @override
+  String get dateInputLabel => 'Cuir Isteach Dáta';
+
+  @override
+  String get dateOutOfRangeLabel => 'Lasmuigh den raon.';
+
+  @override
+  String get datePickerHelpText => 'Roghnaigh dáta';
+
+  @override
+  String get dateRangeEndDateSemanticLabelRaw => r'Dáta deiridh $fullDate';
+
+  @override
+  String get dateRangeEndLabel => 'Dáta Deiridh';
+
+  @override
+  String get dateRangePickerHelpText => 'Roghnaigh raon';
+
+  @override
+  String get dateRangeStartDateSemanticLabelRaw => r'Dáta tosaigh $fullDate';
+
+  @override
+  String get dateRangeStartLabel => 'Dáta Tosaigh';
+
+  @override
+  String get dateSeparator => '/';
+
+  @override
+  String get deleteButtonTooltip => 'Scrios';
+
+  @override
+  String get dialModeButtonLabel => 'Athraigh go mód roghnóra aghaidh an chloig';
+
+  @override
+  String get dialogLabel => 'Dialóg';
+
+  @override
+  String get drawerLabel => 'Roghchlár nascleanúna';
+
+  @override
+  String get expandedHint => 'Laghdaithe';
+
+  @override
+  String get expandedIconTapHint => 'Laghdaigh';
+
+  @override
+  String get expansionTileCollapsedHint => 'tapáil faoi dhó chun leathnú';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Leathnaigh chun tuilleadh sonraí a fháil';
+
+  @override
+  String get expansionTileExpandedHint => 'tapáil faoi dhó chun laghdú';
+
+  @override
+  String get expansionTileExpandedTapHint => 'Laghdaigh';
+
+  @override
+  String get firstPageTooltip => 'An chéad leathanach';
+
+  @override
+  String get hideAccountsLabel => 'Folaigh cuntais';
+
+  @override
+  String get inputDateModeButtonLabel => 'Athraigh go hionchur';
+
+  @override
+  String get inputTimeModeButtonLabel => 'Athraigh go mód ionchuir téacs';
+
+  @override
+  String get invalidDateFormatLabel => 'Formáid neamhbhailí.';
+
+  @override
+  String get invalidDateRangeLabel => 'Raon neamhbhailí.';
+
+  @override
+  String get invalidTimeLabel => 'Cuir isteach am bailí';
+
+  @override
+  String get keyboardKeyAlt => 'Alt';
+
+  @override
+  String get keyboardKeyAltGraph => 'AltGr';
+
+  @override
+  String get keyboardKeyBackspace => 'Cúlspás';
+
+  @override
+  String get keyboardKeyCapsLock => 'Glas Ceannlitreacha';
+
+  @override
+  String get keyboardKeyChannelDown => 'Cainéal Síos';
+
+  @override
+  String get keyboardKeyChannelUp => 'Cainéal Suas';
+
+  @override
+  String get keyboardKeyControl => 'Ctrl';
+
+  @override
+  String get keyboardKeyDelete => 'Del';
+
+  @override
+  String get keyboardKeyEject => 'Caith amach';
+
+  @override
+  String get keyboardKeyEnd => 'End';
+
+  @override
+  String get keyboardKeyEscape => 'Esc';
+
+  @override
+  String get keyboardKeyFn => 'Fn';
+
+  @override
+  String get keyboardKeyHome => 'Baile';
+
+  @override
+  String get keyboardKeyInsert => 'Insert';
+
+  @override
+  String get keyboardKeyMeta => 'Meta';
+
+  @override
+  String get keyboardKeyMetaMacOs => 'Ordú';
+
+  @override
+  String get keyboardKeyMetaWindows => 'Win';
+
+  @override
+  String get keyboardKeyNumLock => 'Uimhirghlas';
+
+  @override
+  String get keyboardKeyNumpad0 => 'Num 0';
+
+  @override
+  String get keyboardKeyNumpad1 => 'Num 1';
+
+  @override
+  String get keyboardKeyNumpad2 => 'Num 2';
+
+  @override
+  String get keyboardKeyNumpad3 => 'Num 3';
+
+  @override
+  String get keyboardKeyNumpad4 => 'Num 4';
+
+  @override
+  String get keyboardKeyNumpad5 => 'Num 5';
+
+  @override
+  String get keyboardKeyNumpad6 => 'Num 6';
+
+  @override
+  String get keyboardKeyNumpad7 => 'Num 7';
+
+  @override
+  String get keyboardKeyNumpad8 => 'Num 8';
+
+  @override
+  String get keyboardKeyNumpad9 => 'Num 9';
+
+  @override
+  String get keyboardKeyNumpadAdd => 'Num +';
+
+  @override
+  String get keyboardKeyNumpadComma => 'Num ,';
+
+  @override
+  String get keyboardKeyNumpadDecimal => 'Num .';
+
+  @override
+  String get keyboardKeyNumpadDivide => 'Num /';
+
+  @override
+  String get keyboardKeyNumpadEnter => 'Num Enter';
+
+  @override
+  String get keyboardKeyNumpadEqual => 'Num =';
+
+  @override
+  String get keyboardKeyNumpadMultiply => 'Num *';
+
+  @override
+  String get keyboardKeyNumpadParenLeft => 'Num (';
+
+  @override
+  String get keyboardKeyNumpadParenRight => 'Num )';
+
+  @override
+  String get keyboardKeyNumpadSubtract => 'Num -';
+
+  @override
+  String get keyboardKeyPageDown => 'PgDown';
+
+  @override
+  String get keyboardKeyPageUp => 'PgUp';
+
+  @override
+  String get keyboardKeyPower => 'Cumhacht';
+
+  @override
+  String get keyboardKeyPowerOff => 'Múch';
+
+  @override
+  String get keyboardKeyPrintScreen => 'Priontáil Scáileán';
+
+  @override
+  String get keyboardKeyScrollLock => 'Scrollghlas';
+
+  @override
+  String get keyboardKeySelect => 'Roghnaigh';
+
+  @override
+  String get keyboardKeyShift => 'Shift';
+
+  @override
+  String get keyboardKeySpace => 'Space';
+
+  @override
+  String get lastPageTooltip => 'An leathanach deiridh';
+
+  @override
+  String? get licensesPackageDetailTextFew => r'$licenseCount cheadúnas';
+
+  @override
+  String? get licensesPackageDetailTextMany => r'$licenseCount gceadúnas';
+
+  @override
+  String? get licensesPackageDetailTextOne => 'Aon cheadúnas amháin';
+
+  @override
+  String get licensesPackageDetailTextOther => r'$licenseCount ceadúnas';
+
+  @override
+  String? get licensesPackageDetailTextTwo => r'$licenseCount cheadúnas';
+
+  @override
+  String? get licensesPackageDetailTextZero => null;
+
+  @override
+  String get licensesPageTitle => 'Ceadúnais';
+
+  @override
+  String get lookUpButtonLabel => 'Cuardaigh';
+
+  @override
+  String get menuBarMenuLabel => 'Roghchlár an bharra roghchláir';
+
+  @override
+  String get menuDismissLabel => 'Ruaig an roghchlár';
+
+  @override
+  String get modalBarrierDismissLabel => 'Ruaig';
+
+  @override
+  String get moreButtonTooltip => 'Tuilleadh';
+
+  @override
+  String get nextMonthTooltip => 'An chéad mhí eile';
+
+  @override
+  String get nextPageTooltip => 'An chéad leathanach eile';
+
+  @override
+  String get okButtonLabel => 'Ceart go leor';
+
+  @override
+  String get openAppDrawerTooltip => 'Oscail an roghchlár nascleanúna';
+
+  @override
+  String get pageRowsInfoTitleRaw => r'$firstRow-$lastRow de $rowCount';
+
+  @override
+  String get pageRowsInfoTitleApproximateRaw => r'$firstRow–$lastRow de thuairim is $rowCount';
+
+  @override
+  String get pasteButtonLabel => 'Greamaigh';
+
+  @override
+  String get popupMenuLabel => 'Roghchlár aníos';
+
+  @override
+  String get postMeridiemAbbreviation => 'I.N.';
+
+  @override
+  String get previousMonthTooltip => 'An mhí roimhe';
+
+  @override
+  String get previousPageTooltip => 'An leathanach roimhe seo';
+
+  @override
+  String get refreshIndicatorSemanticLabel => 'Athnuaigh';
+
+  @override
+  String? get remainingTextFieldCharacterCountFew => r'$remainingCount charachtar fágtha';
+
+  @override
+  String? get remainingTextFieldCharacterCountMany => r'$remainingCount gcarachtar fágtha';
+
+  @override
+  String? get remainingTextFieldCharacterCountOne => 'Aon charachtar amháin fágtha';
+
+  @override
+  String get remainingTextFieldCharacterCountOther => r'$remainingCount carachtar fágtha';
+
+  @override
+  String? get remainingTextFieldCharacterCountTwo => r'$remainingCount charachtar fágtha';
+
+  @override
+  String? get remainingTextFieldCharacterCountZero => null;
+
+  @override
+  String get reorderItemDown => 'Bog síos';
+
+  @override
+  String get reorderItemLeft => 'Bog ar chlé';
+
+  @override
+  String get reorderItemRight => 'Bog ar dheis';
+
+  @override
+  String get reorderItemToEnd => 'Bog chuig an deireadh';
+
+  @override
+  String get reorderItemToStart => 'Bog chuig an tús';
+
+  @override
+  String get reorderItemUp => 'Bog suas';
+
+  @override
+  String get rowsPerPageTitle => 'Rónna in aghaidh an leathanaigh:';
+
+  @override
+  String get saveButtonLabel => 'Sábháil';
+
+  @override
+  String get scanTextButtonLabel => 'Scan téacs';
+
+  @override
+  String get scrimLabel => 'Scrioma';
+
+  @override
+  String get scrimOnTapHintRaw => r'Dún $modalRouteContentName';
+
+  @override
+  ScriptCategory get scriptCategory => ScriptCategory.englishLike;
+
+  @override
+  String get searchFieldLabel => 'Cuardaigh';
+
+  @override
+  String get searchWebButtonLabel => 'Cuardaigh an Gréasán';
+
+  @override
+  String get selectAllButtonLabel => 'Roghnaigh gach rud';
+
+  @override
+  String get selectYearSemanticsLabel => 'Roghnaigh bliain';
+
+  @override
+  String get selectedDateLabel => 'Roghnaithe';
+
+  @override
+  String? get selectedRowCountTitleFew => r'$selectedRowCount mhír roghnaithe';
+
+  @override
+  String? get selectedRowCountTitleMany => r'$selectedRowCount mír roghnaithe';
+
+  @override
+  String? get selectedRowCountTitleOne => 'Aon mhír amháin roghnaithe';
+
+  @override
+  String get selectedRowCountTitleOther => r'$selectedRowCount mír roghnaithe';
+
+  @override
+  String? get selectedRowCountTitleTwo => r'$selectedRowCount mhír roghnaithe';
+
+  @override
+  String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Comhroinn';
+
+  @override
+  String get showAccountsLabel => 'Taispeáin cuntais';
+
+  @override
+  String get showMenuTooltip => 'Taispeáin an roghchlár';
+
+  @override
+  String get signedInLabel => 'Sínithe isteach';
+
+  @override
+  String get tabLabelRaw => r'Cluaisín $tabIndex de $tabCount';
+
+  @override
+  TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.HH_colon_mm;
+
+  @override
+  String get timePickerDialHelpText => 'Roghnaigh am';
+
+  @override
+  String get timePickerHourLabel => 'Uair';
+
+  @override
+  String get timePickerHourModeAnnouncement => 'Roghnaigh uaireanta';
+
+  @override
+  String get timePickerInputHelpText => 'Cuir isteach am';
+
+  @override
+  String get timePickerMinuteLabel => 'Nóiméad';
+
+  @override
+  String get timePickerMinuteModeAnnouncement => 'Roghnaigh nóiméid';
+
+  @override
+  String get unspecifiedDate => 'Dáta';
+
+  @override
+  String get unspecifiedDateRange => 'Raon Dátaí';
+
+  @override
+  String get viewLicensesButtonLabel => 'Féach ar cheadúnais';
+}
+
 /// The translations for Galician (`gl`).
+@Deprecated(
+  'Use MaterialLocalizationGl from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationGl extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Galician.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationGl from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationGl({
     super.localeName = 'gl',
     required super.fullYearFormat,
@@ -15377,13 +17645,16 @@ class MaterialLocalizationGl extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Cancelar';
 
   @override
+  String get clearButtonTooltip => 'Borrar texto';
+
+  @override
   String get closeButtonLabel => 'Pechar';
 
   @override
   String get closeButtonTooltip => 'Pechar';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Despregado';
 
   @override
   String get collapsedIconTapHint => 'Despregar';
@@ -15434,7 +17705,7 @@ class MaterialLocalizationGl extends GlobalMaterialLocalizations {
   String get deleteButtonTooltip => 'Eliminar';
 
   @override
-  String get dialModeButtonLabel => 'Cambiar a modo de selector en esfera';
+  String get dialModeButtonLabel => 'Cambiar ao modo de selector en esfera';
 
   @override
   String get dialogLabel => 'Cadro de diálogo';
@@ -15443,22 +17714,22 @@ class MaterialLocalizationGl extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menú de navegación';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Contraído';
 
   @override
   String get expandedIconTapHint => 'Contraer';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'tocar dúas veces para despregar';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Despregar para obter máis detalles';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'tocar dúas veces para contraer';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Contraer';
 
   @override
   String get firstPageTooltip => 'Primeira páxina';
@@ -15470,7 +17741,7 @@ class MaterialLocalizationGl extends GlobalMaterialLocalizations {
   String get inputDateModeButtonLabel => 'Cambiar ao modo de introdución de texto';
 
   @override
-  String get inputTimeModeButtonLabel => 'Cambiar ao modo de escritura dos números';
+  String get inputTimeModeButtonLabel => 'Cambiar ao modo de introdución de texto';
 
   @override
   String get invalidDateFormatLabel => 'O formato non é válido.';
@@ -15647,10 +17918,16 @@ class MaterialLocalizationGl extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licenzas';
 
   @override
+  String get lookUpButtonLabel => 'Mirar cara arriba';
+
+  @override
   String get menuBarMenuLabel => 'Menú da barra de menú';
 
   @override
-  String get modalBarrierDismissLabel => 'Ignorar';
+  String get menuDismissLabel => 'Pechar menú';
+
+  @override
+  String get modalBarrierDismissLabel => 'Pechar';
 
   @override
   String get moreButtonTooltip => 'Máis';
@@ -15707,7 +17984,7 @@ class MaterialLocalizationGl extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Mover cara abaixo';
@@ -15746,13 +18023,19 @@ class MaterialLocalizationGl extends GlobalMaterialLocalizations {
   ScriptCategory get scriptCategory => ScriptCategory.englishLike;
 
   @override
-  String get searchFieldLabel => 'Buscar';
+  String get searchFieldLabel => 'Fai unha busca';
+
+  @override
+  String get searchWebButtonLabel => 'Buscar na Web';
 
   @override
   String get selectAllButtonLabel => 'Seleccionar todo';
 
   @override
   String get selectYearSemanticsLabel => 'Seleccionar ano';
+
+  @override
+  String get selectedDateLabel => 'Seleccionada';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -15771,6 +18054,9 @@ class MaterialLocalizationGl extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'Non se seleccionaron elementos';
+
+  @override
+  String get shareButtonLabel => 'Compartir';
 
   @override
   String get showAccountsLabel => 'Mostrar contas';
@@ -15816,10 +18102,18 @@ class MaterialLocalizationGl extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Swiss German Alemannic Alsatian (`gsw`).
+@Deprecated(
+  'Use MaterialLocalizationGsw from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationGsw extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Swiss German Alemannic Alsatian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationGsw from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationGsw({
     super.localeName = 'gsw',
     required super.fullYearFormat,
@@ -15855,13 +18149,16 @@ class MaterialLocalizationGsw extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Abbrechen';
 
   @override
+  String get clearButtonTooltip => 'Text löschen';
+
+  @override
   String get closeButtonLabel => 'Schließen';
 
   @override
   String get closeButtonTooltip => 'Schließen';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Maximiert';
 
   @override
   String get collapsedIconTapHint => 'Maximieren';
@@ -15921,22 +18218,22 @@ class MaterialLocalizationGsw extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigationsmenü';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Minimiert';
 
   @override
   String get expandedIconTapHint => 'Minimieren';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'Zum Maximieren doppeltippen';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Für weitere Details maximieren';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'Zum Minimieren doppeltippen';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Minimieren';
 
   @override
   String get firstPageTooltip => 'Erste Seite';
@@ -16125,7 +18422,13 @@ class MaterialLocalizationGsw extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Lizenzen';
 
   @override
+  String get lookUpButtonLabel => 'Nachschlagen';
+
+  @override
   String get menuBarMenuLabel => 'Menü in der Menüleiste';
+
+  @override
+  String get menuDismissLabel => 'Menü schließen';
 
   @override
   String get modalBarrierDismissLabel => 'Schließen';
@@ -16185,7 +18488,7 @@ class MaterialLocalizationGsw extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Nach unten verschieben';
@@ -16227,10 +18530,16 @@ class MaterialLocalizationGsw extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Suchen';
 
   @override
+  String get searchWebButtonLabel => 'Im Web suchen';
+
+  @override
   String get selectAllButtonLabel => 'Alle auswählen';
 
   @override
   String get selectYearSemanticsLabel => 'Jahr auswählen';
+
+  @override
+  String get selectedDateLabel => 'Ausgewählt';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -16249,6 +18558,9 @@ class MaterialLocalizationGsw extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Teilen';
 
   @override
   String get showAccountsLabel => 'Konten anzeigen';
@@ -16294,10 +18606,18 @@ class MaterialLocalizationGsw extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Gujarati (`gu`).
+@Deprecated(
+  'Use MaterialLocalizationGu from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationGu extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Gujarati.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationGu from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationGu({
     super.localeName = 'gu',
     required super.fullYearFormat,
@@ -16333,13 +18653,16 @@ class MaterialLocalizationGu extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'રદ કરો';
 
   @override
+  String get clearButtonTooltip => 'ટેક્સ્ટ સાફ કરો';
+
+  @override
   String get closeButtonLabel => 'બંધ કરો';
 
   @override
   String get closeButtonTooltip => 'બંધ કરો';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'મોટી કરી';
 
   @override
   String get collapsedIconTapHint => 'વિસ્તૃત કરો';
@@ -16399,22 +18722,22 @@ class MaterialLocalizationGu extends GlobalMaterialLocalizations {
   String get drawerLabel => 'નૅવિગેશન મેનૂ';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'નાની કરી';
 
   @override
   String get expandedIconTapHint => 'સંકુચિત કરો';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'મોટી કરવા માટે બે વાર ટૅપ કરો';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'વધુ વિગતો માટે મોટી કરો';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'નાની કરવા માટે બે વાર ટૅપ કરો';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'નાની કરો';
 
   @override
   String get firstPageTooltip => 'પહેલું પેજ';
@@ -16603,7 +18926,13 @@ class MaterialLocalizationGu extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'લાઇસન્સ';
 
   @override
+  String get lookUpButtonLabel => 'શોધો';
+
+  @override
   String get menuBarMenuLabel => 'મેનૂ બાર મેનૂ';
+
+  @override
+  String get menuDismissLabel => 'મેનૂ છોડી દો';
 
   @override
   String get modalBarrierDismissLabel => 'છોડી દો';
@@ -16690,7 +19019,7 @@ class MaterialLocalizationGu extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'સાચવો';
 
   @override
-  String get scanTextButtonLabel => 'ટેક્સ્ટ સ્કેન કરો';
+  String get scanTextButtonLabel => 'ટેક્સ્ટ સ્કૅન કરો';
 
   @override
   String get scrimLabel => 'સ્ક્રિમ';
@@ -16705,10 +19034,16 @@ class MaterialLocalizationGu extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'શોધો';
 
   @override
+  String get searchWebButtonLabel => 'વેબ પર શોધો';
+
+  @override
   String get selectAllButtonLabel => 'બધા પસંદ કરો';
 
   @override
   String get selectYearSemanticsLabel => 'વર્ષ પસંદ કરો';
+
+  @override
+  String get selectedDateLabel => 'પસંદ કરેલો';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -16727,6 +19062,9 @@ class MaterialLocalizationGu extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'શેર કરો';
 
   @override
   String get showAccountsLabel => 'એકાઉન્ટ બતાવો';
@@ -16772,10 +19110,18 @@ class MaterialLocalizationGu extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Hebrew (`he`).
+@Deprecated(
+  'Use MaterialLocalizationHe from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationHe extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Hebrew.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationHe from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationHe({
     super.localeName = 'he',
     required super.fullYearFormat,
@@ -16811,13 +19157,16 @@ class MaterialLocalizationHe extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'ביטול';
 
   @override
+  String get clearButtonTooltip => 'מחיקת הטקסט';
+
+  @override
   String get closeButtonLabel => 'סגירה';
 
   @override
   String get closeButtonTooltip => 'סגירה';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'מורחב';
 
   @override
   String get collapsedIconTapHint => 'הרחבה';
@@ -16877,22 +19226,22 @@ class MaterialLocalizationHe extends GlobalMaterialLocalizations {
   String get drawerLabel => 'תפריט ניווט';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'מכווץ';
 
   @override
   String get expandedIconTapHint => 'כיווץ';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'כדי להרחיב, יש ללחוץ לחיצה כפולה';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'ניתן להרחיב להצגת פרטים נוספים';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'כדי לכווץ, יש ללחוץ לחיצה כפולה';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'כיווץ';
 
   @override
   String get firstPageTooltip => 'לדף הראשון';
@@ -17081,7 +19430,13 @@ class MaterialLocalizationHe extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'רישיונות';
 
   @override
+  String get lookUpButtonLabel => 'חיפוש';
+
+  @override
   String get menuBarMenuLabel => 'תפריט בסרגל התפריטים';
+
+  @override
+  String get menuDismissLabel => 'סגירת התפריט';
 
   @override
   String get modalBarrierDismissLabel => 'סגירה';
@@ -17141,7 +19496,7 @@ class MaterialLocalizationHe extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => r'נותרו $remainingCount תווים';
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'העברה למטה';
@@ -17168,7 +19523,7 @@ class MaterialLocalizationHe extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'שמירה';
 
   @override
-  String get scanTextButtonLabel => 'סרוק טקסט';
+  String get scanTextButtonLabel => 'סריקת טקסט';
 
   @override
   String get scrimLabel => 'מיסוך';
@@ -17183,10 +19538,16 @@ class MaterialLocalizationHe extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'חיפוש';
 
   @override
+  String get searchWebButtonLabel => 'חיפוש באינטרנט';
+
+  @override
   String get selectAllButtonLabel => 'בחירת הכול';
 
   @override
   String get selectYearSemanticsLabel => 'בחירת שנה';
+
+  @override
+  String get selectedDateLabel => 'התאריך שנבחר';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -17205,6 +19566,9 @@ class MaterialLocalizationHe extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'שיתוף';
 
   @override
   String get showAccountsLabel => 'הצגת החשבונות';
@@ -17250,10 +19614,18 @@ class MaterialLocalizationHe extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Hindi (`hi`).
+@Deprecated(
+  'Use MaterialLocalizationHi from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationHi extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Hindi.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationHi from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationHi({
     super.localeName = 'hi',
     required super.fullYearFormat,
@@ -17289,13 +19661,16 @@ class MaterialLocalizationHi extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'रद्द करें';
 
   @override
+  String get clearButtonTooltip => 'टेक्स्ट हटाएं';
+
+  @override
   String get closeButtonLabel => 'बंद करें';
 
   @override
   String get closeButtonTooltip => 'बंद करें';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'बड़ा किया गया';
 
   @override
   String get collapsedIconTapHint => 'बड़ा करें';
@@ -17355,22 +19730,22 @@ class MaterialLocalizationHi extends GlobalMaterialLocalizations {
   String get drawerLabel => 'नेविगेशन मेन्यू';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'छोटा किया गया';
 
   @override
   String get expandedIconTapHint => 'छोटा करें';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'बड़ा करने के लिए दो बार टैप करें';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'ज़्यादा जानने के लिए बड़ा करें';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'छोटा करने के लिए दो बार टैप करें';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'छोटा करें';
 
   @override
   String get firstPageTooltip => 'पहला पेज';
@@ -17559,7 +19934,13 @@ class MaterialLocalizationHi extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'लाइसेंस';
 
   @override
+  String get lookUpButtonLabel => 'लुक अप बटन';
+
+  @override
   String get menuBarMenuLabel => 'मेन्यू बार का मेन्यू';
+
+  @override
+  String get menuDismissLabel => 'मेन्यू खारिज करें';
 
   @override
   String get modalBarrierDismissLabel => 'खारिज करें';
@@ -17619,7 +20000,7 @@ class MaterialLocalizationHi extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'नीचे ले जाएं';
@@ -17646,7 +20027,7 @@ class MaterialLocalizationHi extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'सेव करें';
 
   @override
-  String get scanTextButtonLabel => 'पाठ स्कैन करें';
+  String get scanTextButtonLabel => 'टेक्स्ट स्कैन करें';
 
   @override
   String get scrimLabel => 'स्क्रिम';
@@ -17661,10 +20042,16 @@ class MaterialLocalizationHi extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'खोजें';
 
   @override
+  String get searchWebButtonLabel => 'वेब पर खोजें';
+
+  @override
   String get selectAllButtonLabel => 'सभी को चुनें';
 
   @override
   String get selectYearSemanticsLabel => 'साल चुनें';
+
+  @override
+  String get selectedDateLabel => 'चुनी गई';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -17685,6 +20072,9 @@ class MaterialLocalizationHi extends GlobalMaterialLocalizations {
   String? get selectedRowCountTitleZero => null;
 
   @override
+  String get shareButtonLabel => 'शेयर करें';
+
+  @override
   String get showAccountsLabel => 'खाते दिखाएं';
 
   @override
@@ -17697,7 +20087,7 @@ class MaterialLocalizationHi extends GlobalMaterialLocalizations {
   String get tabLabelRaw => r'$tabCount का टैब $tabIndex';
 
   @override
-  TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.a_space_h_colon_mm;
+  TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.h_colon_mm_space_a;
 
   @override
   String get timePickerDialHelpText => 'समय चुनें';
@@ -17728,10 +20118,18 @@ class MaterialLocalizationHi extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Croatian (`hr`).
+@Deprecated(
+  'Use MaterialLocalizationHr from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationHr extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Croatian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationHr from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationHr({
     super.localeName = 'hr',
     required super.fullYearFormat,
@@ -17767,13 +20165,16 @@ class MaterialLocalizationHr extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Odustani';
 
   @override
+  String get clearButtonTooltip => 'Izbriši tekst';
+
+  @override
   String get closeButtonLabel => 'Zatvori';
 
   @override
   String get closeButtonTooltip => 'Zatvaranje';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Prošireno';
 
   @override
   String get collapsedIconTapHint => 'Proširi';
@@ -17833,22 +20234,22 @@ class MaterialLocalizationHr extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigacijski izbornik';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Sažeto';
 
   @override
   String get expandedIconTapHint => 'Sažmi';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'dvaput dodirnite za proširivanje';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Proširite da biste saznali više';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'dvaput dodirnite za sažimanje';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Sažmi';
 
   @override
   String get firstPageTooltip => 'Prva stranica';
@@ -18037,7 +20438,13 @@ class MaterialLocalizationHr extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licence';
 
   @override
+  String get lookUpButtonLabel => 'Pogled prema gore';
+
+  @override
   String get menuBarMenuLabel => 'Izbornik trake izbornika';
+
+  @override
+  String get menuDismissLabel => 'Odbacivanje izbornika';
 
   @override
   String get modalBarrierDismissLabel => 'Odbaci';
@@ -18097,7 +20504,7 @@ class MaterialLocalizationHr extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Pomakni prema dolje';
@@ -18124,7 +20531,7 @@ class MaterialLocalizationHr extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Spremi';
 
   @override
-  String get scanTextButtonLabel => 'Skeniraj tekst';
+  String get scanTextButtonLabel => 'Skeniranje teksta';
 
   @override
   String get scrimLabel => 'Rubno';
@@ -18139,10 +20546,16 @@ class MaterialLocalizationHr extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Pretražite';
 
   @override
+  String get searchWebButtonLabel => 'Pretraži web';
+
+  @override
   String get selectAllButtonLabel => 'Odaberi sve';
 
   @override
   String get selectYearSemanticsLabel => 'Odaberite godinu';
+
+  @override
+  String get selectedDateLabel => 'Odabrano';
 
   @override
   String? get selectedRowCountTitleFew => r'Odabrane su $selectedRowCount stavke';
@@ -18161,6 +20574,9 @@ class MaterialLocalizationHr extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Dijeli';
 
   @override
   String get showAccountsLabel => 'Prikažite račune';
@@ -18206,10 +20622,18 @@ class MaterialLocalizationHr extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Hungarian (`hu`).
+@Deprecated(
+  'Use MaterialLocalizationHu from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationHu extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Hungarian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationHu from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationHu({
     super.localeName = 'hu',
     required super.fullYearFormat,
@@ -18245,13 +20669,16 @@ class MaterialLocalizationHu extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Mégse';
 
   @override
+  String get clearButtonTooltip => 'Szöveg törlése';
+
+  @override
   String get closeButtonLabel => 'Bezárás';
 
   @override
   String get closeButtonTooltip => 'Bezárás';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Kibontva';
 
   @override
   String get collapsedIconTapHint => 'Kibontás';
@@ -18311,22 +20738,22 @@ class MaterialLocalizationHu extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigációs menü';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Összecsukva';
 
   @override
   String get expandedIconTapHint => 'Összecsukás';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'duplán koppintva kibonthatja';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Bontsa ki a további részletek megtekintéséhez';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'duplán koppintva összecsukhatja';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Összecsukás';
 
   @override
   String get firstPageTooltip => 'Első oldal';
@@ -18515,7 +20942,13 @@ class MaterialLocalizationHu extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licencek';
 
   @override
+  String get lookUpButtonLabel => 'Felfelé nézés';
+
+  @override
   String get menuBarMenuLabel => 'Menüsor menüje';
+
+  @override
+  String get menuDismissLabel => 'Menü bezárása';
 
   @override
   String get modalBarrierDismissLabel => 'Elvetés';
@@ -18575,7 +21008,7 @@ class MaterialLocalizationHu extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Áthelyezés lefelé';
@@ -18617,10 +21050,16 @@ class MaterialLocalizationHu extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Keresés';
 
   @override
+  String get searchWebButtonLabel => 'Keresés az interneten';
+
+  @override
   String get selectAllButtonLabel => 'Összes kijelölése';
 
   @override
   String get selectYearSemanticsLabel => 'Válassza ki az évet';
+
+  @override
+  String get selectedDateLabel => 'Kijelölve';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -18639,6 +21078,9 @@ class MaterialLocalizationHu extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Megosztás';
 
   @override
   String get showAccountsLabel => 'Fiókok megjelenítése';
@@ -18684,10 +21126,18 @@ class MaterialLocalizationHu extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Armenian (`hy`).
+@Deprecated(
+  'Use MaterialLocalizationHy from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationHy extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Armenian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationHy from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationHy({
     super.localeName = 'hy',
     required super.fullYearFormat,
@@ -18723,13 +21173,16 @@ class MaterialLocalizationHy extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Չեղարկել';
 
   @override
+  String get clearButtonTooltip => 'Մաքրել տեքստը';
+
+  @override
   String get closeButtonLabel => 'Փակել';
 
   @override
   String get closeButtonTooltip => 'Փակել';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Ծավալված է';
 
   @override
   String get collapsedIconTapHint => 'Ծավալել';
@@ -18789,22 +21242,22 @@ class MaterialLocalizationHy extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Նավիգացիայի ընտրացանկ';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Ծալված է';
 
   @override
   String get expandedIconTapHint => 'Ծալել';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'կրկնակի հպեք ծավալելու համար';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'ծավալեք՝ մանրամասները տեսնելու համար';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'կրկնակի հպեք ծալելու համար';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Ծալել';
 
   @override
   String get firstPageTooltip => 'Առաջին էջ';
@@ -18993,7 +21446,13 @@ class MaterialLocalizationHy extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Արտոնագրեր';
 
   @override
+  String get lookUpButtonLabel => 'Փնտրել';
+
+  @override
   String get menuBarMenuLabel => 'Ընտրացանկի գոտու ընտրացանկ';
+
+  @override
+  String get menuDismissLabel => 'Փակել ընտրացանկը';
 
   @override
   String get modalBarrierDismissLabel => 'Փակել';
@@ -19080,7 +21539,7 @@ class MaterialLocalizationHy extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Պահել';
 
   @override
-  String get scanTextButtonLabel => 'Սկանավորեք տեքստը';
+  String get scanTextButtonLabel => 'Սկանավորել տեքստ';
 
   @override
   String get scrimLabel => 'Դիմակ';
@@ -19095,10 +21554,16 @@ class MaterialLocalizationHy extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Որոնել';
 
   @override
+  String get searchWebButtonLabel => 'Որոնել համացանցում';
+
+  @override
   String get selectAllButtonLabel => 'Նշել բոլորը';
 
   @override
   String get selectYearSemanticsLabel => 'Ընտրել տարին';
+
+  @override
+  String get selectedDateLabel => 'Ընտրված է';
 
   @override
   String? get selectedRowCountTitleFew => r'Ընտրված է $selectedRowCount օբյեկտ';
@@ -19117,6 +21582,9 @@ class MaterialLocalizationHy extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'Տողերը ընտրված չեն';
+
+  @override
+  String get shareButtonLabel => 'Կիսվել';
 
   @override
   String get showAccountsLabel => 'Ցույց տալ հաշիվները';
@@ -19162,10 +21630,18 @@ class MaterialLocalizationHy extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Indonesian (`id`).
+@Deprecated(
+  'Use MaterialLocalizationId from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationId extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Indonesian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationId from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationId({
     super.localeName = 'id',
     required super.fullYearFormat,
@@ -19201,13 +21677,16 @@ class MaterialLocalizationId extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Batal';
 
   @override
+  String get clearButtonTooltip => 'Hapus teks';
+
+  @override
   String get closeButtonLabel => 'Tutup';
 
   @override
   String get closeButtonTooltip => 'Tutup';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Diluaskan';
 
   @override
   String get collapsedIconTapHint => 'Luaskan';
@@ -19267,22 +21746,22 @@ class MaterialLocalizationId extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menu navigasi';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Diciutkan';
 
   @override
   String get expandedIconTapHint => 'Ciutkan';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'ketuk dua kali untuk meluaskan';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Luaskan untuk mengetahui detail selengkapnya';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ketuk dua kali untuk menciutkan';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Ciutkan';
 
   @override
   String get firstPageTooltip => 'Halaman pertama';
@@ -19471,7 +21950,13 @@ class MaterialLocalizationId extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Lisensi';
 
   @override
+  String get lookUpButtonLabel => 'Cari';
+
+  @override
   String get menuBarMenuLabel => 'Menu panel menu';
+
+  @override
+  String get menuDismissLabel => 'Tutup menu';
 
   @override
   String get modalBarrierDismissLabel => 'Tutup';
@@ -19531,7 +22016,7 @@ class MaterialLocalizationId extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Turunkan';
@@ -19573,10 +22058,16 @@ class MaterialLocalizationId extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Telusuri';
 
   @override
+  String get searchWebButtonLabel => 'Telusuri di Web';
+
+  @override
   String get selectAllButtonLabel => 'Pilih semua';
 
   @override
   String get selectYearSemanticsLabel => 'Pilih tahun';
+
+  @override
+  String get selectedDateLabel => 'Dipilih';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -19595,6 +22086,9 @@ class MaterialLocalizationId extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Bagikan';
 
   @override
   String get showAccountsLabel => 'Tampilkan akun';
@@ -19640,10 +22134,18 @@ class MaterialLocalizationId extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Icelandic (`is`).
+@Deprecated(
+  'Use MaterialLocalizationIs from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationIs extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Icelandic.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationIs from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationIs({
     super.localeName = 'is',
     required super.fullYearFormat,
@@ -19679,13 +22181,16 @@ class MaterialLocalizationIs extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Hætta við';
 
   @override
+  String get clearButtonTooltip => 'Hreinsa texta';
+
+  @override
   String get closeButtonLabel => 'Loka';
 
   @override
   String get closeButtonTooltip => 'Loka';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Stækkað';
 
   @override
   String get collapsedIconTapHint => 'Stækka';
@@ -19745,22 +22250,22 @@ class MaterialLocalizationIs extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Yfirlitsvalmynd';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Minnkað';
 
   @override
   String get expandedIconTapHint => 'Draga saman';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'ýttu tvisvar til að stækka';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Stækka til að sjá frekari upplýsingar';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ýttu tvisvar til að minnka';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Minnka';
 
   @override
   String get firstPageTooltip => 'Fyrsta síða';
@@ -19949,7 +22454,13 @@ class MaterialLocalizationIs extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Leyfi';
 
   @override
+  String get lookUpButtonLabel => 'Look Up';
+
+  @override
   String get menuBarMenuLabel => 'Valmyndarstika';
+
+  @override
+  String get menuDismissLabel => 'Loka valmynd';
 
   @override
   String get modalBarrierDismissLabel => 'Hunsa';
@@ -20036,7 +22547,7 @@ class MaterialLocalizationIs extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Vista';
 
   @override
-  String get scanTextButtonLabel => 'Skannaðu texta';
+  String get scanTextButtonLabel => 'Skanna texta';
 
   @override
   String get scrimLabel => 'Möskvi';
@@ -20051,10 +22562,16 @@ class MaterialLocalizationIs extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Leit';
 
   @override
+  String get searchWebButtonLabel => 'Leita á vefnum';
+
+  @override
   String get selectAllButtonLabel => 'Velja allt';
 
   @override
   String get selectYearSemanticsLabel => 'Velja ár';
+
+  @override
+  String get selectedDateLabel => 'Valið';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -20073,6 +22590,9 @@ class MaterialLocalizationIs extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Deila';
 
   @override
   String get showAccountsLabel => 'Sýna reikninga';
@@ -20118,10 +22638,18 @@ class MaterialLocalizationIs extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Italian (`it`).
+@Deprecated(
+  'Use MaterialLocalizationIt from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationIt extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Italian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationIt from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationIt({
     super.localeName = 'it',
     required super.fullYearFormat,
@@ -20157,13 +22685,16 @@ class MaterialLocalizationIt extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Annulla';
 
   @override
+  String get clearButtonTooltip => 'Cancella testo';
+
+  @override
   String get closeButtonLabel => 'Chiudi';
 
   @override
   String get closeButtonTooltip => 'Chiudi';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Espanso';
 
   @override
   String get collapsedIconTapHint => 'Espandi';
@@ -20181,7 +22712,7 @@ class MaterialLocalizationIt extends GlobalMaterialLocalizations {
   String get cutButtonLabel => 'Taglia';
 
   @override
-  String get dateHelpText => 'mm/gg/aaaa';
+  String get dateHelpText => 'gg/mm/aaaa';
 
   @override
   String get dateInputLabel => 'Inserisci data';
@@ -20223,22 +22754,22 @@ class MaterialLocalizationIt extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menu di navigazione';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Compresso';
 
   @override
   String get expandedIconTapHint => 'Comprimi';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'Tocca due volte per espandere';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'espandere e visualizzare altri dettagli';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'tocca due volte per comprimere';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'comprimere';
 
   @override
   String get firstPageTooltip => 'Prima pagina';
@@ -20427,7 +22958,13 @@ class MaterialLocalizationIt extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licenze';
 
   @override
+  String get lookUpButtonLabel => 'Cerca';
+
+  @override
   String get menuBarMenuLabel => 'Menu barra dei menu';
+
+  @override
+  String get menuDismissLabel => 'Ignora menu';
 
   @override
   String get modalBarrierDismissLabel => 'Ignora';
@@ -20487,7 +23024,7 @@ class MaterialLocalizationIt extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Sposta giù';
@@ -20514,7 +23051,7 @@ class MaterialLocalizationIt extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Salva';
 
   @override
-  String get scanTextButtonLabel => 'Scansiona il testo';
+  String get scanTextButtonLabel => 'Scansiona testo';
 
   @override
   String get scrimLabel => 'Rete';
@@ -20529,10 +23066,16 @@ class MaterialLocalizationIt extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Cerca';
 
   @override
+  String get searchWebButtonLabel => 'Cerca sul web';
+
+  @override
   String get selectAllButtonLabel => 'Seleziona tutto';
 
   @override
   String get selectYearSemanticsLabel => 'Seleziona anno';
+
+  @override
+  String get selectedDateLabel => 'Selezionata';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -20551,6 +23094,9 @@ class MaterialLocalizationIt extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Condividi';
 
   @override
   String get showAccountsLabel => 'Mostra account';
@@ -20596,10 +23142,18 @@ class MaterialLocalizationIt extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Japanese (`ja`).
+@Deprecated(
+  'Use MaterialLocalizationJa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationJa extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Japanese.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationJa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationJa({
     super.localeName = 'ja',
     required super.fullYearFormat,
@@ -20635,13 +23189,16 @@ class MaterialLocalizationJa extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'キャンセル';
 
   @override
+  String get clearButtonTooltip => 'テキストを消去';
+
+  @override
   String get closeButtonLabel => '閉じる';
 
   @override
   String get closeButtonTooltip => '閉じる';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => '開きました';
 
   @override
   String get collapsedIconTapHint => '展開';
@@ -20701,22 +23258,22 @@ class MaterialLocalizationJa extends GlobalMaterialLocalizations {
   String get drawerLabel => 'ナビゲーション メニュー';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => '閉じました';
 
   @override
   String get expandedIconTapHint => '折りたたむ';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => '開くにはダブルタップします';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => '開いて詳細を表示';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ダブルタップすると閉じます';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => '閉じる';
 
   @override
   String get firstPageTooltip => '最初のページ';
@@ -20905,7 +23462,13 @@ class MaterialLocalizationJa extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'ライセンス';
 
   @override
+  String get lookUpButtonLabel => '調べる';
+
+  @override
   String get menuBarMenuLabel => 'メニューバーのメニュー';
+
+  @override
+  String get menuDismissLabel => 'メニューを閉じる';
 
   @override
   String get modalBarrierDismissLabel => '閉じる';
@@ -20965,7 +23528,7 @@ class MaterialLocalizationJa extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => '下に移動';
@@ -21007,10 +23570,16 @@ class MaterialLocalizationJa extends GlobalMaterialLocalizations {
   String get searchFieldLabel => '検索';
 
   @override
-  String get selectAllButtonLabel => 'すべて選択';
+  String get searchWebButtonLabel => 'ウェブを検索';
+
+  @override
+  String get selectAllButtonLabel => 'すべてを選択';
 
   @override
   String get selectYearSemanticsLabel => '年を選択';
+
+  @override
+  String get selectedDateLabel => '選択済み';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -21029,6 +23598,9 @@ class MaterialLocalizationJa extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => '共有';
 
   @override
   String get showAccountsLabel => 'アカウントを表示';
@@ -21074,10 +23646,18 @@ class MaterialLocalizationJa extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Georgian (`ka`).
+@Deprecated(
+  'Use MaterialLocalizationKa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationKa extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Georgian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationKa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationKa({
     super.localeName = 'ka',
     required super.fullYearFormat,
@@ -21113,13 +23693,16 @@ class MaterialLocalizationKa extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'გაუქმება';
 
   @override
+  String get clearButtonTooltip => 'ტექსტის გასუფთავება';
+
+  @override
   String get closeButtonLabel => 'დახურვა';
 
   @override
   String get closeButtonTooltip => 'დახურვა';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'გაფართოებულია';
 
   @override
   String get collapsedIconTapHint => 'გაშლა';
@@ -21179,22 +23762,22 @@ class MaterialLocalizationKa extends GlobalMaterialLocalizations {
   String get drawerLabel => 'ნავიგაციის მენიუ';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'ჩაკეცილია';
 
   @override
   String get expandedIconTapHint => 'ჩაკეცვა';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'გასაფართოებლად ორჯერ შეეხეთ';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'მეტი დეტალებისთვის გააფართოეთ';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ორმაგად შეეხეთ ჩასაკეცად';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'ჩაკეცვა';
 
   @override
   String get firstPageTooltip => 'პირველი გვერდი';
@@ -21383,7 +23966,13 @@ class MaterialLocalizationKa extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'ლიცენზიები';
 
   @override
+  String get lookUpButtonLabel => 'აიხედეთ ზემოთ';
+
+  @override
   String get menuBarMenuLabel => 'მენიუს ზოლის მენიუ';
+
+  @override
+  String get menuDismissLabel => 'მენიუს უარყოფა';
 
   @override
   String get modalBarrierDismissLabel => 'დახურვა';
@@ -21485,10 +24074,16 @@ class MaterialLocalizationKa extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'ძიება';
 
   @override
+  String get searchWebButtonLabel => 'ვებში ძიება';
+
+  @override
   String get selectAllButtonLabel => 'ყველას არჩევა';
 
   @override
   String get selectYearSemanticsLabel => 'აირჩიეთ წელი';
+
+  @override
+  String get selectedDateLabel => 'არჩეულია';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -21507,6 +24102,9 @@ class MaterialLocalizationKa extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'გაზიარება';
 
   @override
   String get showAccountsLabel => 'ანგარიშების ჩვენება';
@@ -21552,10 +24150,18 @@ class MaterialLocalizationKa extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Kazakh (`kk`).
+@Deprecated(
+  'Use MaterialLocalizationKk from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationKk extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Kazakh.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationKk from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationKk({
     super.localeName = 'kk',
     required super.fullYearFormat,
@@ -21591,13 +24197,16 @@ class MaterialLocalizationKk extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Бас тарту';
 
   @override
+  String get clearButtonTooltip => 'Мәтінді тазалау';
+
+  @override
   String get closeButtonLabel => 'Жабу';
 
   @override
   String get closeButtonTooltip => 'Жабу';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Жайылды';
 
   @override
   String get collapsedIconTapHint => 'Жаю';
@@ -21657,22 +24266,22 @@ class MaterialLocalizationKk extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Навигация мәзірі';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Жиылды';
 
   @override
   String get expandedIconTapHint => 'Жию';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'жаю үшін екі рет түртіңіз';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Толық мәлімет алу үшін жайыңыз.';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'жию үшін екі рет түртіңіз';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Жию';
 
   @override
   String get firstPageTooltip => 'Бірінші бет';
@@ -21861,7 +24470,13 @@ class MaterialLocalizationKk extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Лицензиялар';
 
   @override
+  String get lookUpButtonLabel => 'Іздеу';
+
+  @override
   String get menuBarMenuLabel => 'Мәзір жолағының мәзірі';
+
+  @override
+  String get menuDismissLabel => 'Мәзірді жабу';
 
   @override
   String get modalBarrierDismissLabel => 'Жабу';
@@ -21963,10 +24578,16 @@ class MaterialLocalizationKk extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Іздеу';
 
   @override
+  String get searchWebButtonLabel => 'Интернеттен іздеу';
+
+  @override
   String get selectAllButtonLabel => 'Барлығын таңдау';
 
   @override
   String get selectYearSemanticsLabel => 'Жылды таңдау';
+
+  @override
+  String get selectedDateLabel => 'Таңдалды.';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -21985,6 +24606,9 @@ class MaterialLocalizationKk extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'Тармақ таңдалмаған';
+
+  @override
+  String get shareButtonLabel => 'Бөлісу';
 
   @override
   String get showAccountsLabel => 'Аккаунттарды көрсету';
@@ -22030,10 +24654,18 @@ class MaterialLocalizationKk extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Khmer Central Khmer (`km`).
+@Deprecated(
+  'Use MaterialLocalizationKm from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationKm extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Khmer Central Khmer.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationKm from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationKm({
     super.localeName = 'km',
     required super.fullYearFormat,
@@ -22069,13 +24701,16 @@ class MaterialLocalizationKm extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'បោះបង់';
 
   @override
+  String get clearButtonTooltip => 'សម្អាតអក្សរ';
+
+  @override
   String get closeButtonLabel => 'បិទ';
 
   @override
   String get closeButtonTooltip => 'បិទ';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'បាន​ពង្រីក';
 
   @override
   String get collapsedIconTapHint => 'ពង្រីក';
@@ -22135,22 +24770,22 @@ class MaterialLocalizationKm extends GlobalMaterialLocalizations {
   String get drawerLabel => 'ម៉ឺនុយរុករក';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'បាន​បង្រួម';
 
   @override
   String get expandedIconTapHint => 'បង្រួម';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'ចុចពីរដង ដើម្បីពង្រីក';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'ពង្រីក​ដើម្បីទទួលបាន​ព័ត៌មានលម្អិត​បន្ថែម';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ចុចពីរដង ដើម្បីបង្រួម';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'បង្រួម';
 
   @override
   String get firstPageTooltip => 'ទំព័រ​ដំបូង';
@@ -22339,7 +24974,13 @@ class MaterialLocalizationKm extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'អាជ្ញាបណ្ណ';
 
   @override
+  String get lookUpButtonLabel => 'រកមើល';
+
+  @override
   String get menuBarMenuLabel => 'ម៉ឺនុយរបារម៉ឺនុយ';
+
+  @override
+  String get menuDismissLabel => 'ច្រានចោល​ម៉ឺនុយ';
 
   @override
   String get modalBarrierDismissLabel => 'ច្រាន​ចោល';
@@ -22399,7 +25040,7 @@ class MaterialLocalizationKm extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'ផ្លាស់ទី​ចុះ​ក្រោម';
@@ -22426,7 +25067,7 @@ class MaterialLocalizationKm extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'រក្សាទុក';
 
   @override
-  String get scanTextButtonLabel => 'ស្កេនអត្ថបទ';
+  String get scanTextButtonLabel => 'ស្កេន​អក្សរ';
 
   @override
   String get scrimLabel => 'ផ្ទាំងស្រអាប់';
@@ -22441,10 +25082,16 @@ class MaterialLocalizationKm extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'ស្វែងរក';
 
   @override
+  String get searchWebButtonLabel => 'ស្វែងរក​លើបណ្ដាញ';
+
+  @override
   String get selectAllButtonLabel => 'ជ្រើសរើស​ទាំងអស់';
 
   @override
   String get selectYearSemanticsLabel => 'ជ្រើសរើសឆ្នាំ';
+
+  @override
+  String get selectedDateLabel => 'បានជ្រើសរើស';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -22463,6 +25110,9 @@ class MaterialLocalizationKm extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'ចែករំលែក';
 
   @override
   String get showAccountsLabel => 'បង្ហាញគណនី';
@@ -22508,10 +25158,18 @@ class MaterialLocalizationKm extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Kannada (`kn`).
+@Deprecated(
+  'Use MaterialLocalizationKn from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationKn extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Kannada.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationKn from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationKn({
     super.localeName = 'kn',
     required super.fullYearFormat,
@@ -22547,13 +25205,16 @@ class MaterialLocalizationKn extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => '\u{cb0}\u{ca6}\u{ccd}\u{ca6}\u{cc1}\u{cae}\u{cbe}\u{ca1}\u{cbf}';
 
   @override
+  String get clearButtonTooltip => '\u{caa}\u{ca0}\u{ccd}\u{caf}\u{20}\u{ca4}\u{cc6}\u{cb0}\u{cb5}\u{cc1}\u{c97}\u{cca}\u{cb3}\u{cbf}\u{cb8}\u{cbf}';
+
+  @override
   String get closeButtonLabel => '\u{cae}\u{cc1}\u{c9a}\u{ccd}\u{c9a}\u{cbf}\u{cb0}\u{cbf}';
 
   @override
   String get closeButtonTooltip => '\u{cae}\u{cc1}\u{c9a}\u{ccd}\u{c9a}\u{cbf}\u{cb0}\u{cbf}';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => '\u{cb5}\u{cbf}\u{cb8}\u{ccd}\u{ca4}\u{cb0}\u{cbf}\u{cb8}\u{cb2}\u{cbe}\u{c97}\u{cbf}\u{ca6}\u{cc6}';
 
   @override
   String get collapsedIconTapHint => '\u{cb5}\u{cbf}\u{cb8}\u{ccd}\u{ca4}\u{cb0}\u{cbf}\u{cb8}\u{cbf}';
@@ -22562,7 +25223,7 @@ class MaterialLocalizationKn extends GlobalMaterialLocalizations {
   String get continueButtonLabel => '\u{cae}\u{cc1}\u{c82}\u{ca6}\u{cc1}\u{cb5}\u{cb0}\u{cbf}\u{cb8}\u{cbf}';
 
   @override
-  String get copyButtonLabel => '\u{ca8}\u{c95}\u{cb2}\u{cbf}\u{cb8}\u{cbf}';
+  String get copyButtonLabel => '\u{c95}\u{cbe}\u{caa}\u{cbf}\u{20}\u{cae}\u{cbe}\u{ca1}\u{cbf}';
 
   @override
   String get currentDateLabel => '\u{c87}\u{c82}\u{ca6}\u{cc1}';
@@ -22613,22 +25274,22 @@ class MaterialLocalizationKn extends GlobalMaterialLocalizations {
   String get drawerLabel => '\u{ca8}\u{ccd}\u{caf}\u{cbe}\u{cb5}\u{cbf}\u{c97}\u{cc7}\u{cb6}\u{ca8}\u{ccd}\u{200c}\u{20}\u{cae}\u{cc6}\u{ca8}\u{cc1}';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => '\u{c95}\u{cc1}\u{c97}\u{ccd}\u{c97}\u{cbf}\u{cb8}\u{cb2}\u{cbe}\u{c97}\u{cbf}\u{ca6}\u{cc6}';
 
   @override
   String get expandedIconTapHint => '\u{c95}\u{cc1}\u{c97}\u{ccd}\u{c97}\u{cbf}\u{cb8}\u{cbf}';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => '\u{cb5}\u{cbf}\u{cb8}\u{ccd}\u{ca4}\u{cb0}\u{cbf}\u{cb8}\u{cb2}\u{cc1}\u{20}\u{ca1}\u{cac}\u{cb2}\u{ccd}\u{20}\u{c9f}\u{ccd}\u{caf}\u{cbe}\u{caa}\u{ccd}\u{20}\u{cae}\u{cbe}\u{ca1}\u{cbf}';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => '\u{c87}\u{ca8}\u{ccd}\u{ca8}\u{cb7}\u{ccd}\u{c9f}\u{cc1}\u{20}\u{cb5}\u{cbf}\u{cb5}\u{cb0}\u{c97}\u{cb3}\u{cbf}\u{c97}\u{cbe}\u{c97}\u{cbf}\u{20}\u{cb5}\u{cbf}\u{cb8}\u{ccd}\u{ca4}\u{cb0}\u{cbf}\u{cb8}\u{cbf}';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => '\u{c95}\u{cc1}\u{c97}\u{ccd}\u{c97}\u{cbf}\u{cb8}\u{cb2}\u{cc1}\u{20}\u{ca1}\u{cac}\u{cb2}\u{ccd}\u{20}\u{c9f}\u{ccd}\u{caf}\u{cbe}\u{caa}\u{ccd}\u{20}\u{cae}\u{cbe}\u{ca1}\u{cbf}';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => '\u{c95}\u{cc1}\u{c97}\u{ccd}\u{c97}\u{cbf}\u{cb8}\u{cbf}';
 
   @override
   String get firstPageTooltip => '\u{cae}\u{cca}\u{ca6}\u{cb2}\u{20}\u{caa}\u{cc1}\u{c9f}';
@@ -22817,7 +25478,13 @@ class MaterialLocalizationKn extends GlobalMaterialLocalizations {
   String get licensesPageTitle => '\u{caa}\u{cb0}\u{cb5}\u{cbe}\u{ca8}\u{c97}\u{cbf}\u{c97}\u{cb3}\u{cc1}';
 
   @override
+  String get lookUpButtonLabel => '\u{cae}\u{cc7}\u{cb2}\u{cc6}\u{20}\u{ca8}\u{ccb}\u{ca1}\u{cbf}';
+
+  @override
   String get menuBarMenuLabel => '\u{cae}\u{cc6}\u{ca8}\u{cc1}\u{20}\u{cac}\u{cbe}\u{cb0}\u{ccd}\u{200c}\u{20}\u{cae}\u{cc6}\u{ca8}\u{cc1}';
+
+  @override
+  String get menuDismissLabel => '\u{cae}\u{cc6}\u{ca8}\u{cc1}\u{cb5}\u{ca8}\u{ccd}\u{ca8}\u{cc1}\u{20}\u{cb5}\u{c9c}\u{cbe}\u{c97}\u{cc6}\u{cc2}\u{cb3}\u{cbf}\u{cb8}\u{cbf}';
 
   @override
   String get modalBarrierDismissLabel => '\u{cb5}\u{c9c}\u{cbe}\u{c97}\u{cca}\u{cb3}\u{cbf}\u{cb8}\u{cbf}';
@@ -22901,7 +25568,7 @@ class MaterialLocalizationKn extends GlobalMaterialLocalizations {
   String get rowsPerPageTitle => '\u{caa}\u{ccd}\u{cb0}\u{ca4}\u{cbf}\u{20}\u{caa}\u{cc1}\u{c9f}\u{c95}\u{ccd}\u{c95}\u{cc6}\u{20}\u{cb8}\u{cbe}\u{cb2}\u{cc1}\u{c97}\u{cb3}\u{cc1}\u{3a}';
 
   @override
-  String get saveButtonLabel => '\u{c89}\u{cb3}\u{cbf}\u{cb8}\u{cbf}';
+  String get saveButtonLabel => '\u{cb8}\u{cc7}\u{cb5}\u{ccd}\u{20}\u{cae}\u{cbe}\u{ca1}\u{cbf}';
 
   @override
   String get scanTextButtonLabel => '\u{caa}\u{ca0}\u{ccd}\u{caf}\u{cb5}\u{ca8}\u{ccd}\u{ca8}\u{cc1}\u{20}\u{cb8}\u{ccd}\u{c95}\u{ccd}\u{caf}\u{cbe}\u{ca8}\u{ccd}\u{20}\u{cae}\u{cbe}\u{ca1}\u{cbf}';
@@ -22919,10 +25586,16 @@ class MaterialLocalizationKn extends GlobalMaterialLocalizations {
   String get searchFieldLabel => '\u{cb9}\u{cc1}\u{ca1}\u{cc1}\u{c95}\u{cbf}';
 
   @override
+  String get searchWebButtonLabel => '\u{cb5}\u{cc6}\u{cac}\u{ccd}\u{200c}\u{ca8}\u{cb2}\u{ccd}\u{cb2}\u{cbf}\u{20}\u{cb9}\u{cc1}\u{ca1}\u{cc1}\u{c95}\u{cbf}';
+
+  @override
   String get selectAllButtonLabel => '\u{c8e}\u{cb2}\u{ccd}\u{cb2}\u{cb5}\u{ca8}\u{ccd}\u{ca8}\u{cc2}\u{20}\u{c86}\u{caf}\u{ccd}\u{c95}\u{cc6}\u{20}\u{cae}\u{cbe}\u{ca1}\u{cbf}';
 
   @override
   String get selectYearSemanticsLabel => '\u{cb5}\u{cb0}\u{ccd}\u{cb7}\u{cb5}\u{ca8}\u{ccd}\u{ca8}\u{cc1}\u{20}\u{c86}\u{caf}\u{ccd}\u{c95}\u{cc6}\u{cae}\u{cbe}\u{ca1}\u{cbf}';
+
+  @override
+  String get selectedDateLabel => '\u{c86}\u{caf}\u{ccd}\u{c95}\u{cc6}\u{cae}\u{cbe}\u{ca1}\u{cb2}\u{cbe}\u{c97}\u{cbf}\u{ca6}\u{cc6}';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -22941,6 +25614,9 @@ class MaterialLocalizationKn extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => '\u{cb9}\u{c82}\u{c9a}\u{cbf}\u{c95}\u{cca}\u{cb3}\u{ccd}\u{cb3}\u{cbf}';
 
   @override
   String get showAccountsLabel => '\u{c96}\u{cbe}\u{ca4}\u{cc6}\u{c97}\u{cb3}\u{ca8}\u{ccd}\u{ca8}\u{cc1}\u{20}\u{ca4}\u{ccb}\u{cb0}\u{cbf}\u{cb8}\u{cbf}';
@@ -22986,10 +25662,18 @@ class MaterialLocalizationKn extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Korean (`ko`).
+@Deprecated(
+  'Use MaterialLocalizationKo from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationKo extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Korean.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationKo from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationKo({
     super.localeName = 'ko',
     required super.fullYearFormat,
@@ -23025,13 +25709,16 @@ class MaterialLocalizationKo extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => '취소';
 
   @override
+  String get clearButtonTooltip => '텍스트 삭제';
+
+  @override
   String get closeButtonLabel => '닫기';
 
   @override
   String get closeButtonTooltip => '닫기';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => '펼침';
 
   @override
   String get collapsedIconTapHint => '펼치기';
@@ -23046,7 +25733,7 @@ class MaterialLocalizationKo extends GlobalMaterialLocalizations {
   String get currentDateLabel => '오늘';
 
   @override
-  String get cutButtonLabel => '잘라냄';
+  String get cutButtonLabel => '잘라내기';
 
   @override
   String get dateHelpText => 'yyyy.mm.dd';
@@ -23091,22 +25778,22 @@ class MaterialLocalizationKo extends GlobalMaterialLocalizations {
   String get drawerLabel => '탐색 메뉴';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => '접힘';
 
   @override
   String get expandedIconTapHint => '접기';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => '두 번 탭하여 펼치기';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => '자세히 알아보려면 펼치기';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => '두 번 탭하여 접기';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => '접기';
 
   @override
   String get firstPageTooltip => '첫 페이지';
@@ -23295,7 +25982,13 @@ class MaterialLocalizationKo extends GlobalMaterialLocalizations {
   String get licensesPageTitle => '라이선스';
 
   @override
+  String get lookUpButtonLabel => '찾기';
+
+  @override
   String get menuBarMenuLabel => '메뉴 바 메뉴';
+
+  @override
+  String get menuDismissLabel => '메뉴 닫기';
 
   @override
   String get modalBarrierDismissLabel => '닫기';
@@ -23355,7 +26048,7 @@ class MaterialLocalizationKo extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => '아래로 이동';
@@ -23382,7 +26075,7 @@ class MaterialLocalizationKo extends GlobalMaterialLocalizations {
   String get saveButtonLabel => '저장';
 
   @override
-  String get scanTextButtonLabel => '스캔 텍스트';
+  String get scanTextButtonLabel => '텍스트 스캔';
 
   @override
   String get scrimLabel => '스크림';
@@ -23397,10 +26090,16 @@ class MaterialLocalizationKo extends GlobalMaterialLocalizations {
   String get searchFieldLabel => '검색';
 
   @override
+  String get searchWebButtonLabel => '웹 검색';
+
+  @override
   String get selectAllButtonLabel => '전체 선택';
 
   @override
   String get selectYearSemanticsLabel => '연도 선택';
+
+  @override
+  String get selectedDateLabel => '선택됨';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -23419,6 +26118,9 @@ class MaterialLocalizationKo extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => '공유';
 
   @override
   String get showAccountsLabel => '계정 표시';
@@ -23464,10 +26166,18 @@ class MaterialLocalizationKo extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Kirghiz Kyrgyz (`ky`).
+@Deprecated(
+  'Use MaterialLocalizationKy from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationKy extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Kirghiz Kyrgyz.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationKy from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationKy({
     super.localeName = 'ky',
     required super.fullYearFormat,
@@ -23503,13 +26213,16 @@ class MaterialLocalizationKy extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Токтотуу';
 
   @override
+  String get clearButtonTooltip => 'Текстти тазалоо';
+
+  @override
   String get closeButtonLabel => 'Жабуу';
 
   @override
   String get closeButtonTooltip => 'Жабуу';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Жайылып көрсөтүлдү';
 
   @override
   String get collapsedIconTapHint => 'Жайып көрсөтүү';
@@ -23569,22 +26282,22 @@ class MaterialLocalizationKy extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Чабыттоо менюсу';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Жыйыштырылды';
 
   @override
   String get expandedIconTapHint => 'Жыйыштыруу';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'жайып көрсөтүү үчүн эки жолу таптаңыз';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Толук маалымат алуу үчүн жайып көрүңүз';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'жыйыштыруу үчүн эки жолу таптаңыз';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Жыйыштыруу';
 
   @override
   String get firstPageTooltip => 'Биринчи бет';
@@ -23773,7 +26486,13 @@ class MaterialLocalizationKy extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Уруксаттамалар';
 
   @override
+  String get lookUpButtonLabel => 'Издөө';
+
+  @override
   String get menuBarMenuLabel => 'Меню тилкеси менюсу';
+
+  @override
+  String get menuDismissLabel => 'Менюну жабуу';
 
   @override
   String get modalBarrierDismissLabel => 'Жабуу';
@@ -23875,10 +26594,16 @@ class MaterialLocalizationKy extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Издөө';
 
   @override
+  String get searchWebButtonLabel => 'Интернеттен издөө';
+
+  @override
   String get selectAllButtonLabel => 'Баарын тандоо';
 
   @override
   String get selectYearSemanticsLabel => 'Жылды тандоо';
+
+  @override
+  String get selectedDateLabel => 'Тандалды';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -23897,6 +26622,9 @@ class MaterialLocalizationKy extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Бөлүшүү';
 
   @override
   String get showAccountsLabel => 'Аккаунттарды көрсөтүү';
@@ -23942,10 +26670,18 @@ class MaterialLocalizationKy extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Lao (`lo`).
+@Deprecated(
+  'Use MaterialLocalizationLo from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationLo extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Lao.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationLo from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationLo({
     super.localeName = 'lo',
     required super.fullYearFormat,
@@ -23981,13 +26717,16 @@ class MaterialLocalizationLo extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'ຍົກເລີກ';
 
   @override
+  String get clearButtonTooltip => 'ລຶບລ້າງຂໍ້ຄວາມ';
+
+  @override
   String get closeButtonLabel => 'ປິດ';
 
   @override
   String get closeButtonTooltip => 'ປິດ';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'ຂະຫຍາຍແລ້ວ';
 
   @override
   String get collapsedIconTapHint => 'ຂະຫຍາຍ';
@@ -24047,22 +26786,22 @@ class MaterialLocalizationLo extends GlobalMaterialLocalizations {
   String get drawerLabel => 'ເມນູນຳທາງ';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'ຫຍໍ້ລົງແລ້ວ';
 
   @override
   String get expandedIconTapHint => 'ຫຍໍ້ເຂົ້າ';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'ແຕະສອງເທື່ອເພື່ອຂະຫຍາຍ';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'ຂະຫຍາຍສຳລັບຂໍ້ມູນເພີ່ມເຕີມ';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ແຕະສອງເທື່ອເພື່ອຫຍໍ້ລົງ';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'ຫຍໍ້ລົງ';
 
   @override
   String get firstPageTooltip => 'ໜ້າທຳອິດ';
@@ -24251,7 +26990,13 @@ class MaterialLocalizationLo extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'ໃບອະນຸຍາດ';
 
   @override
+  String get lookUpButtonLabel => 'ຊອກຫາຂໍ້ມູນ';
+
+  @override
   String get menuBarMenuLabel => 'ເມນູແຖບເມນູ';
+
+  @override
+  String get menuDismissLabel => 'ປິດເມນູ';
 
   @override
   String get modalBarrierDismissLabel => 'ປິດໄວ້';
@@ -24353,10 +27098,16 @@ class MaterialLocalizationLo extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'ຊອກຫາ';
 
   @override
+  String get searchWebButtonLabel => 'ຊອກຫາຢູ່ອິນເຕີເນັດ';
+
+  @override
   String get selectAllButtonLabel => 'ເລືອກທັງໝົດ';
 
   @override
   String get selectYearSemanticsLabel => 'ເລືອກ​ປີ';
+
+  @override
+  String get selectedDateLabel => 'ເລືອກໄວ້';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -24375,6 +27126,9 @@ class MaterialLocalizationLo extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'ແບ່ງປັນ';
 
   @override
   String get showAccountsLabel => 'ສະແດງບັນຊີ';
@@ -24420,10 +27174,18 @@ class MaterialLocalizationLo extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Lithuanian (`lt`).
+@Deprecated(
+  'Use MaterialLocalizationLt from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationLt extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Lithuanian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationLt from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationLt({
     super.localeName = 'lt',
     required super.fullYearFormat,
@@ -24459,13 +27221,16 @@ class MaterialLocalizationLt extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Atšaukti';
 
   @override
+  String get clearButtonTooltip => 'Išvalyti tekstą';
+
+  @override
   String get closeButtonLabel => 'Uždaryti';
 
   @override
   String get closeButtonTooltip => 'Uždaryti';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Išskleista';
 
   @override
   String get collapsedIconTapHint => 'Išskleisti';
@@ -24525,22 +27290,22 @@ class MaterialLocalizationLt extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Naršymo meniu';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Sutraukta';
 
   @override
   String get expandedIconTapHint => 'Sutraukti';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'dukart palieskite, kad išskleistumėte';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Išskleiskite, jei reikia daugiau išsamios informacijos';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'dukart palieskite, kad sutrauktumėte';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Sutraukti';
 
   @override
   String get firstPageTooltip => 'Pirmas puslapis';
@@ -24729,7 +27494,13 @@ class MaterialLocalizationLt extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licencijos';
 
   @override
+  String get lookUpButtonLabel => 'Ieškoti';
+
+  @override
   String get menuBarMenuLabel => 'Meniu juostos meniu';
+
+  @override
+  String get menuDismissLabel => 'Atsisakyti meniu';
 
   @override
   String get modalBarrierDismissLabel => 'Atsisakyti';
@@ -24789,7 +27560,7 @@ class MaterialLocalizationLt extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Perkelti žemyn';
@@ -24831,10 +27602,16 @@ class MaterialLocalizationLt extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Paieška';
 
   @override
+  String get searchWebButtonLabel => 'Ieškoti žiniatinklyje';
+
+  @override
   String get selectAllButtonLabel => 'Pasirinkti viską';
 
   @override
   String get selectYearSemanticsLabel => 'Pasirinkite metus';
+
+  @override
+  String get selectedDateLabel => 'Pasirinkta';
 
   @override
   String? get selectedRowCountTitleFew => r'Pasirinkti $selectedRowCount elementai';
@@ -24853,6 +27630,9 @@ class MaterialLocalizationLt extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Bendrinti';
 
   @override
   String get showAccountsLabel => 'Rodyti paskyras';
@@ -24898,10 +27678,18 @@ class MaterialLocalizationLt extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Latvian (`lv`).
+@Deprecated(
+  'Use MaterialLocalizationLv from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationLv extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Latvian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationLv from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationLv({
     super.localeName = 'lv',
     required super.fullYearFormat,
@@ -24937,13 +27725,16 @@ class MaterialLocalizationLv extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Atcelt';
 
   @override
+  String get clearButtonTooltip => 'Notīrīt tekstu';
+
+  @override
   String get closeButtonLabel => 'Aizvērt';
 
   @override
   String get closeButtonTooltip => 'Aizvērt';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Izvērsts';
 
   @override
   String get collapsedIconTapHint => 'Izvērst';
@@ -25003,22 +27794,22 @@ class MaterialLocalizationLv extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigācijas izvēlne';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Sakļauts';
 
   @override
   String get expandedIconTapHint => 'Sakļaut';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'dubultskāriens, lai izvērstu';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Izvērst, lai iegūtu plašāku informāciju';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'dubultskāriens, lai sakļautu';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Sakļaut';
 
   @override
   String get firstPageTooltip => 'Pirmā lapa';
@@ -25207,7 +27998,13 @@ class MaterialLocalizationLv extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licences';
 
   @override
+  String get lookUpButtonLabel => 'Meklēt';
+
+  @override
   String get menuBarMenuLabel => 'Izvēļņu joslas izvēlne';
+
+  @override
+  String get menuDismissLabel => 'Nerādīt izvēlni';
 
   @override
   String get modalBarrierDismissLabel => 'Nerādīt';
@@ -25309,10 +28106,16 @@ class MaterialLocalizationLv extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Meklēt';
 
   @override
+  String get searchWebButtonLabel => 'Meklēt tīmeklī';
+
+  @override
   String get selectAllButtonLabel => 'Atlasīt visu';
 
   @override
   String get selectYearSemanticsLabel => 'Atlasiet gadu';
+
+  @override
+  String get selectedDateLabel => 'Atlasīts';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -25331,6 +28134,9 @@ class MaterialLocalizationLv extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'Nav atlasītu vienumu';
+
+  @override
+  String get shareButtonLabel => 'Kopīgot';
 
   @override
   String get showAccountsLabel => 'Rādīt kontus';
@@ -25376,10 +28182,18 @@ class MaterialLocalizationLv extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Macedonian (`mk`).
+@Deprecated(
+  'Use MaterialLocalizationMk from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationMk extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Macedonian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationMk from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationMk({
     super.localeName = 'mk',
     required super.fullYearFormat,
@@ -25415,13 +28229,16 @@ class MaterialLocalizationMk extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Откажи';
 
   @override
+  String get clearButtonTooltip => 'Избриши го текстот';
+
+  @override
   String get closeButtonLabel => 'Затвори';
 
   @override
   String get closeButtonTooltip => 'Затвори';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Проширено';
 
   @override
   String get collapsedIconTapHint => 'Прошири';
@@ -25481,28 +28298,28 @@ class MaterialLocalizationMk extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Мени за навигација';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Собрано';
 
   @override
   String get expandedIconTapHint => 'Собери';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'допри двапати за проширување';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'проширување за повеќе детали';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'допрете двапати за собирање';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'собирање';
 
   @override
   String get firstPageTooltip => 'Прва страница';
 
   @override
-  String get hideAccountsLabel => 'Сокриј сметки';
+  String get hideAccountsLabel => 'Скриј сметки';
 
   @override
   String get inputDateModeButtonLabel => 'Префрли на внесување';
@@ -25685,7 +28502,13 @@ class MaterialLocalizationMk extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Лиценци';
 
   @override
+  String get lookUpButtonLabel => 'Погледнете нагоре';
+
+  @override
   String get menuBarMenuLabel => 'Мени на лентата со мени';
+
+  @override
+  String get menuDismissLabel => 'Отфрлете го менито';
 
   @override
   String get modalBarrierDismissLabel => 'Отфрли';
@@ -25772,7 +28595,7 @@ class MaterialLocalizationMk extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Зачувај';
 
   @override
-  String get scanTextButtonLabel => 'Скенирајте текст';
+  String get scanTextButtonLabel => 'Скенирајте го текстот';
 
   @override
   String get scrimLabel => 'Скрим';
@@ -25787,10 +28610,16 @@ class MaterialLocalizationMk extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Пребарувајте';
 
   @override
+  String get searchWebButtonLabel => 'Пребарајте на интернет';
+
+  @override
   String get selectAllButtonLabel => 'Избери ги сите';
 
   @override
   String get selectYearSemanticsLabel => 'Изберете година';
+
+  @override
+  String get selectedDateLabel => 'Избрано';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -25809,6 +28638,9 @@ class MaterialLocalizationMk extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Сподели';
 
   @override
   String get showAccountsLabel => 'Прикажи сметки';
@@ -25854,10 +28686,18 @@ class MaterialLocalizationMk extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Malayalam (`ml`).
+@Deprecated(
+  'Use MaterialLocalizationMl from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationMl extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Malayalam.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationMl from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationMl({
     super.localeName = 'ml',
     required super.fullYearFormat,
@@ -25893,13 +28733,16 @@ class MaterialLocalizationMl extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'റദ്ദാക്കുക';
 
   @override
+  String get clearButtonTooltip => 'ടെക്സ്റ്റ് മായ്ക്കുക';
+
+  @override
   String get closeButtonLabel => 'അടയ്ക്കുക';
 
   @override
   String get closeButtonTooltip => 'അടയ്‌ക്കുക';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'വികസിപ്പിച്ചു';
 
   @override
   String get collapsedIconTapHint => 'വികസിപ്പിക്കുക';
@@ -25959,22 +28802,22 @@ class MaterialLocalizationMl extends GlobalMaterialLocalizations {
   String get drawerLabel => 'നാവിഗേഷൻ മെനു';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'ചുരുക്കി';
 
   @override
   String get expandedIconTapHint => 'ചുരുക്കുക';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'വികസിപ്പിക്കാൻ ഡബിൾ ടാപ്പ് ചെയ്യുക';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'കൂടുതൽ വിശദാംശങ്ങൾക്ക് വികസിപ്പിക്കുക';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ചുരുക്കാൻ ഡബിൾ ടാപ്പ് ചെയ്യുക';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'ചുരുക്കുക';
 
   @override
   String get firstPageTooltip => 'ആദ്യ പേജ്';
@@ -26163,7 +29006,13 @@ class MaterialLocalizationMl extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'ലൈസൻസുകൾ';
 
   @override
+  String get lookUpButtonLabel => 'മുകളിലേക്ക് നോക്കുക';
+
+  @override
   String get menuBarMenuLabel => 'മെനു ബാർ മെനു';
+
+  @override
+  String get menuDismissLabel => 'മെനു ഡിസ്മിസ് ചെയ്യുക';
 
   @override
   String get modalBarrierDismissLabel => 'നിരസിക്കുക';
@@ -26250,7 +29099,7 @@ class MaterialLocalizationMl extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'സംരക്ഷിക്കുക';
 
   @override
-  String get scanTextButtonLabel => 'ടെക്സ്റ്റ് സ്കാൻ ചെയ്യുക';
+  String get scanTextButtonLabel => 'ടെക്സ്റ്റ് സ്‌കാൻ ചെയ്യുക';
 
   @override
   String get scrimLabel => 'സ്ക്രിം';
@@ -26265,10 +29114,16 @@ class MaterialLocalizationMl extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'തിരയുക';
 
   @override
+  String get searchWebButtonLabel => 'വെബിൽ തിരയുക';
+
+  @override
   String get selectAllButtonLabel => 'എല്ലാം തിരഞ്ഞെടുക്കുക';
 
   @override
   String get selectYearSemanticsLabel => 'വർഷം തിരഞ്ഞെടുക്കുക';
+
+  @override
+  String get selectedDateLabel => 'തിരഞ്ഞെടുത്തു';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -26287,6 +29142,9 @@ class MaterialLocalizationMl extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'പങ്കിടുക';
 
   @override
   String get showAccountsLabel => 'അക്കൗണ്ടുകൾ കാണിക്കുക';
@@ -26332,10 +29190,18 @@ class MaterialLocalizationMl extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Mongolian (`mn`).
+@Deprecated(
+  'Use MaterialLocalizationMn from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationMn extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Mongolian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationMn from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationMn({
     super.localeName = 'mn',
     required super.fullYearFormat,
@@ -26371,13 +29237,16 @@ class MaterialLocalizationMn extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Цуцлах';
 
   @override
+  String get clearButtonTooltip => 'Текстийг арилгах';
+
+  @override
   String get closeButtonLabel => 'Хаах';
 
   @override
   String get closeButtonTooltip => 'Хаах';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Дэлгэсэн';
 
   @override
   String get collapsedIconTapHint => 'Дэлгэх';
@@ -26437,22 +29306,22 @@ class MaterialLocalizationMn extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Навигацын цэс';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Хураасан';
 
   @override
   String get expandedIconTapHint => 'Буулгах';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'дэлгэхийн тулд хоёр товшино уу';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Илүү дэлгэрэнгүй авах бол дэлгэнэ үү';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'хураахын тулд хоёр товшино уу';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Хураах';
 
   @override
   String get firstPageTooltip => 'Эхний хуудас';
@@ -26641,7 +29510,13 @@ class MaterialLocalizationMn extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Лиценз';
 
   @override
+  String get lookUpButtonLabel => 'Дээшээ харах';
+
+  @override
   String get menuBarMenuLabel => 'Цэсний талбарын цэс';
+
+  @override
+  String get menuDismissLabel => 'Цэсийг хаах';
 
   @override
   String get modalBarrierDismissLabel => 'Үл хэрэгсэх';
@@ -26728,7 +29603,7 @@ class MaterialLocalizationMn extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Хадгалах';
 
   @override
-  String get scanTextButtonLabel => 'Текст сканнердах';
+  String get scanTextButtonLabel => 'Текстийг скан хийх';
 
   @override
   String get scrimLabel => 'Скрим';
@@ -26743,10 +29618,16 @@ class MaterialLocalizationMn extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Хайх';
 
   @override
+  String get searchWebButtonLabel => 'Вебээс хайх';
+
+  @override
   String get selectAllButtonLabel => 'Бүгдийг сонгох';
 
   @override
   String get selectYearSemanticsLabel => 'Жил сонгох';
+
+  @override
+  String get selectedDateLabel => 'Сонгосон';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -26765,6 +29646,9 @@ class MaterialLocalizationMn extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'Бичлэг сонгоогүй байна';
+
+  @override
+  String get shareButtonLabel => 'Хуваалцах';
 
   @override
   String get showAccountsLabel => 'Бүртгэлүүдийг харуулах';
@@ -26810,10 +29694,18 @@ class MaterialLocalizationMn extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Marathi (`mr`).
+@Deprecated(
+  'Use MaterialLocalizationMr from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationMr extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Marathi.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationMr from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationMr({
     super.localeName = 'mr',
     required super.fullYearFormat,
@@ -26849,13 +29741,16 @@ class MaterialLocalizationMr extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'रद्द करा';
 
   @override
+  String get clearButtonTooltip => 'मजकूर साफ करा';
+
+  @override
   String get closeButtonLabel => 'बंद करा';
 
   @override
   String get closeButtonTooltip => 'बंद करा';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'विस्तार केले';
 
   @override
   String get collapsedIconTapHint => 'विस्तार करा';
@@ -26915,22 +29810,22 @@ class MaterialLocalizationMr extends GlobalMaterialLocalizations {
   String get drawerLabel => 'नेव्हिगेशन मेनू';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'कोलॅप्स केले';
 
   @override
   String get expandedIconTapHint => 'कोलॅप्स करा';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'विस्तार करण्‍यासाठी दोनदा टॅप करा';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'आणखी तपशिलांसाठी विस्तार करा';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'कोलॅप्स करण्यासाठी दोनदा टॅप करा';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'कोलॅप्स करा';
 
   @override
   String get firstPageTooltip => 'पहिले पेज';
@@ -27119,7 +30014,13 @@ class MaterialLocalizationMr extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'परवाने';
 
   @override
+  String get lookUpButtonLabel => 'शोध घ्या';
+
+  @override
   String get menuBarMenuLabel => 'मेनू बार मेनू';
+
+  @override
+  String get menuDismissLabel => 'मेनू डिसमिस करा';
 
   @override
   String get modalBarrierDismissLabel => 'डिसमिस करा';
@@ -27221,10 +30122,16 @@ class MaterialLocalizationMr extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'शोध';
 
   @override
+  String get searchWebButtonLabel => 'वेबवर शोधा';
+
+  @override
   String get selectAllButtonLabel => 'सर्व निवडा';
 
   @override
   String get selectYearSemanticsLabel => 'वर्ष निवडा';
+
+  @override
+  String get selectedDateLabel => 'निवडली आहे';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -27243,6 +30150,9 @@ class MaterialLocalizationMr extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'कोणतेही आयटम निवडलेले नाहीत';
+
+  @override
+  String get shareButtonLabel => 'शेअर करा';
 
   @override
   String get showAccountsLabel => 'खाती दर्शवा';
@@ -27288,10 +30198,18 @@ class MaterialLocalizationMr extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Malay (`ms`).
+@Deprecated(
+  'Use MaterialLocalizationMs from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationMs extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Malay.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationMs from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationMs({
     super.localeName = 'ms',
     required super.fullYearFormat,
@@ -27327,13 +30245,16 @@ class MaterialLocalizationMs extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Batal';
 
   @override
+  String get clearButtonTooltip => 'Kosongkan teks';
+
+  @override
   String get closeButtonLabel => 'Tutup';
 
   @override
   String get closeButtonTooltip => 'Tutup';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Dikembangkan';
 
   @override
   String get collapsedIconTapHint => 'Kembangkan';
@@ -27393,22 +30314,22 @@ class MaterialLocalizationMs extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menu navigasi';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Dikuncupkan';
 
   @override
   String get expandedIconTapHint => 'Runtuhkan';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'ketik dua kali untuk kembangkan';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Kembangkan untuk mendapatkan butiran lanjut';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ketik dua kali untuk kuncupkan';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Kuncupkan';
 
   @override
   String get firstPageTooltip => 'Halaman pertama';
@@ -27597,7 +30518,13 @@ class MaterialLocalizationMs extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Lesen';
 
   @override
+  String get lookUpButtonLabel => 'Lihat ke Atas';
+
+  @override
   String get menuBarMenuLabel => 'Menu bar menu';
+
+  @override
+  String get menuDismissLabel => 'Ketepikan menu';
 
   @override
   String get modalBarrierDismissLabel => 'Tolak';
@@ -27657,7 +30584,7 @@ class MaterialLocalizationMs extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Alih ke bawah';
@@ -27684,7 +30611,7 @@ class MaterialLocalizationMs extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Simpan';
 
   @override
-  String get scanTextButtonLabel => 'Pindai teks';
+  String get scanTextButtonLabel => 'Imbas teks';
 
   @override
   String get scrimLabel => 'Scrim';
@@ -27699,10 +30626,16 @@ class MaterialLocalizationMs extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Cari';
 
   @override
+  String get searchWebButtonLabel => 'Buat carian pada Web';
+
+  @override
   String get selectAllButtonLabel => 'Pilih semua';
 
   @override
   String get selectYearSemanticsLabel => 'Pilih tahun';
+
+  @override
+  String get selectedDateLabel => 'Dipilih';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -27721,6 +30654,9 @@ class MaterialLocalizationMs extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'Tiada item dipilih';
+
+  @override
+  String get shareButtonLabel => 'Kongsi';
 
   @override
   String get showAccountsLabel => 'Tunjukkan akaun';
@@ -27766,10 +30702,18 @@ class MaterialLocalizationMs extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Burmese (`my`).
+@Deprecated(
+  'Use MaterialLocalizationMy from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationMy extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Burmese.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationMy from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationMy({
     super.localeName = 'my',
     required super.fullYearFormat,
@@ -27805,13 +30749,16 @@ class MaterialLocalizationMy extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'မလုပ်တော့';
 
   @override
+  String get clearButtonTooltip => 'စာသား ဖယ်ရှားရန်';
+
+  @override
   String get closeButtonLabel => 'ပိတ်ရန်';
 
   @override
   String get closeButtonTooltip => 'ပိတ်ရန်';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'ဖြန့်ထားသည်';
 
   @override
   String get collapsedIconTapHint => 'ချဲ့ရန်';
@@ -27871,22 +30818,22 @@ class MaterialLocalizationMy extends GlobalMaterialLocalizations {
   String get drawerLabel => 'လမ်းညွှန် မီနူး';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'ခေါက်ထားသည်';
 
   @override
   String get expandedIconTapHint => 'လျှော့ပြရန်';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'ဖြန့်ရန် နှစ်ချက်တို့ပါ';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'အသေးစိတ်အတွက် ဖြန့်ရန်';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ခေါက်ရန် နှစ်ချက်တို့ပါ';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'ခေါက်ရန်';
 
   @override
   String get firstPageTooltip => 'ပထမ စာမျက်နှာ';
@@ -28075,7 +31022,13 @@ class MaterialLocalizationMy extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'လိုင်စင်များ';
 
   @override
+  String get lookUpButtonLabel => 'အပေါ်ကြည့်ရန်';
+
+  @override
   String get menuBarMenuLabel => 'မီနူးဘား မီနူး';
+
+  @override
+  String get menuDismissLabel => 'မီနူးကိုပယ်ပါ';
 
   @override
   String get modalBarrierDismissLabel => 'ပယ်ရန်';
@@ -28162,7 +31115,7 @@ class MaterialLocalizationMy extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'သိမ်းရန်';
 
   @override
-  String get scanTextButtonLabel => 'စာသားကို စကင်ဖတ်ပါ။';
+  String get scanTextButtonLabel => 'စာသား စကင်ဖတ်ရန်';
 
   @override
   String get scrimLabel => 'Scrim';
@@ -28177,10 +31130,16 @@ class MaterialLocalizationMy extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'ရှာဖွေရန်';
 
   @override
+  String get searchWebButtonLabel => 'ဝဘ်တွင်ရှာရန်';
+
+  @override
   String get selectAllButtonLabel => 'အားလုံး ရွေးရန်';
 
   @override
   String get selectYearSemanticsLabel => 'ခုနှစ် ရွေးရန်';
+
+  @override
+  String get selectedDateLabel => 'ရွေးထားသည်';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -28199,6 +31158,9 @@ class MaterialLocalizationMy extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'မျှဝေရန်';
 
   @override
   String get showAccountsLabel => 'အကောင့်များကို ပြရန်';
@@ -28244,10 +31206,18 @@ class MaterialLocalizationMy extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Norwegian Bokmål (`nb`).
+@Deprecated(
+  'Use MaterialLocalizationNb from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationNb extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Norwegian Bokmål.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationNb from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationNb({
     super.localeName = 'nb',
     required super.fullYearFormat,
@@ -28283,13 +31253,16 @@ class MaterialLocalizationNb extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Avbryt';
 
   @override
+  String get clearButtonTooltip => 'Slett teksten';
+
+  @override
   String get closeButtonLabel => 'Lukk';
 
   @override
   String get closeButtonTooltip => 'Lukk';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Vises';
 
   @override
   String get collapsedIconTapHint => 'Vis';
@@ -28349,22 +31322,22 @@ class MaterialLocalizationNb extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigasjonsmeny';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Skjules';
 
   @override
   String get expandedIconTapHint => 'Skjul';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'dobbelttrykk for å vise';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Vis for å se mer informasjon';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'dobbelttrykk for å skjule';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Skjul';
 
   @override
   String get firstPageTooltip => 'Første side';
@@ -28553,7 +31526,13 @@ class MaterialLocalizationNb extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Lisenser';
 
   @override
+  String get lookUpButtonLabel => 'Slå opp';
+
+  @override
   String get menuBarMenuLabel => 'Meny med menylinje';
+
+  @override
+  String get menuDismissLabel => 'Lukk menyen';
 
   @override
   String get modalBarrierDismissLabel => 'Avvis';
@@ -28640,7 +31619,7 @@ class MaterialLocalizationNb extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Lagre';
 
   @override
-  String get scanTextButtonLabel => 'Scan tekst';
+  String get scanTextButtonLabel => 'Skann tekst';
 
   @override
   String get scrimLabel => 'Vev';
@@ -28655,10 +31634,16 @@ class MaterialLocalizationNb extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Søk';
 
   @override
+  String get searchWebButtonLabel => 'Søk på nettet';
+
+  @override
   String get selectAllButtonLabel => 'Velg alle';
 
   @override
   String get selectYearSemanticsLabel => 'Velg året';
+
+  @override
+  String get selectedDateLabel => 'Valgt';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -28677,6 +31662,9 @@ class MaterialLocalizationNb extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Del';
 
   @override
   String get showAccountsLabel => 'Vis kontoer';
@@ -28722,10 +31710,18 @@ class MaterialLocalizationNb extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Nepali (`ne`).
+@Deprecated(
+  'Use MaterialLocalizationNe from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationNe extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Nepali.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationNe from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationNe({
     super.localeName = 'ne',
     required super.fullYearFormat,
@@ -28746,7 +31742,7 @@ class MaterialLocalizationNe extends GlobalMaterialLocalizations {
   String get alertDialogLabel => 'अलर्ट';
 
   @override
-  String get anteMeridiemAbbreviation => 'पूर्वाह्न';
+  String get anteMeridiemAbbreviation => 'AM';
 
   @override
   String get backButtonTooltip => 'पछाडि जानुहोस्';
@@ -28761,13 +31757,16 @@ class MaterialLocalizationNe extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'रद्द गर्नुहोस्';
 
   @override
+  String get clearButtonTooltip => 'टेक्स्ट हटाउनुहोस्';
+
+  @override
   String get closeButtonLabel => 'बन्द गर्नुहोस्';
 
   @override
   String get closeButtonTooltip => 'बन्द गर्नुहोस्';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'एक्स्पान्ड गरियो';
 
   @override
   String get collapsedIconTapHint => 'विस्तार गर्नुहोस्';
@@ -28776,13 +31775,13 @@ class MaterialLocalizationNe extends GlobalMaterialLocalizations {
   String get continueButtonLabel => 'जारी राख्नुहोस्';
 
   @override
-  String get copyButtonLabel => 'प्रतिलिपि गर्नुहोस्';
+  String get copyButtonLabel => 'कपी गर्नुहोस्';
 
   @override
   String get currentDateLabel => 'आज';
 
   @override
-  String get cutButtonLabel => 'काट्नुहोस्';
+  String get cutButtonLabel => 'कट गर्नुहोस्';
 
   @override
   String get dateHelpText => 'yyyy/mm/dd';
@@ -28827,22 +31826,22 @@ class MaterialLocalizationNe extends GlobalMaterialLocalizations {
   String get drawerLabel => 'नेभिगेसन मेनु';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'कोल्याप्स गरियो';
 
   @override
   String get expandedIconTapHint => 'संक्षिप्त गर्नुहोस्';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'एक्स्पान्ड गर्न डबल ट्याप गर्नुहोस्';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'थप विवरण हेर्न एक्स्पान्ड गर्नुहोस्';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'कोल्याप्स गर्न डबल ट्याप गर्नुहोस्';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'कोल्याप्स गर्नुहोस्';
 
   @override
   String get firstPageTooltip => 'प्रथम पेज';
@@ -29031,7 +32030,13 @@ class MaterialLocalizationNe extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'इजाजतपत्रहरू';
 
   @override
+  String get lookUpButtonLabel => 'माथितिर हेर्नुहोस्';
+
+  @override
   String get menuBarMenuLabel => '"मेनु बार" मेनु';
+
+  @override
+  String get menuDismissLabel => 'मेनु खारेज गर्नुहोस्';
 
   @override
   String get modalBarrierDismissLabel => 'खारेज गर्नुहोस्';
@@ -29043,7 +32048,7 @@ class MaterialLocalizationNe extends GlobalMaterialLocalizations {
   String get nextMonthTooltip => 'अर्को महिना';
 
   @override
-  String get nextPageTooltip => 'अर्को पृष्ठ';
+  String get nextPageTooltip => 'अर्को पेज';
 
   @override
   String get okButtonLabel => 'ठिक छ';
@@ -29058,13 +32063,13 @@ class MaterialLocalizationNe extends GlobalMaterialLocalizations {
   String get pageRowsInfoTitleApproximateRaw => r'लगभग $rowCount को $firstRow–$lastRow';
 
   @override
-  String get pasteButtonLabel => 'टाँस्नुहोस्';
+  String get pasteButtonLabel => 'पेस्ट गर्नुहोस्';
 
   @override
   String get popupMenuLabel => 'पपअप मेनु';
 
   @override
-  String get postMeridiemAbbreviation => 'अपराह्न';
+  String get postMeridiemAbbreviation => 'PM';
 
   @override
   String get previousMonthTooltip => 'अघिल्लो महिना';
@@ -29118,7 +32123,7 @@ class MaterialLocalizationNe extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'सेभ गर्नुहोस्';
 
   @override
-  String get scanTextButtonLabel => 'पाठ स्क्यान गर्नुहोस्';
+  String get scanTextButtonLabel => 'टेक्स्ट स्क्यान गर्नुहोस्';
 
   @override
   String get scrimLabel => 'स्क्रिम';
@@ -29133,10 +32138,16 @@ class MaterialLocalizationNe extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'खोज्नुहोस्';
 
   @override
+  String get searchWebButtonLabel => 'वेबमा खोज्नुहोस्';
+
+  @override
   String get selectAllButtonLabel => 'सबै बटनहरू चयन गर्नुहोस्';
 
   @override
   String get selectYearSemanticsLabel => 'वर्ष छान्नुहोस्';
+
+  @override
+  String get selectedDateLabel => 'चयन गरिएको';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -29155,6 +32166,9 @@ class MaterialLocalizationNe extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'सेयर गर्नुहोस्';
 
   @override
   String get showAccountsLabel => 'खाताहरू देखाउनुहोस्';
@@ -29200,10 +32214,18 @@ class MaterialLocalizationNe extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Dutch Flemish (`nl`).
+@Deprecated(
+  'Use MaterialLocalizationNl from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationNl extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Dutch Flemish.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationNl from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationNl({
     super.localeName = 'nl',
     required super.fullYearFormat,
@@ -29239,13 +32261,16 @@ class MaterialLocalizationNl extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Annuleren';
 
   @override
+  String get clearButtonTooltip => 'Tekst wissen';
+
+  @override
   String get closeButtonLabel => 'Sluiten';
 
   @override
   String get closeButtonTooltip => 'Sluiten';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Uitgevouwen';
 
   @override
   String get collapsedIconTapHint => 'Uitvouwen';
@@ -29305,22 +32330,22 @@ class MaterialLocalizationNl extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigatiemenu';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Samengevouwen';
 
   @override
   String get expandedIconTapHint => 'Samenvouwen';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'dubbeltik om uit te vouwen';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Uitvouwen voor meer informatie';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'dubbeltik om samen te vouwen';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Samenvouwen';
 
   @override
   String get firstPageTooltip => 'Eerste pagina';
@@ -29509,7 +32534,13 @@ class MaterialLocalizationNl extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licenties';
 
   @override
+  String get lookUpButtonLabel => 'Opzoeken';
+
+  @override
   String get menuBarMenuLabel => 'Menu van menubalk';
+
+  @override
+  String get menuDismissLabel => 'Menu sluiten';
 
   @override
   String get modalBarrierDismissLabel => 'Sluiten';
@@ -29569,7 +32600,7 @@ class MaterialLocalizationNl extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Omlaag verplaatsen';
@@ -29611,10 +32642,16 @@ class MaterialLocalizationNl extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Zoeken';
 
   @override
+  String get searchWebButtonLabel => 'Op internet zoeken';
+
+  @override
   String get selectAllButtonLabel => 'Alles selecteren';
 
   @override
   String get selectYearSemanticsLabel => 'Jaar selecteren';
+
+  @override
+  String get selectedDateLabel => 'Geselecteerd';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -29633,6 +32670,9 @@ class MaterialLocalizationNl extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Delen';
 
   @override
   String get showAccountsLabel => 'Accounts tonen';
@@ -29678,10 +32718,18 @@ class MaterialLocalizationNl extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Norwegian (`no`).
+@Deprecated(
+  'Use MaterialLocalizationNo from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationNo extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Norwegian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationNo from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationNo({
     super.localeName = 'no',
     required super.fullYearFormat,
@@ -29717,13 +32765,16 @@ class MaterialLocalizationNo extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Avbryt';
 
   @override
+  String get clearButtonTooltip => 'Slett teksten';
+
+  @override
   String get closeButtonLabel => 'Lukk';
 
   @override
   String get closeButtonTooltip => 'Lukk';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Vises';
 
   @override
   String get collapsedIconTapHint => 'Vis';
@@ -29783,22 +32834,22 @@ class MaterialLocalizationNo extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigasjonsmeny';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Skjules';
 
   @override
   String get expandedIconTapHint => 'Skjul';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'dobbelttrykk for å vise';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Vis for å se mer informasjon';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'dobbelttrykk for å skjule';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Skjul';
 
   @override
   String get firstPageTooltip => 'Første side';
@@ -29987,7 +33038,13 @@ class MaterialLocalizationNo extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Lisenser';
 
   @override
+  String get lookUpButtonLabel => 'Slå opp';
+
+  @override
   String get menuBarMenuLabel => 'Meny med menylinje';
+
+  @override
+  String get menuDismissLabel => 'Lukk menyen';
 
   @override
   String get modalBarrierDismissLabel => 'Avvis';
@@ -30089,10 +33146,16 @@ class MaterialLocalizationNo extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Søk';
 
   @override
+  String get searchWebButtonLabel => 'Søk på nettet';
+
+  @override
   String get selectAllButtonLabel => 'Velg alle';
 
   @override
   String get selectYearSemanticsLabel => 'Velg året';
+
+  @override
+  String get selectedDateLabel => 'Valgt';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -30111,6 +33174,9 @@ class MaterialLocalizationNo extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Del';
 
   @override
   String get showAccountsLabel => 'Vis kontoer';
@@ -30156,10 +33222,18 @@ class MaterialLocalizationNo extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Oriya (`or`).
+@Deprecated(
+  'Use MaterialLocalizationOr from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Oriya.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationOr from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationOr({
     super.localeName = 'or',
     required super.fullYearFormat,
@@ -30189,10 +33263,13 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String get bottomSheetLabel => 'ବଟମ ସିଟ';
 
   @override
-  String get calendarModeButtonLabel => 'କ୍ୟାଲେଣ୍ଡରକୁ ସ୍ୱିଚ୍ କରନ୍ତୁ';
+  String get calendarModeButtonLabel => 'କେଲେଣ୍ଡରକୁ ସ୍ୱିଚ କରନ୍ତୁ';
 
   @override
   String get cancelButtonLabel => 'ବାତିଲ କରନ୍ତୁ';
+
+  @override
+  String get clearButtonTooltip => 'ଟେକ୍ସଟ ଖାଲି କରନ୍ତୁ';
 
   @override
   String get closeButtonLabel => 'ବନ୍ଦ କରନ୍ତୁ';
@@ -30201,10 +33278,10 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String get closeButtonTooltip => 'ବନ୍ଦ କରନ୍ତୁ';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'ବିସ୍ତାର କରାଯାଇଛି';
 
   @override
-  String get collapsedIconTapHint => 'ପ୍ରସାରିତ କରନ୍ତୁ';
+  String get collapsedIconTapHint => 'ବିସ୍ତାର କରନ୍ତୁ';
 
   @override
   String get continueButtonLabel => 'ଜାରି ରଖନ୍ତୁ';
@@ -30216,16 +33293,16 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String get currentDateLabel => 'ଆଜି';
 
   @override
-  String get cutButtonLabel => 'କଟ୍ କରନ୍ତୁ';
+  String get cutButtonLabel => 'କଟ କରନ୍ତୁ';
 
   @override
-  String get dateHelpText => 'mm/dd/yyyy';
+  String get dateHelpText => 'dd/mm/yyyy';
 
   @override
   String get dateInputLabel => 'ତାରିଖ ଲେଖନ୍ତୁ';
 
   @override
-  String get dateOutOfRangeLabel => 'ସୀମା ବାହାରେ।';
+  String get dateOutOfRangeLabel => 'ରେଞ୍ଜ ବାହାରେ।';
 
   @override
   String get datePickerHelpText => 'ତାରିଖ ଚୟନ କରନ୍ତୁ';
@@ -30249,34 +33326,34 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String get dateSeparator => '/';
 
   @override
-  String get deleteButtonTooltip => 'ଡିଲିଟ୍ କରନ୍ତୁ';
+  String get deleteButtonTooltip => 'ଡିଲିଟ କରନ୍ତୁ';
 
   @override
-  String get dialModeButtonLabel => 'ଡାଏଲ୍ ପିକର୍ ମୋଡକୁ ସ୍ୱିଚ୍ କରନ୍ତୁ';
+  String get dialModeButtonLabel => 'ଡାଏଲ ପିକର ମୋଡକୁ ସ୍ୱିଚ କରନ୍ତୁ';
 
   @override
-  String get dialogLabel => 'ଡାୟଲଗ୍';
+  String get dialogLabel => 'ଡାଏଲଗ';
 
   @override
-  String get drawerLabel => 'ନେଭିଗେସନ୍ ମେନୁ';
+  String get drawerLabel => 'ନାଭିଗେସନ ମେନୁ';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'ସଙ୍କୁଚିତ କରାଯାଇଛି';
 
   @override
   String get expandedIconTapHint => 'ସଙ୍କୁଚିତ କରନ୍ତୁ';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'ବିସ୍ତାର କରିବା ପାଇଁ ଦୁଇଥର ଟାପ କରନ୍ତୁ';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'ଅଧିକ ବିବରଣୀ ପାଇଁ ବିସ୍ତାର କରନ୍ତୁ';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ସଙ୍କୁଚିତ କରିବା ପାଇଁ ଦୁଇଥର ଟାପ କରନ୍ତୁ';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'ସଙ୍କୁଚିତ କରନ୍ତୁ';
 
   @override
   String get firstPageTooltip => 'ପ୍ରଥମ ପୃଷ୍ଠା';
@@ -30285,16 +33362,16 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String get hideAccountsLabel => 'ଆକାଉଣ୍ଟଗୁଡ଼ିକୁ ଲୁଚାନ୍ତୁ';
 
   @override
-  String get inputDateModeButtonLabel => 'ଇନପୁଟକୁ ସ୍ୱିଚ୍ କରନ୍ତୁ';
+  String get inputDateModeButtonLabel => 'ଇନପୁଟକୁ ସ୍ୱିଚ କରନ୍ତୁ';
 
   @override
-  String get inputTimeModeButtonLabel => 'ଟେକ୍ସଟ୍ ଇନପୁଟ୍ ମୋଡକୁ ସ୍ୱିଚ୍ କରନ୍ତୁ';
+  String get inputTimeModeButtonLabel => 'ଟେକ୍ସଟ ଇନପୁଟ ମୋଡକୁ ସ୍ୱିଚ କରନ୍ତୁ';
 
   @override
-  String get invalidDateFormatLabel => 'ଅବୈଧ ଫର୍ମାଟ୍।';
+  String get invalidDateFormatLabel => 'ଅବୈଧ ଫର୍ମାଟ।';
 
   @override
-  String get invalidDateRangeLabel => 'ଅବୈଧ ସୀମା।';
+  String get invalidDateRangeLabel => 'ଅବୈଧ ରେଞ୍ଜ।';
 
   @override
   String get invalidTimeLabel => 'ଏକ ବୈଧ ସମୟ ଲେଖନ୍ତୁ';
@@ -30450,10 +33527,10 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String? get licensesPackageDetailTextMany => null;
 
   @override
-  String? get licensesPackageDetailTextOne => '1ଟି ଲାଇସେନ୍ସ';
+  String? get licensesPackageDetailTextOne => '1 ଲାଇସେନ୍ସ';
 
   @override
-  String get licensesPackageDetailTextOther => r'$licenseCountଟି ଲାଇସେନ୍ସ';
+  String get licensesPackageDetailTextOther => r'$licenseCount ଲାଇସେନ୍ସ';
 
   @override
   String? get licensesPackageDetailTextTwo => null;
@@ -30462,10 +33539,16 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String? get licensesPackageDetailTextZero => 'No licenses';
 
   @override
-  String get licensesPageTitle => 'ଲାଇସେନ୍ସଗୁଡ଼କ';
+  String get licensesPageTitle => 'ଲାଇସେନ୍ସ';
+
+  @override
+  String get lookUpButtonLabel => 'ଉପରକୁ ଦେଖନ୍ତୁ';
 
   @override
   String get menuBarMenuLabel => 'ମେନୁ ବାର ମେନୁ';
+
+  @override
+  String get menuDismissLabel => 'ମେନୁ ଖାରଜ କରନ୍ତୁ';
 
   @override
   String get modalBarrierDismissLabel => 'ଖାରଜ କରନ୍ତୁ';
@@ -30477,37 +33560,37 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String get nextMonthTooltip => 'ପରବର୍ତ୍ତୀ ମାସ';
 
   @override
-  String get nextPageTooltip => 'ପରବର୍ତ୍ତୀ ପେଜ୍';
+  String get nextPageTooltip => 'ପରବର୍ତ୍ତୀ ପୃଷ୍ଠା';
 
   @override
-  String get okButtonLabel => 'ଠିକ୍ ଅଛି';
+  String get okButtonLabel => 'ଠିକ ଅଛି';
 
   @override
-  String get openAppDrawerTooltip => 'ନାଭିଗେସନ୍ ମେନୁ ଖୋଲନ୍ତୁ';
+  String get openAppDrawerTooltip => 'ନାଭିଗେସନ ମେନୁ ଖୋଲନ୍ତୁ';
 
   @override
   String get pageRowsInfoTitleRaw => r'$rowCountର $firstRow–$lastRow';
 
   @override
-  String get pageRowsInfoTitleApproximateRaw => r'ପାଖାପାଖି $rowCountର $firstRow–$lastRow';
+  String get pageRowsInfoTitleApproximateRaw => r'$rowCountର ପାଖାପାଖି $firstRow–$lastRow';
 
   @override
   String get pasteButtonLabel => 'ପେଷ୍ଟ କରନ୍ତୁ';
 
   @override
-  String get popupMenuLabel => 'ପପ୍-ଅପ୍ ମେନୁ';
+  String get popupMenuLabel => 'ପପଅପ ମେନୁ';
 
   @override
   String get postMeridiemAbbreviation => 'PM';
 
   @override
-  String get previousMonthTooltip => 'ପୂର୍ବ ମାସ';
+  String get previousMonthTooltip => 'ପୂର୍ବବର୍ତ୍ତୀ ମାସ';
 
   @override
-  String get previousPageTooltip => 'ପୂର୍ବବର୍ତ୍ତୀ ପେଜ୍';
+  String get previousPageTooltip => 'ପୂର୍ବବର୍ତ୍ତୀ ପୃଷ୍ଠା';
 
   @override
-  String get refreshIndicatorSemanticLabel => 'ରିଫ୍ରେସ୍ କରନ୍ତୁ';
+  String get refreshIndicatorSemanticLabel => 'ରିଫ୍ରେସ କରନ୍ତୁ';
 
   @override
   String? get remainingTextFieldCharacterCountFew => null;
@@ -30516,10 +33599,10 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountMany => null;
 
   @override
-  String? get remainingTextFieldCharacterCountOne => '1ଟି ଅକ୍ଷର ବାକି ଅଛି';
+  String? get remainingTextFieldCharacterCountOne => '1 କେରେକ୍ଟର ବାକି ଅଛି';
 
   @override
-  String get remainingTextFieldCharacterCountOther => r'$remainingCountଟି ଅକ୍ଷର ବାକି ଅଛି';
+  String get remainingTextFieldCharacterCountOther => r'$remainingCount କେରେକ୍ଟର ବାକି ଅଛି';
 
   @override
   String? get remainingTextFieldCharacterCountTwo => null;
@@ -30528,31 +33611,31 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountZero => null;
 
   @override
-  String get reorderItemDown => 'ତଳକୁ ଯାଆନ୍ତୁ';
+  String get reorderItemDown => 'ତଳକୁ ମୁଭ କରନ୍ତୁ';
 
   @override
-  String get reorderItemLeft => 'ବାମକୁ ଯାଆନ୍ତୁ';
+  String get reorderItemLeft => 'ବାମକୁ ମୁଭ କରନ୍ତୁ';
 
   @override
-  String get reorderItemRight => 'ଡାହାଣକୁ ଯାଆନ୍ତୁ';
+  String get reorderItemRight => 'ଡାହାଣକୁ ମୁଭ କରନ୍ତୁ';
 
   @override
-  String get reorderItemToEnd => 'ଶେଷକୁ ଯାଆନ୍ତୁ';
+  String get reorderItemToEnd => 'ଶେଷକୁ ମୁଭ କରନ୍ତୁ';
 
   @override
-  String get reorderItemToStart => 'ଆରମ୍ଭକୁ ଯାଆନ୍ତୁ';
+  String get reorderItemToStart => 'ଆରମ୍ଭକୁ ମୁଭ କରନ୍ତୁ';
 
   @override
-  String get reorderItemUp => 'ଉପରକୁ ନିଅନ୍ତୁ';
+  String get reorderItemUp => 'ଉପରକୁ ମୁଭ କରନ୍ତୁ';
 
   @override
-  String get rowsPerPageTitle => 'ପୃଷ୍ଠା ପିଛା ଧାଡ଼ି:';
+  String get rowsPerPageTitle => 'ପ୍ରତି ପୃଷ୍ଠାରେ ଧାଡ଼ି:';
 
   @override
   String get saveButtonLabel => 'ସେଭ କରନ୍ତୁ';
 
   @override
-  String get scanTextButtonLabel => 'ପାଠ୍ୟ ସ୍କାନ୍ କରନ୍ତୁ';
+  String get scanTextButtonLabel => 'ଟେକ୍ସଟ ସ୍କାନ କରନ୍ତୁ';
 
   @override
   String get scrimLabel => 'ସ୍କ୍ରିମ';
@@ -30564,7 +33647,10 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   ScriptCategory get scriptCategory => ScriptCategory.tall;
 
   @override
-  String get searchFieldLabel => 'ସନ୍ଧାନ କରନ୍ତୁ';
+  String get searchFieldLabel => 'ସର୍ଚ୍ଚ କରନ୍ତୁ';
+
+  @override
+  String get searchWebButtonLabel => 'ୱେବ ସର୍ଚ୍ଚ କରନ୍ତୁ';
 
   @override
   String get selectAllButtonLabel => 'ସବୁ ଚୟନ କରନ୍ତୁ';
@@ -30573,16 +33659,19 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String get selectYearSemanticsLabel => 'ବର୍ଷ ଚୟନ କରନ୍ତୁ';
 
   @override
+  String get selectedDateLabel => 'ଚୟନିତ';
+
+  @override
   String? get selectedRowCountTitleFew => null;
 
   @override
   String? get selectedRowCountTitleMany => null;
 
   @override
-  String? get selectedRowCountTitleOne => '1ଟି ଆଇଟମ୍ ଚୟନ କରାଯାଇଛି';
+  String? get selectedRowCountTitleOne => '1 ଆଇଟମ ଚୟନ କରାଯାଇଛି';
 
   @override
-  String get selectedRowCountTitleOther => r'$selectedRowCountଟି ଆଇଟମ୍ ଚୟନ କରାଯାଇଛି';
+  String get selectedRowCountTitleOther => r'$selectedRowCountଟି ଆଇଟମ ଚୟନ କରାଯାଇଛି';
 
   @override
   String? get selectedRowCountTitleTwo => null;
@@ -30591,16 +33680,19 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String? get selectedRowCountTitleZero => null;
 
   @override
+  String get shareButtonLabel => 'ସେୟାର କରନ୍ତୁ';
+
+  @override
   String get showAccountsLabel => 'ଆକାଉଣ୍ଟ ଦେଖାନ୍ତୁ';
 
   @override
   String get showMenuTooltip => 'ମେନୁ ଦେଖାନ୍ତୁ';
 
   @override
-  String get signedInLabel => 'ସାଇନ୍ ଇନ୍ କରାଯାଇଛି';
+  String get signedInLabel => 'ସାଇନ ଇନ କରାଯାଇଛି';
 
   @override
-  String get tabLabelRaw => r'$tabCountର $tabIndex ଟାବ୍';
+  String get tabLabelRaw => r'$tabCountର $tabIndex ଟାବ';
 
   @override
   TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.H_colon_mm;
@@ -30618,26 +33710,34 @@ class MaterialLocalizationOr extends GlobalMaterialLocalizations {
   String get timePickerInputHelpText => 'ସମୟ ଲେଖନ୍ତୁ';
 
   @override
-  String get timePickerMinuteLabel => 'ମିନିଟ୍';
+  String get timePickerMinuteLabel => 'ମିନିଟ';
 
   @override
-  String get timePickerMinuteModeAnnouncement => 'ମିନିଟ୍ ଚୟନ କରନ୍ତୁ';
+  String get timePickerMinuteModeAnnouncement => 'ମିନିଟ ଚୟନ କରନ୍ତୁ';
 
   @override
   String get unspecifiedDate => 'ତାରିଖ';
 
   @override
-  String get unspecifiedDateRange => 'ତାରିଖ ସୀମା';
+  String get unspecifiedDateRange => 'ତାରିଖ ରେଞ୍ଜ';
 
   @override
-  String get viewLicensesButtonLabel => 'ଲାଇସେନ୍ସ ଦେଖନ୍ତୁ';
+  String get viewLicensesButtonLabel => 'ଲାଇସେନ୍ସ ଭ୍ୟୁ କରନ୍ତୁ';
 }
 
 /// The translations for Panjabi Punjabi (`pa`).
+@Deprecated(
+  'Use MaterialLocalizationPa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationPa extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Panjabi Punjabi.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationPa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationPa({
     super.localeName = 'pa',
     required super.fullYearFormat,
@@ -30655,7 +33755,7 @@ class MaterialLocalizationPa extends GlobalMaterialLocalizations {
   String get aboutListTileTitleRaw => r'$applicationName ਬਾਰੇ';
 
   @override
-  String get alertDialogLabel => 'ਸੁਚੇਤਨਾ';
+  String get alertDialogLabel => 'ਅਲਰਟ';
 
   @override
   String get anteMeridiemAbbreviation => 'AM';
@@ -30673,13 +33773,16 @@ class MaterialLocalizationPa extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'ਰੱਦ ਕਰੋ';
 
   @override
+  String get clearButtonTooltip => 'ਲਿਖਤ ਕਲੀਅਰ ਕਰੋ';
+
+  @override
   String get closeButtonLabel => 'ਬੰਦ ਕਰੋ';
 
   @override
   String get closeButtonTooltip => 'ਬੰਦ ਕਰੋ';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'ਵਿਸਤਾਰ ਕੀਤਾ ਗਿਆ';
 
   @override
   String get collapsedIconTapHint => 'ਵਿਸਤਾਰ ਕਰੋ';
@@ -30739,22 +33842,22 @@ class MaterialLocalizationPa extends GlobalMaterialLocalizations {
   String get drawerLabel => 'ਨੈਵੀਗੇਸ਼ਨ ਮੀਨੂ';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'ਸਮੇਟਿਆ ਗਿਆ';
 
   @override
   String get expandedIconTapHint => 'ਸਮੇਟੋ';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'ਵਿਸਤਾਰ ਕਰਨ ਲਈ ਡਬਲ ਟੈਪ ਕਰੋ';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'ਹੋਰ ਵੇਰਵਿਆਂ ਲਈ ਵਿਸਤਾਰ ਕਰੋ';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'ਸਮੇਟਣ ਲਈ ਡਬਲ ਟੈਪ ਕਰੋ';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'ਸਮੇਟੋ';
 
   @override
   String get firstPageTooltip => 'ਪਹਿਲਾ ਪੰਨਾ';
@@ -30943,7 +34046,13 @@ class MaterialLocalizationPa extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'ਲਾਇਸੰਸ';
 
   @override
+  String get lookUpButtonLabel => 'ਖੋਜੋ';
+
+  @override
   String get menuBarMenuLabel => 'ਮੀਨੂ ਬਾਰ ਮੀਨੂ';
+
+  @override
+  String get menuDismissLabel => 'ਮੀਨੂ ਖਾਰਜ ਕਰੋ';
 
   @override
   String get modalBarrierDismissLabel => 'ਖਾਰਜ ਕਰੋ';
@@ -31030,7 +34139,7 @@ class MaterialLocalizationPa extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'ਰੱਖਿਅਤ ਕਰੋ';
 
   @override
-  String get scanTextButtonLabel => 'ਟੈਕਸਟ ਸਕੈਨ ਕਰੋ';
+  String get scanTextButtonLabel => 'ਲਿਖਤ ਨੂੰ ਸਕੈਨ ਕਰੋ';
 
   @override
   String get scrimLabel => 'ਸਕ੍ਰਿਮ';
@@ -31045,10 +34154,16 @@ class MaterialLocalizationPa extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'ਖੋਜੋ';
 
   @override
+  String get searchWebButtonLabel => "ਵੈੱਬ 'ਤੇ ਖੋਜੋ";
+
+  @override
   String get selectAllButtonLabel => 'ਸਭ ਚੁਣੋ';
 
   @override
   String get selectYearSemanticsLabel => 'ਸਾਲ ਚੁਣੋ';
+
+  @override
+  String get selectedDateLabel => 'ਚੁਣਿਆ ਗਿਆ';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -31067,6 +34182,9 @@ class MaterialLocalizationPa extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'ਸਾਂਝਾ ਕਰੋ';
 
   @override
   String get showAccountsLabel => 'ਖਾਤੇ ਦਿਖਾਓ';
@@ -31112,10 +34230,18 @@ class MaterialLocalizationPa extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Polish (`pl`).
+@Deprecated(
+  'Use MaterialLocalizationPl from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationPl extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Polish.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationPl from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationPl({
     super.localeName = 'pl',
     required super.fullYearFormat,
@@ -31151,13 +34277,16 @@ class MaterialLocalizationPl extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Anuluj';
 
   @override
+  String get clearButtonTooltip => 'Wyczyść tekst';
+
+  @override
   String get closeButtonLabel => 'Zamknij';
 
   @override
   String get closeButtonTooltip => 'Zamknij';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Rozwinięto';
 
   @override
   String get collapsedIconTapHint => 'Rozwiń';
@@ -31217,22 +34346,22 @@ class MaterialLocalizationPl extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menu nawigacyjne';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Zwinięto';
 
   @override
   String get expandedIconTapHint => 'Zwiń';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'kliknij dwukrotnie, aby rozwinąć';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Rozwiń, aby wyświetlić więcej informacji';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'kliknij dwukrotnie, aby zwinąć';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Zwiń';
 
   @override
   String get firstPageTooltip => 'Pierwsza strona';
@@ -31421,7 +34550,13 @@ class MaterialLocalizationPl extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licencje';
 
   @override
+  String get lookUpButtonLabel => 'Sprawdź';
+
+  @override
   String get menuBarMenuLabel => 'Pasek menu';
+
+  @override
+  String get menuDismissLabel => 'Zamknij menu';
 
   @override
   String get modalBarrierDismissLabel => 'Zamknij';
@@ -31481,7 +34616,7 @@ class MaterialLocalizationPl extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Przenieś w dół';
@@ -31508,7 +34643,7 @@ class MaterialLocalizationPl extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Zapisz';
 
   @override
-  String get scanTextButtonLabel => 'Zeskanuj tekst';
+  String get scanTextButtonLabel => 'Skanuj tekst';
 
   @override
   String get scrimLabel => 'Siatka';
@@ -31523,10 +34658,16 @@ class MaterialLocalizationPl extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Szukaj';
 
   @override
+  String get searchWebButtonLabel => 'Szukaj w internecie';
+
+  @override
   String get selectAllButtonLabel => 'Zaznacz wszystko';
 
   @override
   String get selectYearSemanticsLabel => 'Wybierz rok';
+
+  @override
+  String get selectedDateLabel => 'Wybrano';
 
   @override
   String? get selectedRowCountTitleFew => r'$selectedRowCount wybrane elementy';
@@ -31545,6 +34686,9 @@ class MaterialLocalizationPl extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Udostępnij';
 
   @override
   String get showAccountsLabel => 'Pokaż konta';
@@ -31590,10 +34734,18 @@ class MaterialLocalizationPl extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Pushto Pashto (`ps`).
+@Deprecated(
+  'Use MaterialLocalizationPs from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationPs extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Pushto Pashto.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationPs from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationPs({
     super.localeName = 'ps',
     required super.fullYearFormat,
@@ -31627,6 +34779,9 @@ class MaterialLocalizationPs extends GlobalMaterialLocalizations {
 
   @override
   String get cancelButtonLabel => 'لغوه کول';
+
+  @override
+  String get clearButtonTooltip => 'Clear text';
 
   @override
   String get closeButtonLabel => 'تړل';
@@ -31899,7 +35054,13 @@ class MaterialLocalizationPs extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'جوازونه';
 
   @override
+  String get lookUpButtonLabel => 'Look Up';
+
+  @override
   String get menuBarMenuLabel => 'Menu bar menu';
+
+  @override
+  String get menuDismissLabel => 'Dismiss menu';
 
   @override
   String get modalBarrierDismissLabel => 'رد کړه';
@@ -32001,10 +35162,16 @@ class MaterialLocalizationPs extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'لټون';
 
   @override
+  String get searchWebButtonLabel => 'Search Web';
+
+  @override
   String get selectAllButtonLabel => 'غوره کړئ';
 
   @override
   String get selectYearSemanticsLabel => 'Select year';
+
+  @override
+  String get selectedDateLabel => 'Selected';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -32023,6 +35190,9 @@ class MaterialLocalizationPs extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Share...';
 
   @override
   String get showAccountsLabel => 'حسابونه ښکاره کړئ';
@@ -32068,10 +35238,18 @@ class MaterialLocalizationPs extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Portuguese (`pt`).
+@Deprecated(
+  'Use MaterialLocalizationPt from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationPt extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Portuguese.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationPt from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationPt({
     super.localeName = 'pt',
     required super.fullYearFormat,
@@ -32107,13 +35285,16 @@ class MaterialLocalizationPt extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Cancelar';
 
   @override
+  String get clearButtonTooltip => 'Limpar texto';
+
+  @override
   String get closeButtonLabel => 'Fechar';
 
   @override
   String get closeButtonTooltip => 'Fechar';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Aberto.';
 
   @override
   String get collapsedIconTapHint => 'Abrir';
@@ -32164,7 +35345,7 @@ class MaterialLocalizationPt extends GlobalMaterialLocalizations {
   String get deleteButtonTooltip => 'Excluir';
 
   @override
-  String get dialModeButtonLabel => 'Alternar para o modo de seleção de discagem';
+  String get dialModeButtonLabel => 'Mudar para o modo de seleção de discagem';
 
   @override
   String get dialogLabel => 'Caixa de diálogo';
@@ -32173,22 +35354,22 @@ class MaterialLocalizationPt extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menu de navegação';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Fechado.';
 
   @override
   String get expandedIconTapHint => 'Recolher';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'Toque duas vezes para abrir';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Abra para mostrar mais detalhes';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'toque duas vezes para fechar';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Feche';
 
   @override
   String get firstPageTooltip => 'Primeira página';
@@ -32200,7 +35381,7 @@ class MaterialLocalizationPt extends GlobalMaterialLocalizations {
   String get inputDateModeButtonLabel => 'Mudar para modo de entrada';
 
   @override
-  String get inputTimeModeButtonLabel => 'Alternar para o modo de entrada de texto';
+  String get inputTimeModeButtonLabel => 'Mudar para o modo de entrada de texto';
 
   @override
   String get invalidDateFormatLabel => 'Formato inválido.';
@@ -32377,7 +35558,13 @@ class MaterialLocalizationPt extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licenças';
 
   @override
+  String get lookUpButtonLabel => 'Pesquisar';
+
+  @override
   String get menuBarMenuLabel => 'Menu da barra de menus';
+
+  @override
+  String get menuDismissLabel => 'Dispensar menu';
 
   @override
   String get modalBarrierDismissLabel => 'Dispensar';
@@ -32437,7 +35624,7 @@ class MaterialLocalizationPt extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Mover para baixo';
@@ -32479,10 +35666,16 @@ class MaterialLocalizationPt extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Pesquisa';
 
   @override
+  String get searchWebButtonLabel => 'Pesquisar na Web';
+
+  @override
   String get selectAllButtonLabel => 'Selecionar tudo';
 
   @override
   String get selectYearSemanticsLabel => 'Selecione o ano';
+
+  @override
+  String get selectedDateLabel => 'Selecionada';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -32501,6 +35694,9 @@ class MaterialLocalizationPt extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Compartilhar';
 
   @override
   String get showAccountsLabel => 'Mostrar contas';
@@ -32546,10 +35742,18 @@ class MaterialLocalizationPt extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Portuguese, as used in Portugal (`pt_PT`).
+@Deprecated(
+  'Use MaterialLocalizationPtPt from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationPtPt extends MaterialLocalizationPt {
   /// Create an instance of the translation bundle for Portuguese, as used in Portugal.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationPtPt from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationPtPt({
     super.localeName = 'pt_PT',
     required super.fullYearFormat,
@@ -32562,6 +35766,36 @@ class MaterialLocalizationPtPt extends MaterialLocalizationPt {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get selectedDateLabel => 'Selecionado';
+
+  @override
+  String get shareButtonLabel => 'Partilhar';
+
+  @override
+  String get lookUpButtonLabel => 'Procurar';
+
+  @override
+  String get menuDismissLabel => 'Ignorar menu';
+
+  @override
+  String get expansionTileExpandedHint => 'toque duas vezes para reduzir';
+
+  @override
+  String get expansionTileCollapsedHint => 'toque duas vezes para expandir';
+
+  @override
+  String get expansionTileExpandedTapHint => 'Reduzir';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Expandir para obter mais detalhes';
+
+  @override
+  String get expandedHint => 'Reduzido';
+
+  @override
+  String get collapsedHint => 'Expandido';
 
   @override
   String get bottomSheetLabel => 'Secção inferior';
@@ -32624,13 +35858,13 @@ class MaterialLocalizationPtPt extends MaterialLocalizationPt {
   String get dateOutOfRangeLabel => 'Fora do intervalo.';
 
   @override
-  String get dateRangeEndDateSemanticLabelRaw => r'Data de conclusão: $fullDate';
+  String get dateRangeEndDateSemanticLabelRaw => r'Data de fim: $fullDate';
 
   @override
   String get dateRangeStartDateSemanticLabelRaw => r'Data de início: $fullDate';
 
   @override
-  String get dateRangeEndLabel => 'Data de conclusão';
+  String get dateRangeEndLabel => 'Data de fim';
 
   @override
   String get inputDateModeButtonLabel => 'Mude para a introdução';
@@ -32697,10 +35931,18 @@ class MaterialLocalizationPtPt extends MaterialLocalizationPt {
 }
 
 /// The translations for Romanian Moldavian Moldovan (`ro`).
+@Deprecated(
+  'Use MaterialLocalizationRo from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationRo extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Romanian Moldavian Moldovan.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationRo from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationRo({
     super.localeName = 'ro',
     required super.fullYearFormat,
@@ -32736,13 +35978,16 @@ class MaterialLocalizationRo extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Anulați';
 
   @override
+  String get clearButtonTooltip => 'Ștergeți textul';
+
+  @override
   String get closeButtonLabel => 'Închideți';
 
   @override
   String get closeButtonTooltip => 'Închideți';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Extins';
 
   @override
   String get collapsedIconTapHint => 'Extindeți';
@@ -32802,22 +36047,22 @@ class MaterialLocalizationRo extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Meniu de navigare';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Restrâns';
 
   @override
   String get expandedIconTapHint => 'Restrângeți';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'atingeți de două ori pentru a extinde';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Extindeți pentru mai multe detalii';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'atingeți de două ori pentru a restrânge';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Restrângeți';
 
   @override
   String get firstPageTooltip => 'Prima pagină';
@@ -33006,7 +36251,13 @@ class MaterialLocalizationRo extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licențe';
 
   @override
+  String get lookUpButtonLabel => 'Privire în sus';
+
+  @override
   String get menuBarMenuLabel => 'Bară de meniu';
+
+  @override
+  String get menuDismissLabel => 'Respingeți meniul';
 
   @override
   String get modalBarrierDismissLabel => 'Închideți';
@@ -33066,7 +36317,7 @@ class MaterialLocalizationRo extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Mutați în jos';
@@ -33108,10 +36359,16 @@ class MaterialLocalizationRo extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Căutați';
 
   @override
+  String get searchWebButtonLabel => 'Căutați pe web';
+
+  @override
   String get selectAllButtonLabel => 'Selectați tot';
 
   @override
   String get selectYearSemanticsLabel => 'Selectați anul';
+
+  @override
+  String get selectedDateLabel => 'Selectată';
 
   @override
   String? get selectedRowCountTitleFew => r'$selectedRowCount articole selectate';
@@ -33130,6 +36387,9 @@ class MaterialLocalizationRo extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'Nu există elemente selectate';
+
+  @override
+  String get shareButtonLabel => 'Trimiteți';
 
   @override
   String get showAccountsLabel => 'Afișați conturile';
@@ -33175,10 +36435,18 @@ class MaterialLocalizationRo extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Russian (`ru`).
+@Deprecated(
+  'Use MaterialLocalizationRu from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationRu extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Russian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationRu from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationRu({
     super.localeName = 'ru',
     required super.fullYearFormat,
@@ -33214,13 +36482,16 @@ class MaterialLocalizationRu extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Отмена';
 
   @override
+  String get clearButtonTooltip => 'Удалить текст';
+
+  @override
   String get closeButtonLabel => 'Закрыть';
 
   @override
   String get closeButtonTooltip => 'Закрыть';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Развернуто';
 
   @override
   String get collapsedIconTapHint => 'Развернуть';
@@ -33280,22 +36551,22 @@ class MaterialLocalizationRu extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Меню навигации';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Свернуто';
 
   @override
   String get expandedIconTapHint => 'Свернуть';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'нажмите дважды, чтобы развернуть';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Развернуть дополнительные сведения';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'нажмите дважды, чтобы свернуть';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Свернуть';
 
   @override
   String get firstPageTooltip => 'Первая страница';
@@ -33484,7 +36755,13 @@ class MaterialLocalizationRu extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Лицензии';
 
   @override
+  String get lookUpButtonLabel => 'Найти';
+
+  @override
   String get menuBarMenuLabel => 'Строка меню';
+
+  @override
+  String get menuDismissLabel => 'Закрыть меню';
 
   @override
   String get modalBarrierDismissLabel => 'Закрыть';
@@ -33544,7 +36821,7 @@ class MaterialLocalizationRu extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Переместить вниз';
@@ -33586,10 +36863,16 @@ class MaterialLocalizationRu extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Поиск';
 
   @override
+  String get searchWebButtonLabel => 'Искать в интернете';
+
+  @override
   String get selectAllButtonLabel => 'Выбрать все';
 
   @override
   String get selectYearSemanticsLabel => 'Выберите год';
+
+  @override
+  String get selectedDateLabel => 'Выбрано';
 
   @override
   String? get selectedRowCountTitleFew => r'Выбрано $selectedRowCount объекта';
@@ -33608,6 +36891,9 @@ class MaterialLocalizationRu extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'Строки не выбраны';
+
+  @override
+  String get shareButtonLabel => 'Поделиться';
 
   @override
   String get showAccountsLabel => 'Показать аккаунты';
@@ -33653,10 +36939,18 @@ class MaterialLocalizationRu extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Sinhala Sinhalese (`si`).
+@Deprecated(
+  'Use MaterialLocalizationSi from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationSi extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Sinhala Sinhalese.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationSi from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationSi({
     super.localeName = 'si',
     required super.fullYearFormat,
@@ -33692,13 +36986,16 @@ class MaterialLocalizationSi extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'අවලංගු කරන්න';
 
   @override
+  String get clearButtonTooltip => 'පෙළ හිස් කරන්න';
+
+  @override
   String get closeButtonLabel => 'වසන්න';
 
   @override
   String get closeButtonTooltip => 'වසන්න';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'දිග හරින ලදි';
 
   @override
   String get collapsedIconTapHint => 'දිග හරින්න';
@@ -33758,22 +37055,22 @@ class MaterialLocalizationSi extends GlobalMaterialLocalizations {
   String get drawerLabel => 'සංචාලන මෙනුව';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'හකුළන ලදි';
 
   @override
   String get expandedIconTapHint => 'හකුළන්න';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'විහිදුවීමට දෙවරක් තට්ටු කරන්න';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'වැඩි විස්තර සඳහා පුළුල් කරන්න';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'හැකිළවීමට දෙවරක් තට්ටු කරන්න';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'හකුළන්න';
 
   @override
   String get firstPageTooltip => 'පළමු පිටුව';
@@ -33962,7 +37259,13 @@ class MaterialLocalizationSi extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'බලපත්‍ර';
 
   @override
+  String get lookUpButtonLabel => 'උඩ බලන්න';
+
+  @override
   String get menuBarMenuLabel => 'මෙනු තීරු මෙනුව';
+
+  @override
+  String get menuDismissLabel => 'මෙනුව අස් කරන්න';
 
   @override
   String get modalBarrierDismissLabel => 'ඉවත ලන්න';
@@ -34049,7 +37352,7 @@ class MaterialLocalizationSi extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'සුරකින්න';
 
   @override
-  String get scanTextButtonLabel => 'පෙළ පරිලෝකනය කරන්න';
+  String get scanTextButtonLabel => 'පෙළ ස්කෑන් කරන්න';
 
   @override
   String get scrimLabel => 'ස්ක්‍රිම්';
@@ -34064,10 +37367,16 @@ class MaterialLocalizationSi extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'සෙවීම';
 
   @override
+  String get searchWebButtonLabel => 'වෙබය සොයන්න';
+
+  @override
   String get selectAllButtonLabel => 'සියල්ල තෝරන්න';
 
   @override
   String get selectYearSemanticsLabel => 'වර්ෂය තෝරන්න';
+
+  @override
+  String get selectedDateLabel => 'තෝරන ලදි';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -34086,6 +37395,9 @@ class MaterialLocalizationSi extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'බෙදා ගන්න';
 
   @override
   String get showAccountsLabel => 'ගිණුම් පෙන්වන්න';
@@ -34131,10 +37443,18 @@ class MaterialLocalizationSi extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Slovak (`sk`).
+@Deprecated(
+  'Use MaterialLocalizationSk from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationSk extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Slovak.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationSk from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationSk({
     super.localeName = 'sk',
     required super.fullYearFormat,
@@ -34170,13 +37490,16 @@ class MaterialLocalizationSk extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Zrušiť';
 
   @override
+  String get clearButtonTooltip => 'Vymazať text';
+
+  @override
   String get closeButtonLabel => 'Zavrieť';
 
   @override
   String get closeButtonTooltip => 'Zavrieť';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Rozbalené';
 
   @override
   String get collapsedIconTapHint => 'Rozbaliť';
@@ -34236,22 +37559,22 @@ class MaterialLocalizationSk extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigačná ponuka';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Zbalené';
 
   @override
   String get expandedIconTapHint => 'Zbaliť';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'rozbalíte dvojitým klepnutím';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Rozbaliť a zobraziť ďalšie podrobnosti';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'zbalíte dvojitým klepnutím';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Zbaliť';
 
   @override
   String get firstPageTooltip => 'Prvá strana';
@@ -34440,7 +37763,13 @@ class MaterialLocalizationSk extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licencie';
 
   @override
+  String get lookUpButtonLabel => 'Pohľad nahor';
+
+  @override
   String get menuBarMenuLabel => 'Ponuka panela s ponukami';
+
+  @override
+  String get menuDismissLabel => 'Zavrieť ponuku';
 
   @override
   String get modalBarrierDismissLabel => 'Odmietnuť';
@@ -34500,7 +37829,7 @@ class MaterialLocalizationSk extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Presunúť nadol';
@@ -34527,7 +37856,7 @@ class MaterialLocalizationSk extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Uložiť';
 
   @override
-  String get scanTextButtonLabel => 'Naskenujte text';
+  String get scanTextButtonLabel => 'Naskenovať text';
 
   @override
   String get scrimLabel => 'Scrim';
@@ -34542,10 +37871,16 @@ class MaterialLocalizationSk extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Hľadať';
 
   @override
+  String get searchWebButtonLabel => 'Hľadať na webe';
+
+  @override
   String get selectAllButtonLabel => 'Vybrať všetko';
 
   @override
   String get selectYearSemanticsLabel => 'Vyberte rok';
+
+  @override
+  String get selectedDateLabel => 'Vybrané';
 
   @override
   String? get selectedRowCountTitleFew => r'$selectedRowCount vybraté položky';
@@ -34564,6 +37899,9 @@ class MaterialLocalizationSk extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Zdieľať';
 
   @override
   String get showAccountsLabel => 'Zobraziť účty';
@@ -34609,10 +37947,18 @@ class MaterialLocalizationSk extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Slovenian (`sl`).
+@Deprecated(
+  'Use MaterialLocalizationSl from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationSl extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Slovenian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationSl from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationSl({
     super.localeName = 'sl',
     required super.fullYearFormat,
@@ -34648,13 +37994,16 @@ class MaterialLocalizationSl extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Prekliči';
 
   @override
+  String get clearButtonTooltip => 'Počisti besedilo';
+
+  @override
   String get closeButtonLabel => 'Zapri';
 
   @override
   String get closeButtonTooltip => 'Zapiranje';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Razširjeno';
 
   @override
   String get collapsedIconTapHint => 'Razširiti';
@@ -34714,22 +38063,22 @@ class MaterialLocalizationSl extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Meni za krmarjenje';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Strnjeno';
 
   @override
   String get expandedIconTapHint => 'Strniti';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'za razširitev se dvakrat dotaknite';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Razširitev za več podrobnosti';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'za strnitev se dvakrat dotaknite';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Strni';
 
   @override
   String get firstPageTooltip => 'Prva stran';
@@ -34918,7 +38267,13 @@ class MaterialLocalizationSl extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licence';
 
   @override
+  String get lookUpButtonLabel => 'Pogled gor';
+
+  @override
   String get menuBarMenuLabel => 'Meni menijske vrstice';
+
+  @override
+  String get menuDismissLabel => 'Opusti meni';
 
   @override
   String get modalBarrierDismissLabel => 'Opusti';
@@ -34978,7 +38333,7 @@ class MaterialLocalizationSl extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => r'Še $remainingCount znaka';
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Premakni navzdol';
@@ -35005,7 +38360,7 @@ class MaterialLocalizationSl extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Shrani';
 
   @override
-  String get scanTextButtonLabel => 'Skeniraj besedilo';
+  String get scanTextButtonLabel => 'Optično preberite besedilo';
 
   @override
   String get scrimLabel => 'Scrim';
@@ -35020,10 +38375,16 @@ class MaterialLocalizationSl extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Iskanje';
 
   @override
+  String get searchWebButtonLabel => 'Iskanje v spletu';
+
+  @override
   String get selectAllButtonLabel => 'Izberi vse';
 
   @override
   String get selectYearSemanticsLabel => 'Izberite leto';
+
+  @override
+  String get selectedDateLabel => 'Izbrano';
 
   @override
   String? get selectedRowCountTitleFew => r'Izbrani so $selectedRowCount elementi';
@@ -35042,6 +38403,9 @@ class MaterialLocalizationSl extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Deli';
 
   @override
   String get showAccountsLabel => 'Prikaz računov';
@@ -35087,10 +38451,18 @@ class MaterialLocalizationSl extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Albanian (`sq`).
+@Deprecated(
+  'Use MaterialLocalizationSq from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationSq extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Albanian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationSq from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationSq({
     super.localeName = 'sq',
     required super.fullYearFormat,
@@ -35126,13 +38498,16 @@ class MaterialLocalizationSq extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Anulo';
 
   @override
+  String get clearButtonTooltip => 'Pastro tekstin';
+
+  @override
   String get closeButtonLabel => 'Mbyll';
 
   @override
   String get closeButtonTooltip => 'Mbyll';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'U zgjerua';
 
   @override
   String get collapsedIconTapHint => 'Zgjero';
@@ -35192,22 +38567,22 @@ class MaterialLocalizationSq extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menyja e navigimit';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'U palos';
 
   @override
   String get expandedIconTapHint => 'Palos';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'trokit dy herë për ta zgjeruar';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Zgjero për më shumë detaje';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'trokit dy herë për ta palosur';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Palos';
 
   @override
   String get firstPageTooltip => 'Faqja e parë';
@@ -35396,7 +38771,13 @@ class MaterialLocalizationSq extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licencat';
 
   @override
+  String get lookUpButtonLabel => 'Kërko';
+
+  @override
   String get menuBarMenuLabel => 'Menyja e shiritit të menysë';
+
+  @override
+  String get menuDismissLabel => 'Hiqe menynë';
 
   @override
   String get modalBarrierDismissLabel => 'Hiq';
@@ -35483,7 +38864,7 @@ class MaterialLocalizationSq extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Ruaj';
 
   @override
-  String get scanTextButtonLabel => 'Skanoni tekstin';
+  String get scanTextButtonLabel => 'Skano tekstin';
 
   @override
   String get scrimLabel => 'Kanavacë';
@@ -35498,10 +38879,16 @@ class MaterialLocalizationSq extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Kërko';
 
   @override
+  String get searchWebButtonLabel => 'Kërko në ueb';
+
+  @override
   String get selectAllButtonLabel => 'Zgjidh të gjitha';
 
   @override
   String get selectYearSemanticsLabel => 'Zgjidh vitin';
+
+  @override
+  String get selectedDateLabel => 'Zgjedhur';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -35520,6 +38907,9 @@ class MaterialLocalizationSq extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Ndaj';
 
   @override
   String get showAccountsLabel => 'Shfaq llogaritë';
@@ -35565,10 +38955,18 @@ class MaterialLocalizationSq extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Serbian (`sr`).
+@Deprecated(
+  'Use MaterialLocalizationSr from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationSr extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Serbian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationSr from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationSr({
     super.localeName = 'sr',
     required super.fullYearFormat,
@@ -35604,13 +39002,16 @@ class MaterialLocalizationSr extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Откажи';
 
   @override
+  String get clearButtonTooltip => 'Обриши текст';
+
+  @override
   String get closeButtonLabel => 'Затвори';
 
   @override
   String get closeButtonTooltip => 'Затворите';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Проширено је';
 
   @override
   String get collapsedIconTapHint => 'Прошири';
@@ -35670,22 +39071,22 @@ class MaterialLocalizationSr extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Мени за навигацију';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Скупљено је';
 
   @override
   String get expandedIconTapHint => 'Скупи';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'двапут додирните да бисте проширили';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Проширите за још детаља';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'двапут додирните да бисте скупили';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Скупите';
 
   @override
   String get firstPageTooltip => 'Прва страница';
@@ -35874,7 +39275,13 @@ class MaterialLocalizationSr extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Лиценце';
 
   @override
+  String get lookUpButtonLabel => 'Поглед нагоре';
+
+  @override
   String get menuBarMenuLabel => 'Мени трака менија';
+
+  @override
+  String get menuDismissLabel => 'Одбаците мени';
 
   @override
   String get modalBarrierDismissLabel => 'Одбаци';
@@ -35934,7 +39341,7 @@ class MaterialLocalizationSr extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Померите надоле';
@@ -35961,7 +39368,7 @@ class MaterialLocalizationSr extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Сачувај';
 
   @override
-  String get scanTextButtonLabel => 'Скенирајте текст';
+  String get scanTextButtonLabel => 'Скенирај текст';
 
   @override
   String get scrimLabel => 'Скрим';
@@ -35976,10 +39383,16 @@ class MaterialLocalizationSr extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Претражите';
 
   @override
+  String get searchWebButtonLabel => 'Претражи веб';
+
+  @override
   String get selectAllButtonLabel => 'Изабери све';
 
   @override
   String get selectYearSemanticsLabel => 'Изаберите годину';
+
+  @override
+  String get selectedDateLabel => 'Изабрано';
 
   @override
   String? get selectedRowCountTitleFew => r'Изабране су $selectedRowCount ставке';
@@ -35998,6 +39411,9 @@ class MaterialLocalizationSr extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Дели';
 
   @override
   String get showAccountsLabel => 'Прикажи налоге';
@@ -36043,10 +39459,18 @@ class MaterialLocalizationSr extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Serbian, using the Cyrillic script (`sr_Cyrl`).
+@Deprecated(
+  'Use MaterialLocalizationSrCyrl from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationSrCyrl extends MaterialLocalizationSr {
   /// Create an instance of the translation bundle for Serbian, using the Cyrillic script.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationSrCyrl from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationSrCyrl({
     super.localeName = 'sr_Cyrl',
     required super.fullYearFormat,
@@ -36062,10 +39486,18 @@ class MaterialLocalizationSrCyrl extends MaterialLocalizationSr {
 }
 
 /// The translations for Serbian, using the Latin script (`sr_Latn`).
+@Deprecated(
+  'Use MaterialLocalizationSrLatn from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationSrLatn extends MaterialLocalizationSr {
   /// Create an instance of the translation bundle for Serbian, using the Latin script.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationSrLatn from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationSrLatn({
     super.localeName = 'sr_Latn',
     required super.fullYearFormat,
@@ -36101,10 +39533,16 @@ class MaterialLocalizationSrLatn extends MaterialLocalizationSr {
   String get cancelButtonLabel => 'Otkaži';
 
   @override
+  String get clearButtonTooltip => 'Obriši tekst';
+
+  @override
   String get closeButtonLabel => 'Zatvori';
 
   @override
   String get closeButtonTooltip => 'Zatvorite';
+
+  @override
+  String get collapsedHint => 'Prošireno je';
 
   @override
   String get collapsedIconTapHint => 'Proširi';
@@ -36161,7 +39599,22 @@ class MaterialLocalizationSrLatn extends MaterialLocalizationSr {
   String get drawerLabel => 'Meni za navigaciju';
 
   @override
+  String get expandedHint => 'Skupljeno je';
+
+  @override
   String get expandedIconTapHint => 'Skupi';
+
+  @override
+  String get expansionTileCollapsedHint => 'dvaput dodirnite da biste proširili';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'Proširite za još detalja';
+
+  @override
+  String get expansionTileExpandedHint => 'dvaput dodirnite da biste skupili';
+
+  @override
+  String get expansionTileExpandedTapHint => 'Skupite';
 
   @override
   String get firstPageTooltip => 'Prva stranica';
@@ -36215,7 +39668,13 @@ class MaterialLocalizationSrLatn extends MaterialLocalizationSr {
   String get licensesPageTitle => 'Licence';
 
   @override
+  String get lookUpButtonLabel => 'Pogled nagore';
+
+  @override
   String get menuBarMenuLabel => 'Meni traka menija';
+
+  @override
+  String get menuDismissLabel => 'Odbacite meni';
 
   @override
   String get modalBarrierDismissLabel => 'Odbaci';
@@ -36293,6 +39752,9 @@ class MaterialLocalizationSrLatn extends MaterialLocalizationSr {
   String get saveButtonLabel => 'Sačuvaj';
 
   @override
+  String get scanTextButtonLabel => 'Skeniraj tekst';
+
+  @override
   String get scrimLabel => 'Skrim';
 
   @override
@@ -36302,10 +39764,16 @@ class MaterialLocalizationSrLatn extends MaterialLocalizationSr {
   String get searchFieldLabel => 'Pretražite';
 
   @override
+  String get searchWebButtonLabel => 'Pretraži veb';
+
+  @override
   String get selectAllButtonLabel => 'Izaberi sve';
 
   @override
   String get selectYearSemanticsLabel => 'Izaberite godinu';
+
+  @override
+  String get selectedDateLabel => 'Izabrano';
 
   @override
   String? get selectedRowCountTitleFew => r'Izabrane su $selectedRowCount stavke';
@@ -36315,6 +39783,9 @@ class MaterialLocalizationSrLatn extends MaterialLocalizationSr {
 
   @override
   String get selectedRowCountTitleOther => r'Izabrano je $selectedRowCount stavki';
+
+  @override
+  String get shareButtonLabel => 'Deli';
 
   @override
   String get showAccountsLabel => 'Prikaži naloge';
@@ -36357,10 +39828,18 @@ class MaterialLocalizationSrLatn extends MaterialLocalizationSr {
 }
 
 /// The translations for Swedish (`sv`).
+@Deprecated(
+  'Use MaterialLocalizationSv from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationSv extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Swedish.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationSv from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationSv({
     super.localeName = 'sv',
     required super.fullYearFormat,
@@ -36396,13 +39875,16 @@ class MaterialLocalizationSv extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Avbryt';
 
   @override
+  String get clearButtonTooltip => 'Rensa text';
+
+  @override
   String get closeButtonLabel => 'Stäng';
 
   @override
   String get closeButtonTooltip => 'Stäng';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Utökades';
 
   @override
   String get collapsedIconTapHint => 'Utöka';
@@ -36462,22 +39944,22 @@ class MaterialLocalizationSv extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigeringsmeny';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Komprimerades';
 
   @override
   String get expandedIconTapHint => 'Dölj';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'dubbeltryck för att utöka';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Utöka för mer information';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'dubbeltryck för att komprimera';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Komprimera';
 
   @override
   String get firstPageTooltip => 'Första sidan';
@@ -36666,7 +40148,13 @@ class MaterialLocalizationSv extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Licenser';
 
   @override
+  String get lookUpButtonLabel => 'Titta upp';
+
+  @override
   String get menuBarMenuLabel => 'Menyrad';
+
+  @override
+  String get menuDismissLabel => 'Stäng menyn';
 
   @override
   String get modalBarrierDismissLabel => 'Stäng';
@@ -36726,7 +40214,7 @@ class MaterialLocalizationSv extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Flytta nedåt';
@@ -36768,10 +40256,16 @@ class MaterialLocalizationSv extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Sök';
 
   @override
+  String get searchWebButtonLabel => 'Sök på webben';
+
+  @override
   String get selectAllButtonLabel => 'Markera allt';
 
   @override
   String get selectYearSemanticsLabel => 'Välj år';
+
+  @override
+  String get selectedDateLabel => 'Markerat';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -36790,6 +40284,9 @@ class MaterialLocalizationSv extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Dela';
 
   @override
   String get showAccountsLabel => 'Visa konton';
@@ -36835,10 +40332,18 @@ class MaterialLocalizationSv extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Swahili (`sw`).
+@Deprecated(
+  'Use MaterialLocalizationSw from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationSw extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Swahili.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationSw from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationSw({
     super.localeName = 'sw',
     required super.fullYearFormat,
@@ -36874,13 +40379,16 @@ class MaterialLocalizationSw extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Ghairi';
 
   @override
+  String get clearButtonTooltip => 'Futa maandishi';
+
+  @override
   String get closeButtonLabel => 'Funga';
 
   @override
   String get closeButtonTooltip => 'Funga';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Imepanuliwa';
 
   @override
   String get collapsedIconTapHint => 'Panua';
@@ -36940,22 +40448,22 @@ class MaterialLocalizationSw extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menyu ya kusogeza';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Imekunjwa';
 
   @override
   String get expandedIconTapHint => 'Kunja';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'gusa mara mbili ili upanue';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Panua ili upate maelezo zaidi';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'gusa mara mbili ili ukunje';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Kunja';
 
   @override
   String get firstPageTooltip => 'Ukurasa wa kwanza';
@@ -37144,7 +40652,13 @@ class MaterialLocalizationSw extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Leseni';
 
   @override
+  String get lookUpButtonLabel => 'Tafuta';
+
+  @override
   String get menuBarMenuLabel => 'Menyu ya upau wa menyu';
+
+  @override
+  String get menuDismissLabel => 'Ondoa menyu';
 
   @override
   String get modalBarrierDismissLabel => 'Ondoa';
@@ -37246,10 +40760,16 @@ class MaterialLocalizationSw extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Tafuta';
 
   @override
+  String get searchWebButtonLabel => 'Tafuta kwenye Wavuti';
+
+  @override
   String get selectAllButtonLabel => 'Chagua vyote';
 
   @override
   String get selectYearSemanticsLabel => 'Chagua mwaka';
+
+  @override
+  String get selectedDateLabel => 'Umechagua';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -37268,6 +40788,9 @@ class MaterialLocalizationSw extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'Hamna kilicho chaguliwa';
+
+  @override
+  String get shareButtonLabel => 'Tuma';
 
   @override
   String get showAccountsLabel => 'Onyesha akaunti';
@@ -37313,10 +40836,18 @@ class MaterialLocalizationSw extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Tamil (`ta`).
+@Deprecated(
+  'Use MaterialLocalizationTa from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationTa extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Tamil.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationTa from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationTa({
     super.localeName = 'ta',
     required super.fullYearFormat,
@@ -37352,13 +40883,16 @@ class MaterialLocalizationTa extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'ரத்துசெய்';
 
   @override
+  String get clearButtonTooltip => 'வார்த்தைகளை அழிக்கும்';
+
+  @override
   String get closeButtonLabel => 'மூடுக';
 
   @override
   String get closeButtonTooltip => 'மூடுக';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'விரிவாக்கப்பட்டது';
 
   @override
   String get collapsedIconTapHint => 'விரிக்கும்';
@@ -37418,22 +40952,22 @@ class MaterialLocalizationTa extends GlobalMaterialLocalizations {
   String get drawerLabel => 'வழிசெலுத்தல் மெனு';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'சுருக்கப்பட்டது';
 
   @override
   String get expandedIconTapHint => 'சுருக்கும்';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'விரிவாக்க இருமுறை தட்டுங்கள்';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'கூடுதல் விவரங்களுக்கு விரிவாக்கலாம்';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'சுருக்க இருமுறை தட்டவும்';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'சுருக்கும்';
 
   @override
   String get firstPageTooltip => 'முதல் பக்கத்திற்குச் செல்லும்';
@@ -37622,7 +41156,13 @@ class MaterialLocalizationTa extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'உரிமங்கள்';
 
   @override
+  String get lookUpButtonLabel => 'தேடு';
+
+  @override
   String get menuBarMenuLabel => 'மெனு பட்டியின் மெனு';
+
+  @override
+  String get menuDismissLabel => 'மெனுவை மூடும்';
 
   @override
   String get modalBarrierDismissLabel => 'நிராகரிக்கும்';
@@ -37709,7 +41249,7 @@ class MaterialLocalizationTa extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'சேமி';
 
   @override
-  String get scanTextButtonLabel => 'உரையை ஸ்கேன் செய்யவும்';
+  String get scanTextButtonLabel => 'வார்த்தைகளை ஸ்கேன் செய்';
 
   @override
   String get scrimLabel => 'ஸ்க்ரிம்';
@@ -37724,10 +41264,16 @@ class MaterialLocalizationTa extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'தேடல்';
 
   @override
+  String get searchWebButtonLabel => 'இணையத்தில் தேடு';
+
+  @override
   String get selectAllButtonLabel => 'அனைத்தையும் தேர்ந்தெடு';
 
   @override
   String get selectYearSemanticsLabel => 'ஆண்டைத் தேர்ந்தெடுக்கவும்';
+
+  @override
+  String get selectedDateLabel => 'தேர்ந்தெடுக்கப்பட்டது';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -37746,6 +41292,9 @@ class MaterialLocalizationTa extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => 'எந்த வரிசையும் தேர்ந்தெடுக்கவில்லை';
+
+  @override
+  String get shareButtonLabel => 'பகிர்';
 
   @override
   String get showAccountsLabel => 'கணக்குகளைக் காட்டும்';
@@ -37791,10 +41340,18 @@ class MaterialLocalizationTa extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Telugu (`te`).
+@Deprecated(
+  'Use MaterialLocalizationTe from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationTe extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Telugu.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationTe from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationTe({
     super.localeName = 'te',
     required super.fullYearFormat,
@@ -37830,13 +41387,16 @@ class MaterialLocalizationTe extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'రద్దు చేయండి';
 
   @override
+  String get clearButtonTooltip => 'టెక్స్ట్‌ను క్లియర్ చేయండి';
+
+  @override
   String get closeButtonLabel => 'మూసివేయండి';
 
   @override
-  String get closeButtonTooltip => 'మూసివేయి';
+  String get closeButtonTooltip => 'మూసివేయండి';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'విస్తరించబడింది';
 
   @override
   String get collapsedIconTapHint => 'విస్తరించు';
@@ -37896,22 +41456,22 @@ class MaterialLocalizationTe extends GlobalMaterialLocalizations {
   String get drawerLabel => 'నావిగేషన్ మెనూ';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'కుదించబడింది';
 
   @override
   String get expandedIconTapHint => 'కుదించు';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'విస్తరించడానికి డబుల్ ట్యాప్ చేయండి';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'మరిన్ని వివరాల కోసం విస్తరించండి';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'కుదించడానికి డబుల్ ట్యాప్ చేయండి';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'కుదించండి';
 
   @override
   String get firstPageTooltip => 'మొదటి పేజీ';
@@ -38100,7 +41660,13 @@ class MaterialLocalizationTe extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'లైసెన్స్‌లు';
 
   @override
+  String get lookUpButtonLabel => 'వెతకండి';
+
+  @override
   String get menuBarMenuLabel => 'మెనూ బార్ మెనూ';
+
+  @override
+  String get menuDismissLabel => 'మెనూను తీసివేయండి';
 
   @override
   String get modalBarrierDismissLabel => 'విస్మరించు';
@@ -38187,7 +41753,7 @@ class MaterialLocalizationTe extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'సేవ్ చేయండి';
 
   @override
-  String get scanTextButtonLabel => 'వచనాన్ని స్కాన్ చేయండి';
+  String get scanTextButtonLabel => 'టెక్స్ట్‌ను స్కాన్ చేయండి';
 
   @override
   String get scrimLabel => 'స్క్రిమ్';
@@ -38202,10 +41768,16 @@ class MaterialLocalizationTe extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'వెతకండి';
 
   @override
+  String get searchWebButtonLabel => 'వెబ్‌లో సెర్చ్ చేయండి';
+
+  @override
   String get selectAllButtonLabel => 'అన్నింటినీ ఎంచుకోండి';
 
   @override
   String get selectYearSemanticsLabel => 'సంవత్సరాన్ని ఎంచుకోండి';
+
+  @override
+  String get selectedDateLabel => 'ఎంచుకోబడింది';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -38224,6 +41796,9 @@ class MaterialLocalizationTe extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'షేర్ చేయండి';
 
   @override
   String get showAccountsLabel => 'ఖాతాలను చూపు';
@@ -38269,10 +41844,18 @@ class MaterialLocalizationTe extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Thai (`th`).
+@Deprecated(
+  'Use MaterialLocalizationTh from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationTh extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Thai.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationTh from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationTh({
     super.localeName = 'th',
     required super.fullYearFormat,
@@ -38308,13 +41891,16 @@ class MaterialLocalizationTh extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'ยกเลิก';
 
   @override
+  String get clearButtonTooltip => 'ล้างข้อความ';
+
+  @override
   String get closeButtonLabel => 'ปิด';
 
   @override
   String get closeButtonTooltip => 'ปิด';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'ขยาย';
 
   @override
   String get collapsedIconTapHint => 'ขยาย';
@@ -38374,22 +41960,22 @@ class MaterialLocalizationTh extends GlobalMaterialLocalizations {
   String get drawerLabel => 'เมนูการนำทาง';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'ยุบ';
 
   @override
   String get expandedIconTapHint => 'ยุบ';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'แตะสองครั้งเพื่อขยาย';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'ขยายเพื่อดูรายละเอียดเพิ่มเติม';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'แตะสองครั้งเพื่อยุบ';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'ยุบ';
 
   @override
   String get firstPageTooltip => 'หน้าแรก';
@@ -38578,7 +42164,13 @@ class MaterialLocalizationTh extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'ใบอนุญาต';
 
   @override
+  String get lookUpButtonLabel => 'ค้นหา';
+
+  @override
   String get menuBarMenuLabel => 'เมนูในแถบเมนู';
+
+  @override
+  String get menuDismissLabel => 'ปิดเมนู';
 
   @override
   String get modalBarrierDismissLabel => 'ปิด';
@@ -38638,7 +42230,7 @@ class MaterialLocalizationTh extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'ย้ายลง';
@@ -38680,10 +42272,16 @@ class MaterialLocalizationTh extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'ค้นหา';
 
   @override
+  String get searchWebButtonLabel => 'ค้นหาบนอินเทอร์เน็ต';
+
+  @override
   String get selectAllButtonLabel => 'เลือกทั้งหมด';
 
   @override
   String get selectYearSemanticsLabel => 'เลือกปี';
+
+  @override
+  String get selectedDateLabel => 'เลือกไว้';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -38702,6 +42300,9 @@ class MaterialLocalizationTh extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'แชร์';
 
   @override
   String get showAccountsLabel => 'แสดงบัญชี';
@@ -38747,10 +42348,18 @@ class MaterialLocalizationTh extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Tagalog (`tl`).
+@Deprecated(
+  'Use MaterialLocalizationTl from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationTl extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Tagalog.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationTl from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationTl({
     super.localeName = 'tl',
     required super.fullYearFormat,
@@ -38786,13 +42395,16 @@ class MaterialLocalizationTl extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Kanselahin';
 
   @override
+  String get clearButtonTooltip => 'I-clear ang text';
+
+  @override
   String get closeButtonLabel => 'Isara';
 
   @override
   String get closeButtonTooltip => 'Isara';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Naka-expand';
 
   @override
   String get collapsedIconTapHint => 'I-expand';
@@ -38852,22 +42464,22 @@ class MaterialLocalizationTl extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menu ng navigation';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Naka-collapse';
 
   @override
   String get expandedIconTapHint => 'I-collapse';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'i-double tap para i-expand';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'I-expand para sa higit pang detalye';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'i-double tap para i-collapse';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'I-collapse';
 
   @override
   String get firstPageTooltip => 'Unang page';
@@ -39056,7 +42668,13 @@ class MaterialLocalizationTl extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Mga Lisensya';
 
   @override
+  String get lookUpButtonLabel => 'Tumingin sa Itaas';
+
+  @override
   String get menuBarMenuLabel => 'Menu sa menu bar';
+
+  @override
+  String get menuDismissLabel => 'I-dismiss ang menu';
 
   @override
   String get modalBarrierDismissLabel => 'I-dismiss';
@@ -39116,7 +42734,7 @@ class MaterialLocalizationTl extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Ilipat pababa';
@@ -39158,10 +42776,16 @@ class MaterialLocalizationTl extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Maghanap';
 
   @override
+  String get searchWebButtonLabel => 'Maghanap sa Web';
+
+  @override
   String get selectAllButtonLabel => 'Piliin lahat';
 
   @override
   String get selectYearSemanticsLabel => 'Pumili ng taon';
+
+  @override
+  String get selectedDateLabel => 'Napili';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -39180,6 +42804,9 @@ class MaterialLocalizationTl extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'I-share';
 
   @override
   String get showAccountsLabel => 'Ipakita ang mga account';
@@ -39225,10 +42852,18 @@ class MaterialLocalizationTl extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Turkish (`tr`).
+@Deprecated(
+  'Use MaterialLocalizationTr from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationTr extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Turkish.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationTr from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationTr({
     super.localeName = 'tr',
     required super.fullYearFormat,
@@ -39264,13 +42899,16 @@ class MaterialLocalizationTr extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'İptal';
 
   @override
+  String get clearButtonTooltip => 'Metni temizle';
+
+  @override
   String get closeButtonLabel => 'Kapat';
 
   @override
   String get closeButtonTooltip => 'Kapat';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Genişletildi';
 
   @override
   String get collapsedIconTapHint => 'Genişlet';
@@ -39330,22 +42968,22 @@ class MaterialLocalizationTr extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Gezinme menüsü';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Daraltıldı';
 
   @override
   String get expandedIconTapHint => 'Daralt';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'genişletmek için iki kez dokunun';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Daha fazla ayrıntı için genişletin';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'daraltmak için iki kez dokunun';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Daralt';
 
   @override
   String get firstPageTooltip => 'İlk sayfa';
@@ -39534,7 +43172,13 @@ class MaterialLocalizationTr extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Lisanslar';
 
   @override
+  String get lookUpButtonLabel => 'Ara';
+
+  @override
   String get menuBarMenuLabel => 'Menü çubuğu menüsü';
+
+  @override
+  String get menuDismissLabel => 'Menüyü kapat';
 
   @override
   String get modalBarrierDismissLabel => 'Kapat';
@@ -39594,7 +43238,7 @@ class MaterialLocalizationTr extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Aşağı taşı';
@@ -39621,7 +43265,7 @@ class MaterialLocalizationTr extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Kaydet';
 
   @override
-  String get scanTextButtonLabel => 'Metni tara';
+  String get scanTextButtonLabel => 'Metin tara';
 
   @override
   String get scrimLabel => 'opaklık katmanı';
@@ -39636,10 +43280,16 @@ class MaterialLocalizationTr extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Ara';
 
   @override
+  String get searchWebButtonLabel => "Web'de Ara";
+
+  @override
   String get selectAllButtonLabel => 'Tümünü seç';
 
   @override
   String get selectYearSemanticsLabel => 'Yılı seçin';
+
+  @override
+  String get selectedDateLabel => 'Seçili';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -39658,6 +43308,9 @@ class MaterialLocalizationTr extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Paylaş';
 
   @override
   String get showAccountsLabel => 'Hesapları göster';
@@ -39702,11 +43355,523 @@ class MaterialLocalizationTr extends GlobalMaterialLocalizations {
   String get viewLicensesButtonLabel => 'Lisansları göster';
 }
 
+/// The translations for Uighur Uyghur (`ug`).
+@Deprecated(
+  'Use MaterialLocalizationUg from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
+class MaterialLocalizationUg extends GlobalMaterialLocalizations {
+  /// Create an instance of the translation bundle for Uighur Uyghur.
+  ///
+  /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationUg from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
+  const MaterialLocalizationUg({
+    super.localeName = 'ug',
+    required super.fullYearFormat,
+    required super.compactDateFormat,
+    required super.shortDateFormat,
+    required super.mediumDateFormat,
+    required super.longDateFormat,
+    required super.yearMonthFormat,
+    required super.shortMonthDayFormat,
+    required super.decimalFormat,
+    required super.twoDigitZeroPaddedFormat,
+  });
+
+  @override
+  String get aboutListTileTitleRaw => r'$applicationName ھەققىدە';
+
+  @override
+  String get alertDialogLabel => 'ئاگاھلاندۇرۇش';
+
+  @override
+  String get anteMeridiemAbbreviation => 'چۈشتىن بۇرۇن';
+
+  @override
+  String get backButtonTooltip => 'قايتىش';
+
+  @override
+  String get bottomSheetLabel => 'ئاستىنقى كۆزنەك';
+
+  @override
+  String get calendarModeButtonLabel => 'كالېندارغا ئۆتۈش';
+
+  @override
+  String get cancelButtonLabel => 'بىكار قىلىش';
+
+  @override
+  String get clearButtonTooltip => 'تېكىستنى تازىلاش';
+
+  @override
+  String get closeButtonLabel => 'يېپىش';
+
+  @override
+  String get closeButtonTooltip => 'يېپىش';
+
+  @override
+  String get collapsedHint => 'يېيىلدى';
+
+  @override
+  String get collapsedIconTapHint => 'يېيىش';
+
+  @override
+  String get continueButtonLabel => 'داۋاملاشتۇرۇش';
+
+  @override
+  String get copyButtonLabel => 'كۆچۈرۈش';
+
+  @override
+  String get currentDateLabel => 'بۈگۈن';
+
+  @override
+  String get cutButtonLabel => 'كېسىش';
+
+  @override
+  String get dateHelpText => 'dd-mm-yyyy';
+
+  @override
+  String get dateInputLabel => 'چېسلا كىرگۈزۈش';
+
+  @override
+  String get dateOutOfRangeLabel => 'دائىرىدىن چىقىپ كەتتى';
+
+  @override
+  String get datePickerHelpText => 'چېسلا تاللاش';
+
+  @override
+  String get dateRangeEndDateSemanticLabelRaw => r'ئاخىرلىشىش ۋاقتى fullDate$';
+
+  @override
+  String get dateRangeEndLabel => 'ئاخىرلىشىش ۋاقتى';
+
+  @override
+  String get dateRangePickerHelpText => 'دائىرە تاللاش';
+
+  @override
+  String get dateRangeStartDateSemanticLabelRaw => r'باشلىنىش ۋاقتى fullDate$';
+
+  @override
+  String get dateRangeStartLabel => 'باشلىنىش ۋاقتى';
+
+  @override
+  String get dateSeparator => '-';
+
+  @override
+  String get deleteButtonTooltip => 'ئۆچۈرۈش';
+
+  @override
+  String get dialModeButtonLabel => 'ئىشكالا تاختىسىدا تاللاش ھالىتىگە ئۆتۈش';
+
+  @override
+  String get dialogLabel => 'دىئالوگ';
+
+  @override
+  String get drawerLabel => 'يېتەگلىگۈچى تىزىملىكى';
+
+  @override
+  String get expandedHint => 'يىغىلدى';
+
+  @override
+  String get expandedIconTapHint => 'يىغىش';
+
+  @override
+  String get expansionTileCollapsedHint => 'يېيىش ئۈچۈن قوش چېكىڭ';
+
+  @override
+  String get expansionTileCollapsedTapHint => 'تېخىمۇ كۆپ تەپسىلاتلار ئۈچۈن يېيىڭ';
+
+  @override
+  String get expansionTileExpandedHint => 'يىغىش ئۈچۈن قوش چېكىڭ';
+
+  @override
+  String get expansionTileExpandedTapHint => 'يىغىش';
+
+  @override
+  String get firstPageTooltip => 'بىرىنچى بەت';
+
+  @override
+  String get hideAccountsLabel => 'ھېساباتنى يوشۇرۇش';
+
+  @override
+  String get inputDateModeButtonLabel => 'خەت كىرگۈزۈشكە ئۆتۈش';
+
+  @override
+  String get inputTimeModeButtonLabel => 'خەت كىرگۈزۈش ھالىتىگە ئۆتۈش';
+
+  @override
+  String get invalidDateFormatLabel => 'فورمات ئىناۋەتسىز.';
+
+  @override
+  String get invalidDateRangeLabel => 'دائىرە ئىناۋەتسىز.';
+
+  @override
+  String get invalidTimeLabel => 'ئىناۋەتلىك بىر ۋاقىت كىرگۈزۈڭ';
+
+  @override
+  String get keyboardKeyAlt => 'Alt';
+
+  @override
+  String get keyboardKeyAltGraph => 'AltGr';
+
+  @override
+  String get keyboardKeyBackspace => 'Backspace';
+
+  @override
+  String get keyboardKeyCapsLock => 'Caps Lock';
+
+  @override
+  String get keyboardKeyChannelDown => 'ئاستىنقى قانال';
+
+  @override
+  String get keyboardKeyChannelUp => 'يۇقىرىقى قانال';
+
+  @override
+  String get keyboardKeyControl => 'Ctrl';
+
+  @override
+  String get keyboardKeyDelete => 'Del';
+
+  @override
+  String get keyboardKeyEject => 'Eject';
+
+  @override
+  String get keyboardKeyEnd => 'End';
+
+  @override
+  String get keyboardKeyEscape => 'Esc';
+
+  @override
+  String get keyboardKeyFn => 'Fn';
+
+  @override
+  String get keyboardKeyHome => 'باشبەت';
+
+  @override
+  String get keyboardKeyInsert => 'قىستۇرۇش';
+
+  @override
+  String get keyboardKeyMeta => 'مېتا';
+
+  @override
+  String get keyboardKeyMetaMacOs => 'بۇيرۇق';
+
+  @override
+  String get keyboardKeyMetaWindows => 'Win';
+
+  @override
+  String get keyboardKeyNumLock => 'Num Lock';
+
+  @override
+  String get keyboardKeyNumpad0 => 'Num 0';
+
+  @override
+  String get keyboardKeyNumpad1 => 'Num 1';
+
+  @override
+  String get keyboardKeyNumpad2 => 'Num 2';
+
+  @override
+  String get keyboardKeyNumpad3 => 'Num 3';
+
+  @override
+  String get keyboardKeyNumpad4 => 'Num 4';
+
+  @override
+  String get keyboardKeyNumpad5 => 'Num 5';
+
+  @override
+  String get keyboardKeyNumpad6 => 'Num 6';
+
+  @override
+  String get keyboardKeyNumpad7 => 'Num 7';
+
+  @override
+  String get keyboardKeyNumpad8 => 'Num 8';
+
+  @override
+  String get keyboardKeyNumpad9 => 'Num 9';
+
+  @override
+  String get keyboardKeyNumpadAdd => '+ Num';
+
+  @override
+  String get keyboardKeyNumpadComma => ', Num';
+
+  @override
+  String get keyboardKeyNumpadDecimal => '. Num';
+
+  @override
+  String get keyboardKeyNumpadDivide => '/ Num';
+
+  @override
+  String get keyboardKeyNumpadEnter => 'Num Enter';
+
+  @override
+  String get keyboardKeyNumpadEqual => '= Num';
+
+  @override
+  String get keyboardKeyNumpadMultiply => '* Num';
+
+  @override
+  String get keyboardKeyNumpadParenLeft => ') Num';
+
+  @override
+  String get keyboardKeyNumpadParenRight => '( Num';
+
+  @override
+  String get keyboardKeyNumpadSubtract => '- Num';
+
+  @override
+  String get keyboardKeyPageDown => 'PgDown';
+
+  @override
+  String get keyboardKeyPageUp => 'PgUp';
+
+  @override
+  String get keyboardKeyPower => 'توك';
+
+  @override
+  String get keyboardKeyPowerOff => 'ئېتىش';
+
+  @override
+  String get keyboardKeyPrintScreen => 'Print Screen';
+
+  @override
+  String get keyboardKeyScrollLock => 'Scroll Lock';
+
+  @override
+  String get keyboardKeySelect => 'تاللاش';
+
+  @override
+  String get keyboardKeyShift => 'Shift';
+
+  @override
+  String get keyboardKeySpace => 'بوشلۇق';
+
+  @override
+  String get lastPageTooltip => 'ئاخىرقى بەت';
+
+  @override
+  String? get licensesPackageDetailTextFew => null;
+
+  @override
+  String? get licensesPackageDetailTextMany => null;
+
+  @override
+  String? get licensesPackageDetailTextOne => '1 ئىجازەتنامە';
+
+  @override
+  String get licensesPackageDetailTextOther => r'$licenseCount ئىجازەتنامە';
+
+  @override
+  String? get licensesPackageDetailTextTwo => null;
+
+  @override
+  String? get licensesPackageDetailTextZero => null;
+
+  @override
+  String get licensesPageTitle => 'ئىجازەتننامىلەر';
+
+  @override
+  String get lookUpButtonLabel => 'ئىزدەش';
+
+  @override
+  String get menuBarMenuLabel => 'تىزىملىك بالدىقى تىزىملىكى';
+
+  @override
+  String get menuDismissLabel => 'تىزىملىكنى بىكار قىلىش';
+
+  @override
+  String get modalBarrierDismissLabel => 'بىكار قىلىش';
+
+  @override
+  String get moreButtonTooltip => 'تېخىمۇ كۆپ';
+
+  @override
+  String get nextMonthTooltip => 'كېيىنكى ئاي';
+
+  @override
+  String get nextPageTooltip => 'كېيىنكى بەت';
+
+  @override
+  String get okButtonLabel => 'ماقۇل';
+
+  @override
+  String get openAppDrawerTooltip => 'يېتەكچى تىزىملىكىنى ئېچىىش';
+
+  @override
+  String get pageRowsInfoTitleRaw => r'جەمئىي $rowCount قۇر $firstRow-دىن $lastRow-گىچە';
+
+  @override
+  String get pageRowsInfoTitleApproximateRaw => r'تەخمىنەن جەمئىي $rowCount قۇر $firstRow-دىن $lastRow-گىچە';
+
+  @override
+  String get pasteButtonLabel => 'چاپلاش';
+
+  @override
+  String get popupMenuLabel => 'سەكرىمە تىزىملىك';
+
+  @override
+  String get postMeridiemAbbreviation => 'چۈشتىن كېيىن';
+
+  @override
+  String get previousMonthTooltip => 'ئالدىنقى ئاي';
+
+  @override
+  String get previousPageTooltip => 'ئالدىنقى بەت';
+
+  @override
+  String get refreshIndicatorSemanticLabel => 'يېڭىلاش';
+
+  @override
+  String? get remainingTextFieldCharacterCountFew => null;
+
+  @override
+  String? get remainingTextFieldCharacterCountMany => null;
+
+  @override
+  String? get remainingTextFieldCharacterCountOne => '1 ھەرپ-بەلگە قالدى';
+
+  @override
+  String get remainingTextFieldCharacterCountOther => r'$remainingCount ھەرپ-بەلگە قالدى';
+
+  @override
+  String? get remainingTextFieldCharacterCountTwo => null;
+
+  @override
+  String? get remainingTextFieldCharacterCountZero => null;
+
+  @override
+  String get reorderItemDown => 'ئاستىغا يۆتكەش';
+
+  @override
+  String get reorderItemLeft => 'سولغا يۆتكەش';
+
+  @override
+  String get reorderItemRight => 'ئوڭغا يۆتكەش';
+
+  @override
+  String get reorderItemToEnd => 'ئاخىرىغا يۆتكەش';
+
+  @override
+  String get reorderItemToStart => 'باشلىنىشقا يۆتكەش';
+
+  @override
+  String get reorderItemUp => 'يۇقىرىغا يۆتكەش';
+
+  @override
+  String get rowsPerPageTitle => 'ھەر بەتتىكى قۇر سانى:';
+
+  @override
+  String get saveButtonLabel => 'ساقلاش';
+
+  @override
+  String get scanTextButtonLabel => 'تېكىستنى سايىلەش';
+
+  @override
+  String get scrimLabel => 'Scrim';
+
+  @override
+  String get scrimOnTapHintRaw => r'$modalRouteContentName نى يېپىش';
+
+  @override
+  ScriptCategory get scriptCategory => ScriptCategory.tall;
+
+  @override
+  String get searchFieldLabel => 'ئىزدەش';
+
+  @override
+  String get searchWebButtonLabel => 'توردا ئىزدەش';
+
+  @override
+  String get selectAllButtonLabel => 'ھەممىنى تاللاش';
+
+  @override
+  String get selectYearSemanticsLabel => 'يىل تاللاش';
+
+  @override
+  String get selectedDateLabel => 'تاللاندى';
+
+  @override
+  String? get selectedRowCountTitleFew => null;
+
+  @override
+  String? get selectedRowCountTitleMany => null;
+
+  @override
+  String? get selectedRowCountTitleOne => '1 ماددا تاللاندى';
+
+  @override
+  String get selectedRowCountTitleOther => r'$selectedRowCount ماددا تاللاندى';
+
+  @override
+  String? get selectedRowCountTitleTwo => null;
+
+  @override
+  String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'ھەمبەھرلەش';
+
+  @override
+  String get showAccountsLabel => 'ھېساباتنى كۆرسىتىش';
+
+  @override
+  String get showMenuTooltip => 'تىزىملىكنى كۆرسىتىش';
+
+  @override
+  String get signedInLabel => 'تىزىملاپ كىردىڭىز';
+
+  @override
+  String get tabLabelRaw => r'بەتكۈچ $tabIndex جەمئىي $tabCount';
+
+  @override
+  TimeOfDayFormat get timeOfDayFormatRaw => TimeOfDayFormat.HH_colon_mm;
+
+  @override
+  String get timePickerDialHelpText => 'ۋاقىت تاللاش';
+
+  @override
+  String get timePickerHourLabel => 'سائەت';
+
+  @override
+  String get timePickerHourModeAnnouncement => 'سائەت تاللاش';
+
+  @override
+  String get timePickerInputHelpText => 'ۋاقىت كىرگۈزۈش';
+
+  @override
+  String get timePickerMinuteLabel => 'مىنۇت';
+
+  @override
+  String get timePickerMinuteModeAnnouncement => 'مىنۇت تاللاش';
+
+  @override
+  String get unspecifiedDate => 'چېسلا';
+
+  @override
+  String get unspecifiedDateRange => 'چېسلا دائىرىسى';
+
+  @override
+  String get viewLicensesButtonLabel => 'ئىجازەتنامىلەرنى كۆرۈش';
+}
+
 /// The translations for Ukrainian (`uk`).
+@Deprecated(
+  'Use MaterialLocalizationUk from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationUk extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Ukrainian.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationUk from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationUk({
     super.localeName = 'uk',
     required super.fullYearFormat,
@@ -39742,13 +43907,16 @@ class MaterialLocalizationUk extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Скасувати';
 
   @override
+  String get clearButtonTooltip => 'Видалити текст';
+
+  @override
   String get closeButtonLabel => 'Закрити';
 
   @override
   String get closeButtonTooltip => 'Закрити';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Розгорнуто';
 
   @override
   String get collapsedIconTapHint => 'Розгорнути';
@@ -39808,22 +43976,22 @@ class MaterialLocalizationUk extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Меню навігації';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Згорнуто';
 
   @override
   String get expandedIconTapHint => 'Згорнути';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'двічі торкніться, щоб розгорнути';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Розгорнути й дізнатися більше';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'двічі торкніться, щоб згорнути';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Згорнути';
 
   @override
   String get firstPageTooltip => 'Перша сторінка';
@@ -40012,7 +44180,13 @@ class MaterialLocalizationUk extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Ліцензії';
 
   @override
+  String get lookUpButtonLabel => 'Шукати';
+
+  @override
   String get menuBarMenuLabel => 'Панель меню';
+
+  @override
+  String get menuDismissLabel => 'Закрити меню';
 
   @override
   String get modalBarrierDismissLabel => 'Закрити';
@@ -40072,7 +44246,7 @@ class MaterialLocalizationUk extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Перемістити вниз';
@@ -40099,7 +44273,7 @@ class MaterialLocalizationUk extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'Зберегти';
 
   @override
-  String get scanTextButtonLabel => 'Сканувати текст';
+  String get scanTextButtonLabel => 'Відсканувати текст';
 
   @override
   String get scrimLabel => 'Маскувальний фон';
@@ -40114,10 +44288,16 @@ class MaterialLocalizationUk extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Пошук';
 
   @override
+  String get searchWebButtonLabel => 'Пошук в Інтернеті';
+
+  @override
   String get selectAllButtonLabel => 'Вибрати всі';
 
   @override
   String get selectYearSemanticsLabel => 'Виберіть рік';
+
+  @override
+  String get selectedDateLabel => 'Вибрано';
 
   @override
   String? get selectedRowCountTitleFew => r'Вибрано $selectedRowCount елементи';
@@ -40136,6 +44316,9 @@ class MaterialLocalizationUk extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Поділитися';
 
   @override
   String get showAccountsLabel => 'Показати облікові записи';
@@ -40181,10 +44364,18 @@ class MaterialLocalizationUk extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Urdu (`ur`).
+@Deprecated(
+  'Use MaterialLocalizationUr from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationUr extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Urdu.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationUr from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationUr({
     super.localeName = 'ur',
     required super.fullYearFormat,
@@ -40220,13 +44411,16 @@ class MaterialLocalizationUr extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'منسوخ کریں';
 
   @override
+  String get clearButtonTooltip => 'ٹیکسٹ صاف کریں';
+
+  @override
   String get closeButtonLabel => 'بند کریں';
 
   @override
   String get closeButtonTooltip => 'بند کریں';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'پھیلا ہوا';
 
   @override
   String get collapsedIconTapHint => 'پھیلائیں';
@@ -40286,22 +44480,22 @@ class MaterialLocalizationUr extends GlobalMaterialLocalizations {
   String get drawerLabel => 'نیویگیشن مینیو';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'سکڑا ہوا';
 
   @override
   String get expandedIconTapHint => 'سکیڑیں';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'پھیلانے کے لیے دوبار تھپتھپائیں';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'مزید تفصیلات کے لیے پھیلائیں';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'سکیڑنے کے لیے دوبار تھپتھپائیں';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'سکیڑیں';
 
   @override
   String get firstPageTooltip => 'پہلا صفحہ';
@@ -40490,7 +44684,13 @@ class MaterialLocalizationUr extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'لائسنسز';
 
   @override
+  String get lookUpButtonLabel => 'تفصیل دیکھیں';
+
+  @override
   String get menuBarMenuLabel => 'مینیو بار کا مینیو';
+
+  @override
+  String get menuDismissLabel => 'مینو برخاست کریں';
 
   @override
   String get modalBarrierDismissLabel => 'برخاست کریں';
@@ -40550,7 +44750,7 @@ class MaterialLocalizationUr extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'نیچے منتقل کریں';
@@ -40577,7 +44777,7 @@ class MaterialLocalizationUr extends GlobalMaterialLocalizations {
   String get saveButtonLabel => 'محفوظ کریں';
 
   @override
-  String get scanTextButtonLabel => 'متن کو اسکین کریں';
+  String get scanTextButtonLabel => 'ٹیکسٹ اسکین کریں';
 
   @override
   String get scrimLabel => 'اسکریم';
@@ -40592,10 +44792,16 @@ class MaterialLocalizationUr extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'تلاش';
 
   @override
+  String get searchWebButtonLabel => 'ویب تلاش کریں';
+
+  @override
   String get selectAllButtonLabel => 'سبھی کو منتخب کریں';
 
   @override
   String get selectYearSemanticsLabel => 'سال منتخب کریں';
+
+  @override
+  String get selectedDateLabel => 'منتخب کردہ';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -40614,6 +44820,9 @@ class MaterialLocalizationUr extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'اشتراک کریں';
 
   @override
   String get showAccountsLabel => 'اکاؤنٹس دکھائیں';
@@ -40659,10 +44868,18 @@ class MaterialLocalizationUr extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Uzbek (`uz`).
+@Deprecated(
+  'Use MaterialLocalizationUz from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationUz extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Uzbek.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationUz from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationUz({
     super.localeName = 'uz',
     required super.fullYearFormat,
@@ -40698,13 +44915,16 @@ class MaterialLocalizationUz extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Bekor qilish';
 
   @override
+  String get clearButtonTooltip => 'Matnni tozalash';
+
+  @override
   String get closeButtonLabel => 'Yopish';
 
   @override
   String get closeButtonTooltip => 'Yopish';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Yoyilgan';
 
   @override
   String get collapsedIconTapHint => 'Yoyish';
@@ -40764,22 +44984,22 @@ class MaterialLocalizationUz extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Navigatsiya menyusi';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Yigʻilgan';
 
   @override
   String get expandedIconTapHint => 'Kichraytirish';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'yoyish uchun ikki marta bosing';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Batafsil koʻrish uchun yoying';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'yigʻish uchun ikki marta bosing';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Yigʻish';
 
   @override
   String get firstPageTooltip => 'Birinchi sahifa';
@@ -40968,7 +45188,13 @@ class MaterialLocalizationUz extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Litsenziyalar';
 
   @override
+  String get lookUpButtonLabel => 'Tepaga qarang';
+
+  @override
   String get menuBarMenuLabel => 'Menyu paneli';
+
+  @override
+  String get menuDismissLabel => 'Menyuni yopish';
 
   @override
   String get modalBarrierDismissLabel => 'Yopish';
@@ -41070,10 +45296,16 @@ class MaterialLocalizationUz extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Qidirish';
 
   @override
+  String get searchWebButtonLabel => 'Internetdan qidirish';
+
+  @override
   String get selectAllButtonLabel => 'Hammasi';
 
   @override
   String get selectYearSemanticsLabel => 'Yilni tanlang';
+
+  @override
+  String get selectedDateLabel => 'Tanlangan';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -41092,6 +45324,9 @@ class MaterialLocalizationUz extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Ulashish';
 
   @override
   String get showAccountsLabel => 'Hisoblarni koʻrsatish';
@@ -41137,10 +45372,18 @@ class MaterialLocalizationUz extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Vietnamese (`vi`).
+@Deprecated(
+  'Use MaterialLocalizationVi from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationVi extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Vietnamese.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationVi from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationVi({
     super.localeName = 'vi',
     required super.fullYearFormat,
@@ -41176,13 +45419,16 @@ class MaterialLocalizationVi extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Huỷ';
 
   @override
+  String get clearButtonTooltip => 'Xoá văn bản';
+
+  @override
   String get closeButtonLabel => 'Đóng';
 
   @override
   String get closeButtonTooltip => 'Đóng';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Đã mở rộng';
 
   @override
   String get collapsedIconTapHint => 'Mở rộng';
@@ -41242,22 +45488,22 @@ class MaterialLocalizationVi extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Menu di chuyển';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Đã thu gọn';
 
   @override
   String get expandedIconTapHint => 'Thu gọn';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'nhấn đúp để mở rộng';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Mở rộng để xem thêm chi tiết';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'nhấn đúp để thu gọn';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Thu gọn';
 
   @override
   String get firstPageTooltip => 'Trang đầu';
@@ -41446,7 +45692,13 @@ class MaterialLocalizationVi extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Giấy phép';
 
   @override
+  String get lookUpButtonLabel => 'Tra cứu';
+
+  @override
   String get menuBarMenuLabel => 'Trình đơn của thanh trình đơn';
+
+  @override
+  String get menuDismissLabel => 'Đóng trình đơn';
 
   @override
   String get modalBarrierDismissLabel => 'Bỏ qua';
@@ -41506,7 +45758,7 @@ class MaterialLocalizationVi extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => 'Di chuyển xuống';
@@ -41548,10 +45800,16 @@ class MaterialLocalizationVi extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Tìm kiếm';
 
   @override
+  String get searchWebButtonLabel => 'Tìm kiếm trên web';
+
+  @override
   String get selectAllButtonLabel => 'Chọn tất cả';
 
   @override
   String get selectYearSemanticsLabel => 'Chọn năm';
+
+  @override
+  String get selectedDateLabel => 'Đã chọn';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -41570,6 +45828,9 @@ class MaterialLocalizationVi extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Chia sẻ';
 
   @override
   String get showAccountsLabel => 'Hiển thị tài khoản';
@@ -41615,10 +45876,18 @@ class MaterialLocalizationVi extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Chinese (`zh`).
+@Deprecated(
+  'Use MaterialLocalizationZh from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationZh extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Chinese.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationZh from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationZh({
     super.localeName = 'zh',
     required super.fullYearFormat,
@@ -41654,13 +45923,16 @@ class MaterialLocalizationZh extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => '取消';
 
   @override
+  String get clearButtonTooltip => '清除文字';
+
+  @override
   String get closeButtonLabel => '关闭';
 
   @override
   String get closeButtonTooltip => '关闭';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => '已展开';
 
   @override
   String get collapsedIconTapHint => '展开';
@@ -41720,28 +45992,28 @@ class MaterialLocalizationZh extends GlobalMaterialLocalizations {
   String get drawerLabel => '导航菜单';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => '已收起';
 
   @override
   String get expandedIconTapHint => '收起';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => '点按两次即可展开';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => '展开查看更多详情';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => '点按两次即可收起';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => '收起';
 
   @override
   String get firstPageTooltip => '第一页';
 
   @override
-  String get hideAccountsLabel => '隐藏帐号';
+  String get hideAccountsLabel => '隐藏账号';
 
   @override
   String get inputDateModeButtonLabel => '切换到输入模式';
@@ -41924,7 +46196,13 @@ class MaterialLocalizationZh extends GlobalMaterialLocalizations {
   String get licensesPageTitle => '许可';
 
   @override
+  String get lookUpButtonLabel => '查询';
+
+  @override
   String get menuBarMenuLabel => '菜单栏的菜单';
+
+  @override
+  String get menuDismissLabel => '关闭菜单';
 
   @override
   String get modalBarrierDismissLabel => '关闭';
@@ -41984,7 +46262,7 @@ class MaterialLocalizationZh extends GlobalMaterialLocalizations {
   String? get remainingTextFieldCharacterCountTwo => null;
 
   @override
-  String? get remainingTextFieldCharacterCountZero => 'TBD';
+  String? get remainingTextFieldCharacterCountZero => null;
 
   @override
   String get reorderItemDown => '下移';
@@ -42011,7 +46289,7 @@ class MaterialLocalizationZh extends GlobalMaterialLocalizations {
   String get saveButtonLabel => '保存';
 
   @override
-  String get scanTextButtonLabel => '扫描文本';
+  String get scanTextButtonLabel => '扫描文字';
 
   @override
   String get scrimLabel => '纱罩';
@@ -42026,10 +46304,16 @@ class MaterialLocalizationZh extends GlobalMaterialLocalizations {
   String get searchFieldLabel => '搜索';
 
   @override
+  String get searchWebButtonLabel => '搜索';
+
+  @override
   String get selectAllButtonLabel => '全选';
 
   @override
   String get selectYearSemanticsLabel => '选择年份';
+
+  @override
+  String get selectedDateLabel => '已选择';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -42050,7 +46334,10 @@ class MaterialLocalizationZh extends GlobalMaterialLocalizations {
   String? get selectedRowCountTitleZero => null;
 
   @override
-  String get showAccountsLabel => '显示帐号';
+  String get shareButtonLabel => '分享';
+
+  @override
+  String get showAccountsLabel => '显示账号';
 
   @override
   String get showMenuTooltip => '显示菜单';
@@ -42093,10 +46380,18 @@ class MaterialLocalizationZh extends GlobalMaterialLocalizations {
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
+@Deprecated(
+  'Use MaterialLocalizationZhHans from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationZhHans extends MaterialLocalizationZh {
   /// Create an instance of the translation bundle for Chinese, using the Han script.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationZhHans from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationZhHans({
     super.localeName = 'zh_Hans',
     required super.fullYearFormat,
@@ -42112,10 +46407,18 @@ class MaterialLocalizationZhHans extends MaterialLocalizationZh {
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
+@Deprecated(
+  'Use MaterialLocalizationZhHant from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationZhHant extends MaterialLocalizationZh {
   /// Create an instance of the translation bundle for Chinese, using the Han script.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationZhHant from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationZhHant({
     super.localeName = 'zh_Hant',
     required super.fullYearFormat,
@@ -42146,6 +46449,9 @@ class MaterialLocalizationZhHant extends MaterialLocalizationZh {
 
   @override
   String get closeButtonTooltip => '關閉';
+
+  @override
+  String get collapsedHint => '已展開';
 
   @override
   String get collapsedIconTapHint => '展開';
@@ -42199,7 +46505,22 @@ class MaterialLocalizationZhHant extends MaterialLocalizationZh {
   String get drawerLabel => '導覽選單';
 
   @override
+  String get expandedHint => '已收合';
+
+  @override
   String get expandedIconTapHint => '收合';
+
+  @override
+  String get expansionTileCollapsedHint => '㩒兩下就可以展開';
+
+  @override
+  String get expansionTileCollapsedTapHint => '展開就可以查看詳情';
+
+  @override
+  String get expansionTileExpandedHint => '㩒兩下就可以收合';
+
+  @override
+  String get expansionTileExpandedTapHint => '收合';
 
   @override
   String get firstPageTooltip => '第一頁';
@@ -42325,7 +46646,13 @@ class MaterialLocalizationZhHant extends MaterialLocalizationZh {
   String get licensesPageTitle => '授權';
 
   @override
+  String get lookUpButtonLabel => '查詢';
+
+  @override
   String get menuBarMenuLabel => '選單列選單';
+
+  @override
+  String get menuDismissLabel => '閂選單';
 
   @override
   String get modalBarrierDismissLabel => '拒絕';
@@ -42394,6 +46721,9 @@ class MaterialLocalizationZhHant extends MaterialLocalizationZh {
   String get saveButtonLabel => '儲存';
 
   @override
+  String get scanTextButtonLabel => '掃瞄文字';
+
+  @override
   String get scrimLabel => 'Scrim';
 
   @override
@@ -42403,10 +46733,16 @@ class MaterialLocalizationZhHant extends MaterialLocalizationZh {
   String get searchFieldLabel => '搜尋';
 
   @override
+  String get searchWebButtonLabel => '搜尋';
+
+  @override
   String get selectAllButtonLabel => '全部選取';
 
   @override
   String get selectYearSemanticsLabel => '揀年份';
+
+  @override
+  String get selectedDateLabel => '已選取';
 
   @override
   String? get selectedRowCountTitleOne => '已選取 1 個項目';
@@ -42452,10 +46788,18 @@ class MaterialLocalizationZhHant extends MaterialLocalizationZh {
 }
 
 /// The translations for Chinese, as used in Hong Kong, using the Han script (`zh_Hant_HK`).
+@Deprecated(
+  'Use MaterialLocalizationZhHantHk from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationZhHantHk extends MaterialLocalizationZhHant {
   /// Create an instance of the translation bundle for Chinese, as used in Hong Kong, using the Han script.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationZhHantHk from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationZhHantHk({
     super.localeName = 'zh_Hant_HK',
     required super.fullYearFormat,
@@ -42471,10 +46815,18 @@ class MaterialLocalizationZhHantHk extends MaterialLocalizationZhHant {
 }
 
 /// The translations for Chinese, as used in Taiwan, using the Han script (`zh_Hant_TW`).
+@Deprecated(
+  'Use MaterialLocalizationZhHantTw from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationZhHantTw extends MaterialLocalizationZhHant {
   /// Create an instance of the translation bundle for Chinese, as used in Taiwan, using the Han script.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationZhHantTw from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationZhHantTw({
     super.localeName = 'zh_Hant_TW',
     required super.fullYearFormat,
@@ -42487,6 +46839,21 @@ class MaterialLocalizationZhHantTw extends MaterialLocalizationZhHant {
     required super.decimalFormat,
     required super.twoDigitZeroPaddedFormat,
   });
+
+  @override
+  String get scanTextButtonLabel => '掃描文字';
+
+  @override
+  String get menuDismissLabel => '關閉選單';
+
+  @override
+  String get expansionTileExpandedHint => '輕觸兩下即可收合';
+
+  @override
+  String get expansionTileCollapsedHint => '輕觸兩下即可展開';
+
+  @override
+  String get expansionTileCollapsedTapHint => '展開更多詳細資料';
 
   @override
   String get scrimLabel => '紗罩';
@@ -42570,7 +46937,7 @@ class MaterialLocalizationZhHantTw extends MaterialLocalizationZhHant {
   String get timePickerMinuteModeAnnouncement => '選取分鐘數';
 
   @override
-  String get alertDialogLabel => '快訊';
+  String get alertDialogLabel => '警告';
 
   @override
   String get reorderItemToStart => '移至開頭';
@@ -42586,10 +46953,18 @@ class MaterialLocalizationZhHantTw extends MaterialLocalizationZhHant {
 }
 
 /// The translations for Zulu (`zu`).
+@Deprecated(
+  'Use MaterialLocalizationZu from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 class MaterialLocalizationZu extends GlobalMaterialLocalizations {
   /// Create an instance of the translation bundle for Zulu.
   ///
   /// For details on the meaning of the arguments, see [GlobalMaterialLocalizations].
+  @Deprecated(
+    'Use MaterialLocalizationZu from package:material_ui/material_ui.dart instead. '
+    'This feature was deprecated after v3.47.0-0.0.pre.',
+  )
   const MaterialLocalizationZu({
     super.localeName = 'zu',
     required super.fullYearFormat,
@@ -42625,13 +47000,16 @@ class MaterialLocalizationZu extends GlobalMaterialLocalizations {
   String get cancelButtonLabel => 'Khansela';
 
   @override
+  String get clearButtonTooltip => 'Sula umbhalo';
+
+  @override
   String get closeButtonLabel => 'Vala';
 
   @override
   String get closeButtonTooltip => 'Vala';
 
   @override
-  String get collapsedHint => 'Expanded';
+  String get collapsedHint => 'Kunwetshiwe';
 
   @override
   String get collapsedIconTapHint => 'Nweba';
@@ -42691,22 +47069,22 @@ class MaterialLocalizationZu extends GlobalMaterialLocalizations {
   String get drawerLabel => 'Imenyu yokuzulazula';
 
   @override
-  String get expandedHint => 'Collapsed';
+  String get expandedHint => 'Kugoqiwe';
 
   @override
   String get expandedIconTapHint => 'Goqa';
 
   @override
-  String get expansionTileCollapsedHint => 'double tap to expand';
+  String get expansionTileCollapsedHint => 'Thepha kabili ukuze unwebe';
 
   @override
-  String get expansionTileCollapsedTapHint => 'Expand for more details';
+  String get expansionTileCollapsedTapHint => 'Nweba ukuze uthole imininingwane eyengeziwe';
 
   @override
-  String get expansionTileExpandedHint => "double tap to collapse'";
+  String get expansionTileExpandedHint => 'thepha kabili ukuze ugoqe';
 
   @override
-  String get expansionTileExpandedTapHint => 'Collapse';
+  String get expansionTileExpandedTapHint => 'Goqa';
 
   @override
   String get firstPageTooltip => 'Ikhasi lokuqala';
@@ -42895,7 +47273,13 @@ class MaterialLocalizationZu extends GlobalMaterialLocalizations {
   String get licensesPageTitle => 'Amalayisense';
 
   @override
+  String get lookUpButtonLabel => 'Bheka Phezulu';
+
+  @override
   String get menuBarMenuLabel => 'Imenyu yebha yemenyu';
+
+  @override
+  String get menuDismissLabel => 'Chitha imenyu';
 
   @override
   String get modalBarrierDismissLabel => 'Cashisa';
@@ -42997,10 +47381,16 @@ class MaterialLocalizationZu extends GlobalMaterialLocalizations {
   String get searchFieldLabel => 'Sesha';
 
   @override
+  String get searchWebButtonLabel => 'Sesha Iwebhu';
+
+  @override
   String get selectAllButtonLabel => 'Khetha konke';
 
   @override
   String get selectYearSemanticsLabel => 'Khetha unyaka';
+
+  @override
+  String get selectedDateLabel => 'Okukhethiwe';
 
   @override
   String? get selectedRowCountTitleFew => null;
@@ -43019,6 +47409,9 @@ class MaterialLocalizationZu extends GlobalMaterialLocalizations {
 
   @override
   String? get selectedRowCountTitleZero => null;
+
+  @override
+  String get shareButtonLabel => 'Yabelana';
 
   @override
   String get showAccountsLabel => 'Bonisa ama-akhawunti';
@@ -43074,6 +47467,10 @@ class MaterialLocalizationZu extends GlobalMaterialLocalizations {
 /// See also:
 ///
 ///  * [getMaterialTranslation], whose documentation describes these values.
+@Deprecated(
+  'Use kMaterialSupportedLanguages from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 final Set<String> kMaterialSupportedLanguages = HashSet<String>.from(const <String>[
   'af', // Afrikaans
   'am', // Amharic
@@ -43083,6 +47480,7 @@ final Set<String> kMaterialSupportedLanguages = HashSet<String>.from(const <Stri
   'be', // Belarusian
   'bg', // Bulgarian
   'bn', // Bengali Bangla
+  'bo', // Tibetan
   'bs', // Bosnian
   'ca', // Catalan Valencian
   'cs', // Czech
@@ -43098,6 +47496,7 @@ final Set<String> kMaterialSupportedLanguages = HashSet<String>.from(const <Stri
   'fi', // Finnish
   'fil', // Filipino Pilipino
   'fr', // French
+  'ga', // Irish
   'gl', // Galician
   'gsw', // Swiss German Alemannic Alsatian
   'gu', // Gujarati
@@ -43148,6 +47547,7 @@ final Set<String> kMaterialSupportedLanguages = HashSet<String>.from(const <Stri
   'th', // Thai
   'tl', // Tagalog
   'tr', // Turkish
+  'ug', // Uighur Uyghur
   'uk', // Ukrainian
   'ur', // Urdu
   'uz', // Uzbek
@@ -43174,6 +47574,7 @@ final Set<String> kMaterialSupportedLanguages = HashSet<String>.from(const <Stri
 ///  * `be` - Belarusian
 ///  * `bg` - Bulgarian
 ///  * `bn` - Bengali Bangla
+///  * `bo` - Tibetan
 ///  * `bs` - Bosnian
 ///  * `ca` - Catalan Valencian
 ///  * `cs` - Czech
@@ -43189,6 +47590,7 @@ final Set<String> kMaterialSupportedLanguages = HashSet<String>.from(const <Stri
 ///  * `fi` - Finnish
 ///  * `fil` - Filipino Pilipino
 ///  * `fr` - French (plus one country variation)
+///  * `ga` - Irish
 ///  * `gl` - Galician
 ///  * `gsw` - Swiss German Alemannic Alsatian
 ///  * `gu` - Gujarati
@@ -43239,6 +47641,7 @@ final Set<String> kMaterialSupportedLanguages = HashSet<String>.from(const <Stri
 ///  * `th` - Thai
 ///  * `tl` - Tagalog
 ///  * `tr` - Turkish
+///  * `ug` - Uighur Uyghur
 ///  * `uk` - Ukrainian
 ///  * `ur` - Urdu
 ///  * `uz` - Uzbek
@@ -43249,6 +47652,10 @@ final Set<String> kMaterialSupportedLanguages = HashSet<String>.from(const <Stri
 ///
 /// Generally speaking, this method is only intended to be used by
 /// [GlobalMaterialLocalizations.delegate].
+@Deprecated(
+  'Use getMaterialTranslation from package:material_ui/material_ui.dart instead. '
+  'This feature was deprecated after v3.47.0-0.0.pre.',
+)
 GlobalMaterialLocalizations? getMaterialTranslation(
   Locale locale,
   intl.DateFormat fullYearFormat,
@@ -43278,6 +47685,8 @@ GlobalMaterialLocalizations? getMaterialTranslation(
       return MaterialLocalizationBg(fullYearFormat: fullYearFormat, compactDateFormat: compactDateFormat, shortDateFormat: shortDateFormat, mediumDateFormat: mediumDateFormat, longDateFormat: longDateFormat, yearMonthFormat: yearMonthFormat, shortMonthDayFormat: shortMonthDayFormat, decimalFormat: decimalFormat, twoDigitZeroPaddedFormat: twoDigitZeroPaddedFormat);
     case 'bn':
       return MaterialLocalizationBn(fullYearFormat: fullYearFormat, compactDateFormat: compactDateFormat, shortDateFormat: shortDateFormat, mediumDateFormat: mediumDateFormat, longDateFormat: longDateFormat, yearMonthFormat: yearMonthFormat, shortMonthDayFormat: shortMonthDayFormat, decimalFormat: decimalFormat, twoDigitZeroPaddedFormat: twoDigitZeroPaddedFormat);
+    case 'bo':
+      return MaterialLocalizationBo(fullYearFormat: fullYearFormat, compactDateFormat: compactDateFormat, shortDateFormat: shortDateFormat, mediumDateFormat: mediumDateFormat, longDateFormat: longDateFormat, yearMonthFormat: yearMonthFormat, shortMonthDayFormat: shortMonthDayFormat, decimalFormat: decimalFormat, twoDigitZeroPaddedFormat: twoDigitZeroPaddedFormat);
     case 'bs':
       return MaterialLocalizationBs(fullYearFormat: fullYearFormat, compactDateFormat: compactDateFormat, shortDateFormat: shortDateFormat, mediumDateFormat: mediumDateFormat, longDateFormat: longDateFormat, yearMonthFormat: yearMonthFormat, shortMonthDayFormat: shortMonthDayFormat, decimalFormat: decimalFormat, twoDigitZeroPaddedFormat: twoDigitZeroPaddedFormat);
     case 'ca':
@@ -43380,6 +47789,8 @@ GlobalMaterialLocalizations? getMaterialTranslation(
       }
       return MaterialLocalizationFr(fullYearFormat: fullYearFormat, compactDateFormat: compactDateFormat, shortDateFormat: shortDateFormat, mediumDateFormat: mediumDateFormat, longDateFormat: longDateFormat, yearMonthFormat: yearMonthFormat, shortMonthDayFormat: shortMonthDayFormat, decimalFormat: decimalFormat, twoDigitZeroPaddedFormat: twoDigitZeroPaddedFormat);
     }
+    case 'ga':
+      return MaterialLocalizationGa(fullYearFormat: fullYearFormat, compactDateFormat: compactDateFormat, shortDateFormat: shortDateFormat, mediumDateFormat: mediumDateFormat, longDateFormat: longDateFormat, yearMonthFormat: yearMonthFormat, shortMonthDayFormat: shortMonthDayFormat, decimalFormat: decimalFormat, twoDigitZeroPaddedFormat: twoDigitZeroPaddedFormat);
     case 'gl':
       return MaterialLocalizationGl(fullYearFormat: fullYearFormat, compactDateFormat: compactDateFormat, shortDateFormat: shortDateFormat, mediumDateFormat: mediumDateFormat, longDateFormat: longDateFormat, yearMonthFormat: yearMonthFormat, shortMonthDayFormat: shortMonthDayFormat, decimalFormat: decimalFormat, twoDigitZeroPaddedFormat: twoDigitZeroPaddedFormat);
     case 'gsw':
@@ -43494,6 +47905,8 @@ GlobalMaterialLocalizations? getMaterialTranslation(
       return MaterialLocalizationTl(fullYearFormat: fullYearFormat, compactDateFormat: compactDateFormat, shortDateFormat: shortDateFormat, mediumDateFormat: mediumDateFormat, longDateFormat: longDateFormat, yearMonthFormat: yearMonthFormat, shortMonthDayFormat: shortMonthDayFormat, decimalFormat: decimalFormat, twoDigitZeroPaddedFormat: twoDigitZeroPaddedFormat);
     case 'tr':
       return MaterialLocalizationTr(fullYearFormat: fullYearFormat, compactDateFormat: compactDateFormat, shortDateFormat: shortDateFormat, mediumDateFormat: mediumDateFormat, longDateFormat: longDateFormat, yearMonthFormat: yearMonthFormat, shortMonthDayFormat: shortMonthDayFormat, decimalFormat: decimalFormat, twoDigitZeroPaddedFormat: twoDigitZeroPaddedFormat);
+    case 'ug':
+      return MaterialLocalizationUg(fullYearFormat: fullYearFormat, compactDateFormat: compactDateFormat, shortDateFormat: shortDateFormat, mediumDateFormat: mediumDateFormat, longDateFormat: longDateFormat, yearMonthFormat: yearMonthFormat, shortMonthDayFormat: shortMonthDayFormat, decimalFormat: decimalFormat, twoDigitZeroPaddedFormat: twoDigitZeroPaddedFormat);
     case 'uk':
       return MaterialLocalizationUk(fullYearFormat: fullYearFormat, compactDateFormat: compactDateFormat, shortDateFormat: shortDateFormat, mediumDateFormat: mediumDateFormat, longDateFormat: longDateFormat, yearMonthFormat: yearMonthFormat, shortMonthDayFormat: shortMonthDayFormat, decimalFormat: decimalFormat, twoDigitZeroPaddedFormat: twoDigitZeroPaddedFormat);
     case 'ur':

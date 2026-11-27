@@ -1,0 +1,283 @@
+// Copyright 2014 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import 'package:file/memory.dart';
+import 'package:flutter_tools/src/base/config.dart';
+import 'package:flutter_tools/src/reporting/unified_analytics.dart';
+import 'package:unified_analytics/unified_analytics.dart';
+
+import '../src/common.dart';
+import '../src/fakes.dart';
+
+void main() {
+  const userBranch = 'abc123';
+  const clientIde = 'VSCode';
+
+  late MemoryFileSystem fs;
+  late Config config;
+  late FakeAnalytics analyticsOverride;
+
+  setUp(() {
+    fs = MemoryFileSystem.test();
+    config = Config.test();
+
+    analyticsOverride = getInitializedFakeAnalyticsInstance(
+      fs: fs,
+      fakeFlutterVersion: FakeFlutterVersion(branch: userBranch),
+      clientIde: clientIde,
+    );
+  });
+
+  group('Unit testing util:', () {
+    test('getEnabledFeatures is null', () {
+      final String? enabledFeatures = getEnabledFeatures(config);
+      expect(enabledFeatures, isNull);
+    });
+
+    test('getEnabledFeatures not null', () {
+      config.setValue('cli-animations', true);
+
+      final String? enabledFeatures = getEnabledFeatures(config);
+      expect(enabledFeatures, isNotNull);
+      expect(enabledFeatures!.split(','), unorderedEquals(<String>['cli-animations']));
+    });
+  });
+
+  group('Unit testing getAnalytics', () {
+    test('Successfully creates the instance for standard branch', () {
+      final Analytics analytics = getAnalytics(
+        runningOnBot: false,
+        flutterVersion: FakeFlutterVersion(),
+        environment: const <String, String>{},
+        analyticsOverride: analyticsOverride,
+        clientIde: clientIde,
+        config: config,
+      );
+
+      expect(
+        analytics.clientId,
+        isNot(NoOpAnalytics.staticClientId),
+        reason: 'The CLIENT ID should be a randomly generated id',
+      );
+      expect(analytics, isNot(isA<NoOpAnalytics>()));
+    });
+
+    test('NoOp instance for user branch', () {
+      final Analytics analytics = getAnalytics(
+        runningOnBot: false,
+        flutterVersion: FakeFlutterVersion(
+          branch: userBranch,
+          frameworkRevision: '3.14.0-14.0.pre.370',
+        ),
+        environment: const <String, String>{},
+        analyticsOverride: analyticsOverride,
+        clientIde: clientIde,
+        config: config,
+      );
+
+      expect(
+        analytics.clientId,
+        NoOpAnalytics.staticClientId,
+        reason: 'The client ID should match the NoOp client id',
+      );
+      expect(analytics, isA<NoOpAnalytics>());
+    });
+
+    test('NoOp instance for unknown branch', () {
+      final Analytics analytics = getAnalytics(
+        runningOnBot: false,
+        flutterVersion: FakeFlutterVersion(frameworkRevision: 'unknown'),
+        environment: const <String, String>{},
+        analyticsOverride: analyticsOverride,
+        clientIde: clientIde,
+        config: config,
+      );
+
+      expect(
+        analytics.clientId,
+        NoOpAnalytics.staticClientId,
+        reason: 'The client ID should match the NoOp client id',
+      );
+      expect(analytics, isA<NoOpAnalytics>());
+    });
+
+    test('NoOp instance when running on bots', () {
+      final Analytics analytics = getAnalytics(
+        runningOnBot: true,
+        flutterVersion: FakeFlutterVersion(),
+        environment: const <String, String>{},
+        analyticsOverride: analyticsOverride,
+        clientIde: clientIde,
+        config: config,
+      );
+
+      expect(
+        analytics.clientId,
+        NoOpAnalytics.staticClientId,
+        reason: 'The client ID should match the NoOp client id',
+      );
+      expect(analytics, isA<NoOpAnalytics>());
+    });
+
+    test('NoOp instance when suppressing via env variable', () {
+      final Analytics analytics = getAnalytics(
+        runningOnBot: false,
+        flutterVersion: FakeFlutterVersion(),
+        environment: const <String, String>{'FLUTTER_SUPPRESS_ANALYTICS': 'true'},
+        analyticsOverride: analyticsOverride,
+        clientIde: clientIde,
+        config: config,
+      );
+
+      expect(
+        analytics.clientId,
+        NoOpAnalytics.staticClientId,
+        reason: 'The client ID should match the NoOp client id',
+      );
+      expect(analytics, isA<NoOpAnalytics>());
+    });
+
+    test('NoOp instance when suppressed by an inherited DASH__SUPPRESS_ANALYTICS', () {
+      final Analytics analytics = getAnalytics(
+        runningOnBot: false,
+        flutterVersion: FakeFlutterVersion(),
+        environment: <String, String>{DashEnvVar.suppressAnalytics.name: 'true'},
+        analyticsOverride: analyticsOverride,
+        clientIde: clientIde,
+        config: config,
+      );
+
+      expect(
+        analytics.clientId,
+        NoOpAnalytics.staticClientId,
+        reason: 'The client ID should match the NoOp client id',
+      );
+      expect(analytics, isA<NoOpAnalytics>());
+    });
+
+    for (final value in const <String>['false', 'TRUE', '1', '']) {
+      test('DASH__SUPPRESS_ANALYTICS="$value" does not suppress analytics', () {
+        final Analytics analytics = getAnalytics(
+          runningOnBot: false,
+          flutterVersion: FakeFlutterVersion(),
+          environment: <String, String>{DashEnvVar.suppressAnalytics.name: value},
+          analyticsOverride: analyticsOverride,
+          clientIde: clientIde,
+          config: config,
+        );
+
+        expect(analytics, isNot(isA<NoOpAnalytics>()));
+      });
+    }
+
+    test('DASH__SUPPRESS_ANALYTICS takes precedence over the AI agent bot exemption', () {
+      final Analytics analytics = getAnalytics(
+        runningOnBot: true,
+        flutterVersion: FakeFlutterVersion(),
+        environment: <String, String>{'CLAUDECODE': '1', DashEnvVar.suppressAnalytics.name: 'true'},
+        analyticsOverride: analyticsOverride,
+        clientIde: clientIde,
+        config: config,
+      );
+
+      expect(analytics, isA<NoOpAnalytics>());
+    });
+
+    test('either suppression env variable suppresses when the other is false', () {
+      for (final environment in <Map<String, String>>[
+        <String, String>{
+          'FLUTTER_SUPPRESS_ANALYTICS': 'false',
+          DashEnvVar.suppressAnalytics.name: 'true',
+        },
+        <String, String>{
+          'FLUTTER_SUPPRESS_ANALYTICS': 'true',
+          DashEnvVar.suppressAnalytics.name: 'false',
+        },
+      ]) {
+        final Analytics analytics = getAnalytics(
+          runningOnBot: false,
+          flutterVersion: FakeFlutterVersion(),
+          environment: environment,
+          analyticsOverride: analyticsOverride,
+          clientIde: clientIde,
+          config: config,
+        );
+
+        expect(analytics, isA<NoOpAnalytics>(), reason: 'environment: $environment');
+      }
+    });
+
+    test('Suppression prevents events from being sent', () {
+      expect(analyticsOverride.okToSend, true);
+      analyticsOverride.send(Event.surveyShown(surveyId: 'surveyId'));
+      expect(analyticsOverride.sentEvents, hasLength(1));
+
+      analyticsOverride.suppressTelemetry();
+      expect(analyticsOverride.okToSend, false);
+      analyticsOverride.send(Event.surveyShown(surveyId: 'surveyId'));
+
+      expect(analyticsOverride.sentEvents, hasLength(1));
+    });
+
+    test('Client IDE is passed and found in events', () {
+      final Analytics analytics = getAnalytics(
+        runningOnBot: false,
+        flutterVersion: FakeFlutterVersion(),
+        environment: const <String, String>{},
+        analyticsOverride: analyticsOverride,
+        clientIde: clientIde,
+        config: config,
+      );
+      analytics as FakeAnalytics;
+
+      expect(analytics.userProperty.clientIde, 'VSCode');
+    });
+
+    test('getAnalytics bypasses bot check when running on bots if run by an AI agent', () {
+      // Normally returns NoOpAnalytics when running on bot
+      final Analytics analyticsNormalBot = getAnalytics(
+        runningOnBot: true,
+        flutterVersion: FakeFlutterVersion(),
+        environment: const <String, String>{},
+        analyticsOverride: analyticsOverride,
+        clientIde: clientIde,
+        config: config,
+      );
+      expect(analyticsNormalBot, isA<NoOpAnalytics>());
+
+      // Bypasses NoOpAnalytics check and returns analyticsOverride when AI agent is detected
+      final Analytics analyticsAgentBot = getAnalytics(
+        runningOnBot: true,
+        flutterVersion: FakeFlutterVersion(),
+        environment: const <String, String>{'CLAUDECODE': '1'},
+        analyticsOverride: analyticsOverride,
+        clientIde: clientIde,
+        config: config,
+      );
+      expect(analyticsAgentBot, isNot(isA<NoOpAnalytics>()));
+      expect(analyticsAgentBot, equals(analyticsOverride));
+    });
+
+    test('Agent is passed and found in events', () {
+      final FakeAnalytics fakeAnalytics = getInitializedFakeAnalyticsInstance(
+        fs: fs,
+        fakeFlutterVersion: FakeFlutterVersion(),
+        clientIde: clientIde,
+        agent: 'Claude Code',
+      );
+
+      final Analytics analytics = getAnalytics(
+        runningOnBot: false,
+        flutterVersion: FakeFlutterVersion(),
+        environment: const <String, String>{},
+        analyticsOverride: fakeAnalytics,
+        clientIde: clientIde,
+        config: config,
+      );
+      analytics as FakeAnalytics;
+
+      expect(analytics.userProperty.aiAgent, 'Claude Code');
+    });
+  });
+}

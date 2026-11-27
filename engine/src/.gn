@@ -1,0 +1,29 @@
+# This file is used by the experimental meta-buildsystem in src/tools/gn to
+# find the root of the source tree and to set startup options.
+
+# Use the hermetic Python from DEPS for exec_script() and action() calls. Engine
+# GN scripts only need the standard library, and invoking vpython3 for every
+# action contends on its virtualenv store under high Ninja parallelism.
+# See `gn help dotfile` for details.
+script_executable = "//flutter/third_party/cpython3/bin/python3"
+
+# The location of the build configuration file.
+buildconfig = "//build/config/BUILDCONFIG.gn"
+
+# The secondary source root is a parallel directory tree where
+# GN build files are placed when they can not be placed directly
+# in the source tree, e.g. for third party source trees.
+secondary_source = "//flutter/build/secondary/"
+
+# The set of targets known to pass 'gn check'. When all targets pass, remove
+# this.
+check_targets = [
+  "//flutter/common/*",
+  "//flutter/display_list/*",
+  "//flutter/flow/*",
+  "//flutter/fml/*",
+  "//flutter/lib/*",
+  "//flutter/impeller/*",
+  "//flutter/runtime/*",
+  "//flutter/shell/*",
+]

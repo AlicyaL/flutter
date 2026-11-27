@@ -5,14 +5,18 @@
 import 'template.dart';
 
 class TabsTemplate extends TokenTemplate {
-  const TabsTemplate(super.blockName, super.fileName, super.tokens, {
+  const TabsTemplate(
+    super.blockName,
+    super.fileName,
+    super.tokens, {
     super.colorSchemePrefix = '_colors.',
     super.textThemePrefix = '_textTheme.',
   });
 
   @override
-  String generate() => '''
-class _${blockName}PrimaryDefaultsM3 extends TabBarTheme {
+  String generate() =>
+      '''
+class _${blockName}PrimaryDefaultsM3 extends TabBarThemeData {
   _${blockName}PrimaryDefaultsM3(this.context, this.isScrollable)
     : super(indicatorSize: TabBarIndicatorSize.label);
 
@@ -21,8 +25,13 @@ class _${blockName}PrimaryDefaultsM3 extends TabBarTheme {
   late final TextTheme _textTheme = Theme.of(context).textTheme;
   final bool isScrollable;
 
+  // This value comes from Divider widget defaults. Token db deprecated 'primary-navigation-tab.divider.color' token.
   @override
-  Color? get dividerColor => ${componentColor("md.comp.primary-navigation-tab.divider")};
+  Color? get dividerColor => ${componentColor("md.comp.divider")};
+
+  // This value comes from Divider widget defaults. Token db deprecated 'primary-navigation-tab.divider.height' token.
+  @override
+  double? get dividerHeight => ${getToken("md.comp.divider.thickness")};
 
   @override
   Color? get indicatorColor => ${componentColor("md.comp.primary-navigation-tab.active-indicator")};
@@ -40,27 +49,27 @@ class _${blockName}PrimaryDefaultsM3 extends TabBarTheme {
   TextStyle? get unselectedLabelStyle => ${textStyle("md.comp.primary-navigation-tab.with-label-text.label-text")};
 
   @override
-  MaterialStateProperty<Color?> get overlayColor {
-    return MaterialStateProperty.resolveWith((Set<MaterialState> states) {
-      if (states.contains(MaterialState.selected)) {
-        if (states.contains(MaterialState.pressed)) {
+  WidgetStateProperty<Color?> get overlayColor {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.selected)) {
+        if (states.contains(WidgetState.pressed)) {
           return ${componentColor('md.comp.primary-navigation-tab.active.pressed.state-layer')};
         }
-        if (states.contains(MaterialState.hovered)) {
+        if (states.contains(WidgetState.hovered)) {
           return ${componentColor('md.comp.primary-navigation-tab.active.hover.state-layer')};
         }
-        if (states.contains(MaterialState.focused)) {
+        if (states.contains(WidgetState.focused)) {
           return ${componentColor('md.comp.primary-navigation-tab.active.focus.state-layer')};
         }
         return null;
       }
-      if (states.contains(MaterialState.pressed)) {
+      if (states.contains(WidgetState.pressed)) {
         return ${componentColor('md.comp.primary-navigation-tab.inactive.pressed.state-layer')};
       }
-      if (states.contains(MaterialState.hovered)) {
+      if (states.contains(WidgetState.hovered)) {
         return ${componentColor('md.comp.primary-navigation-tab.inactive.hover.state-layer')};
       }
-      if (states.contains(MaterialState.focused)) {
+      if (states.contains(WidgetState.focused)) {
         return ${componentColor('md.comp.primary-navigation-tab.inactive.focus.state-layer')};
       }
       return null;
@@ -71,12 +80,22 @@ class _${blockName}PrimaryDefaultsM3 extends TabBarTheme {
   InteractiveInkFeatureFactory? get splashFactory => Theme.of(context).splashFactory;
 
   @override
-  TabAlignment? get tabAlignment => isScrollable ? TabAlignment.start : TabAlignment.fill;
+  TabAlignment? get tabAlignment => isScrollable ? TabAlignment.startOffset : TabAlignment.fill;
 
-  static double indicatorWeight = ${getToken('md.comp.primary-navigation-tab.active-indicator.height')};
+  static double indicatorWeight(TabBarIndicatorSize indicatorSize) {
+    return switch (indicatorSize) {
+      TabBarIndicatorSize.label => ${getToken('md.comp.primary-navigation-tab.active-indicator.height')},
+      TabBarIndicatorSize.tab   => ${getToken('md.comp.secondary-navigation-tab.active-indicator.height')},
+    };
+  }
+
+  // TODO(davidmartos96): This value doesn't currently exist in
+  // https://m3.material.io/components/tabs/specs
+  // Update this when the token is available.
+  static const EdgeInsetsGeometry iconMargin = EdgeInsets.only(bottom: 2);
 }
 
-class _${blockName}SecondaryDefaultsM3 extends TabBarTheme {
+class _${blockName}SecondaryDefaultsM3 extends TabBarThemeData {
   _${blockName}SecondaryDefaultsM3(this.context, this.isScrollable)
     : super(indicatorSize: TabBarIndicatorSize.tab);
 
@@ -85,11 +104,16 @@ class _${blockName}SecondaryDefaultsM3 extends TabBarTheme {
   late final TextTheme _textTheme = Theme.of(context).textTheme;
   final bool isScrollable;
 
+  // This value comes from Divider widget defaults. Token db deprecated 'secondary-navigation-tab.divider.color' token.
   @override
-  Color? get dividerColor => ${componentColor("md.comp.secondary-navigation-tab.divider")};
+  Color? get dividerColor => ${componentColor("md.comp.divider")};
+
+  // This value comes from Divider widget defaults. Token db deprecated 'secondary-navigation-tab.divider.height' token.
+  @override
+  double? get dividerHeight => ${getToken("md.comp.divider.thickness")};
 
   @override
-  Color? get indicatorColor => ${componentColor("md.comp.primary-navigation-tab.active-indicator")};
+  Color? get indicatorColor => ${componentColor("md.comp.secondary-navigation-tab.active-indicator")};
 
   @override
   Color? get labelColor => ${componentColor("md.comp.secondary-navigation-tab.active.label-text")};
@@ -104,27 +128,27 @@ class _${blockName}SecondaryDefaultsM3 extends TabBarTheme {
   TextStyle? get unselectedLabelStyle => ${textStyle("md.comp.secondary-navigation-tab.label-text")};
 
   @override
-  MaterialStateProperty<Color?> get overlayColor {
-    return MaterialStateProperty.resolveWith((Set<MaterialState> states) {
-      if (states.contains(MaterialState.selected)) {
-        if (states.contains(MaterialState.pressed)) {
+  WidgetStateProperty<Color?> get overlayColor {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      if (states.contains(WidgetState.selected)) {
+        if (states.contains(WidgetState.pressed)) {
           return ${componentColor('md.comp.secondary-navigation-tab.pressed.state-layer')};
         }
-        if (states.contains(MaterialState.hovered)) {
+        if (states.contains(WidgetState.hovered)) {
           return ${componentColor('md.comp.secondary-navigation-tab.hover.state-layer')};
         }
-        if (states.contains(MaterialState.focused)) {
+        if (states.contains(WidgetState.focused)) {
           return ${componentColor('md.comp.secondary-navigation-tab.focus.state-layer')};
         }
         return null;
       }
-      if (states.contains(MaterialState.pressed)) {
+      if (states.contains(WidgetState.pressed)) {
         return ${componentColor('md.comp.secondary-navigation-tab.pressed.state-layer')};
       }
-      if (states.contains(MaterialState.hovered)) {
+      if (states.contains(WidgetState.hovered)) {
         return ${componentColor('md.comp.secondary-navigation-tab.hover.state-layer')};
       }
-      if (states.contains(MaterialState.focused)) {
+      if (states.contains(WidgetState.focused)) {
         return ${componentColor('md.comp.secondary-navigation-tab.focus.state-layer')};
       }
       return null;
@@ -135,8 +159,9 @@ class _${blockName}SecondaryDefaultsM3 extends TabBarTheme {
   InteractiveInkFeatureFactory? get splashFactory => Theme.of(context).splashFactory;
 
   @override
-  TabAlignment? get tabAlignment => isScrollable ? TabAlignment.start : TabAlignment.fill;
+  TabAlignment? get tabAlignment => isScrollable ? TabAlignment.startOffset : TabAlignment.fill;
+
+  static double indicatorWeight = ${getToken('md.comp.secondary-navigation-tab.active-indicator.height')};
 }
 ''';
-
 }

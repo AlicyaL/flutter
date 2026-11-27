@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'text_input.dart';
+library;
+
 import 'system_channels.dart';
 
 /// Utility methods for interacting with the system's Live Text.
@@ -12,11 +15,7 @@ import 'system_channels.dart';
 /// See also:
 ///  * <https://developer.apple.com/documentation/uikit/uiresponder/3778577-capturetextfromcamera>
 ///  * <https://support.apple.com/guide/iphone/use-live-text-iphcf0b71b0e/ios>
-class LiveText {
-  // This class is not meant to be instantiated or extended; this constructor
-  // prevents instantiation and extension.
-  LiveText._();
-
+abstract final class LiveText {
   /// Returns true if the Live Text input feature is available on the current device.
   static Future<bool> isLiveTextInputAvailable() async {
     final bool supportLiveTextInput =
@@ -29,7 +28,7 @@ class LiveText {
   /// If any [TextInputConnection] is currently active, calling this method will tell the text field
   /// to start Live Text input. If the current device doesn't support Live Text input,
   /// nothing will happen.
-  static void startLiveTextInput() {
-    SystemChannels.textInput.invokeMethod('TextInput.startLiveTextInput');
+  static Future<void> startLiveTextInput() async {
+    await SystemChannels.textInput.invokeMethod<void>('TextInput.startLiveTextInput');
   }
 }

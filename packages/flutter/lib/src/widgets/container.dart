@@ -2,6 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/// @docImport 'package:flutter/material.dart';
+///
+/// @docImport 'decorated_sliver.dart';
+/// @docImport 'implicit_animations.dart';
+/// @docImport 'transitions.dart';
+library;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
@@ -56,8 +63,7 @@ import 'image.dart';
 class DecoratedBox extends SingleChildRenderObjectWidget {
   /// Creates a widget that paints a [Decoration].
   ///
-  /// The [decoration] and [position] arguments must not be null. By default the
-  /// decoration paints behind the child.
+  /// By default the decoration paints behind the child.
   const DecoratedBox({
     super.key,
     required this.decoration,
@@ -93,14 +99,13 @@ class DecoratedBox extends SingleChildRenderObjectWidget {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    final String label;
-    switch (position) {
-      case DecorationPosition.background:
-        label = 'bg';
-      case DecorationPosition.foreground:
-        label = 'fg';
-    }
-    properties.add(EnumProperty<DecorationPosition>('position', position, level: DiagnosticLevel.hidden));
+    final String label = switch (position) {
+      DecorationPosition.background => 'bg',
+      DecorationPosition.foreground => 'fg',
+    };
+    properties.add(
+      EnumProperty<DecorationPosition>('position', position, level: DiagnosticLevel.hidden),
+    );
     properties.add(DiagnosticsProperty<Decoration>(label, decoration));
   }
 }
@@ -236,8 +241,8 @@ class DecoratedBox extends SingleChildRenderObjectWidget {
 ///  * [Border], which has a sample which uses [Container] heavily.
 ///  * [Ink], which paints a [Decoration] on a [Material], allowing
 ///    [InkResponse] and [InkWell] splashes to paint over them.
-///  * Cookbook: [Animate the properties of a container](https://flutter.dev/docs/cookbook/animation/animated-container)
-///  * The [catalog of layout widgets](https://flutter.dev/widgets/layout/).
+///  * Cookbook: [Animate the properties of a container](https://docs.flutter.dev/cookbook/animation/animated-container)
+///  * The [catalog of layout widgets](https://docs.flutter.dev/ui/widgets/layout).
 class Container extends StatelessWidget {
   /// Creates a widget that combines common painting, positioning, and sizing widgets.
   ///
@@ -252,6 +257,7 @@ class Container extends StatelessWidget {
     this.alignment,
     this.padding,
     this.color,
+    this.isAntiAlias = true,
     this.decoration,
     this.foregroundDecoration,
     double? width,
@@ -267,15 +273,16 @@ class Container extends StatelessWidget {
        assert(decoration == null || decoration.debugAssertIsValid()),
        assert(constraints == null || constraints.debugAssertIsValid()),
        assert(decoration != null || clipBehavior == Clip.none),
-       assert(color == null || decoration == null,
-         'Cannot provide both a color and a decoration\n'
-         'To provide both, use "decoration: BoxDecoration(color: color)".',
+       assert(
+         color == null || decoration == null,
+         'Cannot provide both a color and a decoration.\n'
+         'The color argument is just a shorthand for "decoration: BoxDecoration(color: color)".\n'
+         'To use both a color and other decoration properties, set the color in the BoxDecoration instead.',
        ),
-       constraints =
-        (width != null || height != null)
-          ? constraints?.tighten(width: width, height: height)
-            ?? BoxConstraints.tightFor(width: width, height: height)
-          : constraints;
+       constraints = (width != null || height != null)
+           ? constraints?.tighten(width: width, height: height) ??
+                 BoxConstraints.tightFor(width: width, height: height)
+           : constraints;
 
   /// The [child] contained by the container.
   ///
@@ -320,6 +327,9 @@ class Container extends StatelessWidget {
   /// color may still be painted by the [decoration] even if this property is
   /// null.
   final Color? color;
+
+  /// {@macro flutter.widgets.ColoredBox.isAntiAlias}
+  final bool isAntiAlias;
 
   /// The decoration to paint behind the [child].
   ///
@@ -366,14 +376,11 @@ class Container extends StatelessWidget {
   final Clip clipBehavior;
 
   EdgeInsetsGeometry? get _paddingIncludingDecoration {
-    if (decoration == null) {
-      return padding;
-    }
-    final EdgeInsetsGeometry decorationPadding = decoration!.padding;
-    if (padding == null) {
-      return decorationPadding;
-    }
-    return padding!.add(decorationPadding);
+    return switch ((padding, decoration?.padding)) {
+      (null, final EdgeInsetsGeometry? padding) => padding,
+      (final EdgeInsetsGeometry? padding, null) => padding,
+      (_) => padding!.add(decoration!.padding),
+    };
   }
 
   @override
@@ -396,7 +403,7 @@ class Container extends StatelessWidget {
     }
 
     if (color != null) {
-      current = ColoredBox(color: color!, child: current);
+      current = ColoredBox(color: color!, isAntiAlias: isAntiAlias, child: current);
     }
 
     if (clipBehavior != Clip.none) {
@@ -441,16 +448,27 @@ class Container extends StatelessWidget {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    properties.add(DiagnosticsProperty<AlignmentGeometry>('alignment', alignment, showName: false, defaultValue: null));
+    properties.add(
+      DiagnosticsProperty<AlignmentGeometry>(
+        'alignment',
+        alignment,
+        showName: false,
+        defaultValue: null,
+      ),
+    );
     properties.add(DiagnosticsProperty<EdgeInsetsGeometry>('padding', padding, defaultValue: null));
-    properties.add(DiagnosticsProperty<Clip>('clipBehavior', clipBehavior, defaultValue: Clip.none));
+    properties.add(
+      DiagnosticsProperty<Clip>('clipBehavior', clipBehavior, defaultValue: Clip.none),
+    );
     if (color != null) {
       properties.add(DiagnosticsProperty<Color>('bg', color));
     } else {
       properties.add(DiagnosticsProperty<Decoration>('bg', decoration, defaultValue: null));
     }
     properties.add(DiagnosticsProperty<Decoration>('fg', foregroundDecoration, defaultValue: null));
-    properties.add(DiagnosticsProperty<BoxConstraints>('constraints', constraints, defaultValue: null));
+    properties.add(
+      DiagnosticsProperty<BoxConstraints>('constraints', constraints, defaultValue: null),
+    );
     properties.add(DiagnosticsProperty<EdgeInsetsGeometry>('margin', margin, defaultValue: null));
     properties.add(ObjectFlagProperty<Matrix4>.has('transform', transform));
   }
@@ -458,10 +476,8 @@ class Container extends StatelessWidget {
 
 /// A clipper that uses [Decoration.getClipPath] to clip.
 class _DecorationClipper extends CustomClipper<Path> {
-  _DecorationClipper({
-    TextDirection? textDirection,
-    required this.decoration,
-  }) : textDirection = textDirection ?? TextDirection.ltr;
+  _DecorationClipper({TextDirection? textDirection, required this.decoration})
+    : textDirection = textDirection ?? TextDirection.ltr;
 
   final TextDirection textDirection;
   final Decoration decoration;
@@ -473,7 +489,6 @@ class _DecorationClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(_DecorationClipper oldClipper) {
-    return oldClipper.decoration != decoration
-        || oldClipper.textDirection != textDirection;
+    return oldClipper.decoration != decoration || oldClipper.textDirection != textDirection;
   }
 }

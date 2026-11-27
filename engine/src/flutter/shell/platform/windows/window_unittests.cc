@@ -1,0 +1,1031 @@
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#include <array>
+
+#include "flutter/fml/macros.h"
+#include "flutter/shell/platform/windows/testing/mock_direct_manipulation.h"
+#include "flutter/shell/platform/windows/testing/mock_text_input_manager.h"
+#include "flutter/shell/platform/windows/testing/mock_window.h"
+#include "flutter/shell/platform/windows/testing/mock_windows_proc_table.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+
+using testing::_;
+using testing::Eq;
+using testing::InSequence;
+using testing::Invoke;
+using testing::Return;
+
+namespace flutter {
+namespace testing {
+
+namespace {
+
+// Runs the real TextInputManager logic, mocking only the strings read from IMM.
+class MockImmTextInputManager : public TextInputManager {
+ public:
+  MockImmTextInputManager() = default;
+  ~MockImmTextInputManager() override = default;
+
+  MOCK_METHOD(std::optional<std::u16string>,
+              ReadImmString,
+              (int),
+              (const, override));
+
+ private:
+  FML_DISALLOW_COPY_AND_ASSIGN(MockImmTextInputManager);
+};
+
+}  // namespace
+
+TEST(MockWindow, CreateDestroy) {
+  MockWindow window;
+  ASSERT_TRUE(TRUE);
+}
+
+TEST(MockWindow, GetDpiAfterCreate) {
+  MockWindow window;
+  ASSERT_TRUE(window.GetDpi() > 0);
+}
+
+TEST(MockWindow, VerticalScroll) {
+  MockWindow window;
+  const int scroll_amount = 10;
+  // Vertical scroll should be passed along, adjusted for scroll tick size
+  // and direction.
+  EXPECT_CALL(window, OnScroll(0, -scroll_amount / 120.0,
+                               kFlutterPointerDeviceKindMouse, 0))
+      .Times(1);
+
+  window.InjectWindowMessage(WM_MOUSEWHEEL, MAKEWPARAM(0, scroll_amount), 0);
+}
+
+TEST(MockWindow, OnImeCompositionCompose) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, GetComposingString())
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"nihao"))));
+  EXPECT_CALL(*text_input_manager, GetResultString())
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"`}"))));
+  EXPECT_CALL(*text_input_manager, GetComposingCursorPosition()).Times(0);
+
+  EXPECT_CALL(window, OnComposeBegin()).Times(1);
+  EXPECT_CALL(window, OnComposeChange(std::u16string(u"nihao"), 5)).Times(1);
+  EXPECT_CALL(window, OnComposeChange(std::u16string(u"`}"), 0)).Times(0);
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  // Start composing, then send an IME_COMPOSITION event that contains just the
+  // composition string.
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+}
+
+// The composing string is not readable while the IME window is inactive.
+TEST(MockWindow, OnImeCompositionComposeWhileImeInactiveIsIgnored) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(_)).Times(0);
+
+  EXPECT_CALL(window, OnComposeBegin()).Times(0);
+  EXPECT_CALL(window, OnComposeChange(_, _)).Times(0);
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  EXPECT_CALL(window, OnComposeEnd()).Times(0);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+}
+
+// A composing string that arrives without WM_IME_STARTCOMPOSITION begins a
+// composition. Otherwise the text input model would insert it twice.
+TEST(MockWindow, OnImeCompositionComposeWithoutStartBeginsComposition) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"nihao"))));
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"nihao"), 5)).Times(1);
+  }
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  EXPECT_CALL(window, OnComposeEnd()).Times(0);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  // WM_IME_SETCONTEXT activates the IME window without starting a composition.
+  window.InjectWindowMessage(WM_IME_SETCONTEXT, TRUE, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+}
+
+// Beginning the composition again would leave the composing text applied so
+// far behind as plain text.
+TEST(MockWindow, OnImeStartCompositionAfterImplicitBeginDoesNotBeginAgain) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u"n"))))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u"ni"))));
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"n"), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"ni"), 2)).Times(1);
+  }
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  EXPECT_CALL(window, OnComposeEnd()).Times(0);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(2);
+
+  window.InjectWindowMessage(WM_IME_SETCONTEXT, TRUE, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+}
+
+// The same holds for a WM_IME_STARTCOMPOSITION that arrives during a
+// composition, with no WM_IME_ENDCOMPOSITION before it.
+TEST(MockWindow, OnImeStartCompositionDuringCompositionDoesNotBeginAgain) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u"n"))))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u"ni"))));
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"n"), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"ni"), 2)).Times(1);
+  }
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  EXPECT_CALL(window, OnComposeEnd()).Times(0);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(2);
+
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+}
+
+// WM_IME_ENDCOMPOSITION may never arrive for a composition that was begun
+// implicitly, so it ends once no composing text is left.
+TEST(MockWindow, OnImeCompositionImplicitCompositionEndsWithResult) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  // The result leaves no composing text behind.
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u"ni"))))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u""))));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_RESULTSTR))
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"你"))));
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"ni"), 2)).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"你"), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeCommit()).Times(1);
+    EXPECT_CALL(window, OnComposeEnd()).Times(1);
+  }
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(2);
+
+  window.InjectWindowMessage(WM_IME_SETCONTEXT, TRUE, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_RESULTSTR);
+}
+
+// A message that does not carry the composing string, such as one that only
+// moves the cursor, does not mean that no composing text is left.
+TEST(MockWindow, OnImeCompositionImplicitCompositionContinuesWithoutCompStr) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"ni"))));
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"ni"), 2)).Times(1);
+  }
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  EXPECT_CALL(window, OnComposeEnd()).Times(0);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(2);
+
+  window.InjectWindowMessage(WM_IME_SETCONTEXT, TRUE, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_CURSORPOS);
+}
+
+// A result string that arrives with neither WM_IME_STARTCOMPOSITION nor
+// WM_IME_ENDCOMPOSITION is committed in a composition of its own.
+TEST(MockWindow, OnImeCompositionResultWithoutStartOrEndIsCommitted) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u""))));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_RESULTSTR))
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"x"))));
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"x"), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeCommit()).Times(1);
+    EXPECT_CALL(window, OnComposeEnd()).Times(1);
+  }
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  window.InjectWindowMessage(WM_IME_SETCONTEXT, TRUE, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_RESULTSTR);
+}
+
+// The IME window stays active after an implicitly begun composition ends, so
+// the next string is still read.
+TEST(MockWindow, OnImeCompositionResultAfterImplicitCompositionIsCommitted) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u""))));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_RESULTSTR))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u"x"))))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u"y"))));
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"x"), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeCommit()).Times(1);
+    EXPECT_CALL(window, OnComposeEnd()).Times(1);
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"y"), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeCommit()).Times(1);
+    EXPECT_CALL(window, OnComposeEnd()).Times(1);
+  }
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(2);
+
+  window.InjectWindowMessage(WM_IME_SETCONTEXT, TRUE, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_RESULTSTR);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_RESULTSTR);
+}
+
+// Regression test for https://github.com/flutter/flutter/issues/140739.
+TEST(MockWindow, OnImeCompositionDefaultsKoreanCursorToCompositionEnd) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, GetComposingString())
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"다"))));
+  EXPECT_CALL(*text_input_manager, GetComposingCursorPosition()).Times(0);
+
+  EXPECT_CALL(window, OnComposeBegin()).Times(1);
+  EXPECT_CALL(window, OnComposeChange(std::u16string(u"다"), 1)).Times(1);
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+}
+
+TEST(MockWindow, OnImeCompositionResult) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, GetComposingString())
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"nihao"))));
+  EXPECT_CALL(*text_input_manager, GetResultString())
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"`}"))));
+  EXPECT_CALL(*text_input_manager, GetComposingCursorPosition()).Times(0);
+
+  EXPECT_CALL(window, OnComposeBegin()).Times(1);
+  EXPECT_CALL(window, OnComposeChange(std::u16string(u"nihao"), 0)).Times(0);
+  EXPECT_CALL(window, OnComposeChange(std::u16string(u"`}"), 2)).Times(1);
+  EXPECT_CALL(window, OnComposeCommit()).Times(1);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  // Start composing, then send an IME_COMPOSITION event that contains just the
+  // result string.
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_RESULTSTR);
+}
+
+TEST(MockWindow, OnImeCompositionResultAndCompose) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+
+  // This situation is that Google Japanese Input finished composing "今日" in
+  // "今日は" but is still composing "は".
+  {
+    InSequence dummy;
+    EXPECT_CALL(*text_input_manager, GetResultString())
+        .WillRepeatedly(
+            Return(std::optional<std::u16string>(std::u16string(u"今日"))));
+    EXPECT_CALL(*text_input_manager, GetComposingString())
+        .WillRepeatedly(
+            Return(std::optional<std::u16string>(std::u16string(u"は"))));
+  }
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"今日"), 2)).Times(1);
+    EXPECT_CALL(window, OnComposeCommit()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"は"), 1)).Times(1);
+  }
+
+  EXPECT_CALL(*text_input_manager, GetComposingCursorPosition()).Times(0);
+
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  // Start composing, then send an IME_COMPOSITION event that contains both the
+  // result string and the composition string.
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0,
+                             GCS_COMPSTR | GCS_RESULTSTR);
+}
+
+// Regression test for https://github.com/flutter/flutter/issues/140537.
+// The legacy Microsoft Korean IME sends WM_IME_ENDCOMPOSITION before the result
+// string. In the 3-beolsik layouts that string also carries the space, digit or
+// punctuation that ended the composition.
+TEST(MockWindow, OnImeEndCompositionWaitsForQueuedResult) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, GetComposingString())
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"겨"))));
+  EXPECT_CALL(*text_input_manager, GetResultString())
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"겨 "))));
+  EXPECT_CALL(*text_input_manager, GetComposingCursorPosition()).Times(0);
+
+  // The result string is already queued when WM_IME_ENDCOMPOSITION arrives.
+  EXPECT_CALL(window, Win32PeekMessage(_, WM_IME_COMPOSITION,
+                                       WM_IME_COMPOSITION, PM_NOREMOVE))
+      .WillOnce([](LPMSG message, UINT, UINT, UINT) {
+        message->message = WM_IME_COMPOSITION;
+        message->lParam = GCS_RESULTSTR;
+        return TRUE;
+      });
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"겨"), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"겨 "), 2)).Times(1);
+    EXPECT_CALL(window, OnComposeCommit()).Times(1);
+    EXPECT_CALL(window, OnComposeEnd()).Times(1);
+  }
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(2);
+
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+  window.InjectWindowMessage(WM_IME_ENDCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_RESULTSTR);
+}
+
+// Regression test for https://github.com/flutter/flutter/issues/140537.
+// With nothing being composed, the 3-beolsik layouts of the legacy Microsoft
+// Korean IME send WM_IME_ENDCOMPOSITION and the result without
+// WM_IME_STARTCOMPOSITION.
+TEST(MockWindow, OnImeEndCompositionWithoutStartBeginsComposition) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, GetResultString())
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u" "))));
+  EXPECT_CALL(*text_input_manager, GetComposingCursorPosition()).Times(0);
+
+  // The result string is already queued when WM_IME_ENDCOMPOSITION arrives.
+  EXPECT_CALL(window, Win32PeekMessage(_, WM_IME_COMPOSITION,
+                                       WM_IME_COMPOSITION, PM_NOREMOVE))
+      .WillOnce([](LPMSG message, UINT, UINT, UINT) {
+        message->message = WM_IME_COMPOSITION;
+        message->lParam = GCS_RESULTSTR;
+        return TRUE;
+      });
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u" "), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeCommit()).Times(1);
+    EXPECT_CALL(window, OnComposeEnd()).Times(1);
+  }
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  window.InjectWindowMessage(WM_IME_ENDCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_RESULTSTR);
+}
+
+// Regression test for https://github.com/flutter/flutter/issues/140537.
+// Ending a composition deactivates the IME window, so the composition begun
+// for a following bare space must activate it again to read the result.
+TEST(MockWindow, OnImeCompositionResultAfterPreviousCompositionIsCommitted) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"가"))));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_RESULTSTR))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u"가 "))))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u" "))));
+
+  // The result string is queued behind both WM_IME_ENDCOMPOSITION messages.
+  EXPECT_CALL(window, Win32PeekMessage(_, WM_IME_COMPOSITION,
+                                       WM_IME_COMPOSITION, PM_NOREMOVE))
+      .Times(2)
+      .WillRepeatedly([](LPMSG message, UINT, UINT, UINT) {
+        message->message = WM_IME_COMPOSITION;
+        message->lParam = GCS_RESULTSTR;
+        return TRUE;
+      });
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"가"), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"가 "), 2)).Times(1);
+    EXPECT_CALL(window, OnComposeCommit()).Times(1);
+    EXPECT_CALL(window, OnComposeEnd()).Times(1);
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u" "), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeCommit()).Times(1);
+    EXPECT_CALL(window, OnComposeEnd()).Times(1);
+  }
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(3);
+
+  // "가" followed by a space ends the composition.
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+  window.InjectWindowMessage(WM_IME_ENDCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_RESULTSTR);
+  // A second space with nothing being composed.
+  window.InjectWindowMessage(WM_IME_ENDCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_RESULTSTR);
+}
+
+// When the window loses focus during a composition, the legacy Microsoft Korean
+// IME may send WM_IME_ENDCOMPOSITION with nothing queued and then the composing
+// text in a GCS_RESULTSTR. That text must not be inserted again.
+TEST(MockWindow, OnImeCompositionResultAfterEndCompositionIsIgnored) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"ㅂ"))));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_RESULTSTR)).Times(0);
+
+  // Nothing is queued when WM_IME_ENDCOMPOSITION arrives.
+  EXPECT_CALL(window, Win32PeekMessage(_, WM_IME_COMPOSITION,
+                                       WM_IME_COMPOSITION, PM_NOREMOVE))
+      .WillOnce(Return(FALSE));
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"ㅂ"), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeEnd()).Times(1);
+  }
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(2);
+
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+  window.InjectWindowMessage(WM_IME_ENDCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_RESULTSTR);
+}
+
+// The queued result belongs to the composition being reset, so it must not be
+// applied to whichever text input client comes next.
+TEST(MockWindow, OnResetImeComposingEndsDeferredComposition) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"겨"))));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_RESULTSTR)).Times(0);
+
+  // The result string is already queued when WM_IME_ENDCOMPOSITION arrives.
+  EXPECT_CALL(window, Win32PeekMessage(_, WM_IME_COMPOSITION,
+                                       WM_IME_COMPOSITION, PM_NOREMOVE))
+      .WillOnce([](LPMSG message, UINT, UINT, UINT) {
+        message->message = WM_IME_COMPOSITION;
+        message->lParam = GCS_RESULTSTR;
+        return TRUE;
+      });
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"겨"), 1)).Times(1);
+    EXPECT_CALL(window, OnComposeEnd()).Times(1);
+  }
+  EXPECT_CALL(window, OnComposeChange(std::u16string(u"겨 "), _)).Times(0);
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(2);
+
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+  window.InjectWindowMessage(WM_IME_ENDCOMPOSITION, 0, 0);
+  window.OnResetImeComposing();
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_RESULTSTR);
+}
+
+// The text input client stops composing when composing is reset, so the next
+// WM_IME_STARTCOMPOSITION must begin a composition, and a cancellation that
+// arrives in between has nothing to cancel.
+TEST(MockWindow, OnResetImeComposingEndsComposition) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u"ni"))));
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"ni"), 2)).Times(1);
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+  }
+  EXPECT_CALL(window, OnComposeChange(std::u16string(u""), _)).Times(0);
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  EXPECT_CALL(window, OnComposeEnd()).Times(0);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(2);
+
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+  window.OnResetImeComposing();
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+}
+
+// WM_IME_ENDCOMPOSITION may never arrive for a composition that was begun
+// implicitly, so resetting composing must end it. Otherwise the next
+// WM_IME_STARTCOMPOSITION would be taken to belong to it.
+TEST(MockWindow, OnResetImeComposingEndsImplicitComposition) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockImmTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, ReadImmString(GCS_COMPSTR))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u"ni"))))
+      .WillOnce(Return(std::optional<std::u16string>(std::u16string(u"a"))));
+
+  {
+    InSequence dummy;
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"ni"), 2)).Times(1);
+    EXPECT_CALL(window, OnComposeBegin()).Times(1);
+    EXPECT_CALL(window, OnComposeChange(std::u16string(u"a"), 1)).Times(1);
+  }
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  EXPECT_CALL(window, OnComposeEnd()).Times(0);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(2);
+
+  window.InjectWindowMessage(WM_IME_SETCONTEXT, TRUE, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+  window.OnResetImeComposing();
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, GCS_COMPSTR);
+}
+
+TEST(MockWindow, OnImeCompositionUsesCursorPositionWhenProvided) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, GetComposingString())
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"nihao"))));
+  EXPECT_CALL(*text_input_manager, GetComposingCursorPosition())
+      .WillOnce(Return(2));
+
+  EXPECT_CALL(window, OnComposeBegin()).Times(1);
+  EXPECT_CALL(window, OnComposeChange(std::u16string(u"nihao"), 2)).Times(1);
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0,
+                             GCS_COMPSTR | GCS_CURSORPOS);
+}
+
+TEST(MockWindow, OnImeCompositionFallsBackToTextEndForInvalidCursorPosition) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(*text_input_manager, GetComposingString())
+      .WillRepeatedly(
+          Return(std::optional<std::u16string>(std::u16string(u"nihao"))));
+  EXPECT_CALL(*text_input_manager, GetComposingCursorPosition())
+      .WillOnce(Return(-1));
+
+  EXPECT_CALL(window, OnComposeBegin()).Times(1);
+  EXPECT_CALL(window, OnComposeChange(std::u16string(u"nihao"), 5)).Times(1);
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0,
+                             GCS_COMPSTR | GCS_CURSORPOS);
+}
+
+TEST(MockWindow, OnImeCompositionClearChange) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(window, OnComposeBegin()).Times(1);
+  EXPECT_CALL(window, OnComposeChange(std::u16string(u""), 0)).Times(1);
+  EXPECT_CALL(window, OnComposeCommit()).Times(1);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  // Start composing, then send an IME_COMPOSITION event with no GCS_ values
+  // set, which cancels the composition.
+  window.InjectWindowMessage(WM_IME_STARTCOMPOSITION, 0, 0);
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, 0);
+}
+
+// Outside of a composition there is nothing to cancel. Clearing the composing
+// text would delete the current selection instead.
+TEST(MockWindow, OnImeCompositionClearWithoutCompositionIsIgnored) {
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto* text_input_manager = new MockTextInputManager();
+  std::unique_ptr<TextInputManager> text_input_manager_ptr(text_input_manager);
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager_ptr));
+  EXPECT_CALL(window, OnComposeBegin()).Times(0);
+  EXPECT_CALL(window, OnComposeChange(_, _)).Times(0);
+  EXPECT_CALL(window, OnComposeCommit()).Times(0);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+  ON_CALL(window, OnImeComposition)
+      .WillByDefault(Invoke(&window, &MockWindow::CallOnImeComposition));
+  EXPECT_CALL(window, OnImeComposition(_, _, _)).Times(1);
+
+  window.InjectWindowMessage(WM_IME_COMPOSITION, 0, 0);
+}
+
+TEST(MockWindow, HorizontalScroll) {
+  MockWindow window;
+  const int scroll_amount = 10;
+  // Vertical scroll should be passed along, adjusted for scroll tick size.
+  EXPECT_CALL(window, OnScroll(scroll_amount / 120.0, 0,
+                               kFlutterPointerDeviceKindMouse, 0))
+      .Times(1);
+
+  window.InjectWindowMessage(WM_MOUSEHWHEEL, MAKEWPARAM(0, scroll_amount), 0);
+}
+
+TEST(MockWindow, MouseLeave) {
+  MockWindow window;
+  const double mouse_x = 10.0;
+  const double mouse_y = 20.0;
+
+  EXPECT_CALL(window,
+              OnPointerMove(mouse_x, mouse_y, kFlutterPointerDeviceKindMouse, 0,
+                            0, 0, 0, 0))
+      .Times(1);
+  EXPECT_CALL(window, OnPointerLeave(mouse_x, mouse_y,
+                                     kFlutterPointerDeviceKindMouse, 0))
+      .Times(1);
+
+  window.InjectWindowMessage(WM_MOUSEMOVE, 0, MAKELPARAM(mouse_x, mouse_y));
+  window.InjectWindowMessage(WM_MOUSELEAVE, 0, 0);
+}
+
+TEST(MockWindow, KeyDown) {
+  MockWindow window;
+  EXPECT_CALL(window, OnKey(_, _, _, _, _, _, _)).Times(1);
+  LPARAM lparam = CreateKeyEventLparam(42, false, false);
+  // send a "Shift" key down event.
+  window.InjectWindowMessage(WM_KEYDOWN, 16, lparam);
+}
+
+TEST(MockWindow, KeyUp) {
+  MockWindow window;
+  EXPECT_CALL(window, OnKey(_, _, _, _, _, _, _)).Times(1);
+  LPARAM lparam = CreateKeyEventLparam(42, false, true);
+  // send a "Shift" key up event.
+  window.InjectWindowMessage(WM_KEYUP, 16, lparam);
+}
+
+TEST(MockWindow, SysKeyDown) {
+  MockWindow window;
+  EXPECT_CALL(window, OnKey(_, _, _, _, _, _, _)).Times(1);
+  LPARAM lparam = CreateKeyEventLparam(42, false, false);
+  // send a "Shift" key down event.
+  window.InjectWindowMessage(WM_SYSKEYDOWN, 16, lparam);
+}
+
+TEST(MockWindow, SysKeyUp) {
+  MockWindow window;
+  EXPECT_CALL(window, OnKey(_, _, _, _, _, _, _)).Times(1);
+  // Prevent default proc for WM_SYSKEYUP which unfocuses the window and sends
+  // WM_MOUSELEAVE.
+  EXPECT_CALL(window, Win32DefWindowProc(_, _, _, _)).Times(0);
+  LPARAM lparam = CreateKeyEventLparam(42, false, true);
+  // send a "Shift" key up event.
+  window.InjectWindowMessage(WM_SYSKEYUP, 16, lparam);
+}
+
+TEST(MockWindow, KeyDownPrintable) {
+  MockWindow window;
+  LPARAM lparam = CreateKeyEventLparam(30, false, false);
+
+  auto respond_false = [](int key, int scancode, int action, char32_t character,
+                          bool extended, bool was_down,
+                          std::function<void(bool)> callback) {
+    callback(false);
+  };
+  EXPECT_CALL(window, OnKey(65, 30, WM_KEYDOWN, 0, false, false, _))
+      .Times(1)
+      .WillOnce(respond_false);
+  EXPECT_CALL(window, OnText(_)).Times(1);
+  std::array<Win32Message, 2> messages = {
+      Win32Message{WM_KEYDOWN, 65, lparam, kWmResultDontCheck},
+      Win32Message{WM_CHAR, 65, lparam, kWmResultDontCheck}};
+  window.InjectMessageList(2, messages.data());
+}
+
+TEST(MockWindow, KeyDownWithCtrl) {
+  MockWindow window;
+
+  // Simulate CONTROL pressed
+  std::array<BYTE, 256> keyboard_state;
+  keyboard_state[VK_CONTROL] = -1;
+  SetKeyboardState(keyboard_state.data());
+
+  LPARAM lparam = CreateKeyEventLparam(30, false, false);
+
+  // Expect OnKey, but not OnText, because Control + Key is not followed by
+  // WM_CHAR
+  EXPECT_CALL(window, OnKey(65, 30, WM_KEYDOWN, 0, false, false, _)).Times(1);
+  EXPECT_CALL(window, OnText(_)).Times(0);
+
+  window.InjectWindowMessage(WM_KEYDOWN, 65, lparam);
+
+  keyboard_state.fill(0);
+  SetKeyboardState(keyboard_state.data());
+}
+
+TEST(MockWindow, KeyDownWithCtrlToggled) {
+  MockWindow window;
+
+  auto respond_false = [](int key, int scancode, int action, char32_t character,
+                          bool extended, bool was_down,
+                          std::function<void(bool)> callback) {
+    callback(false);
+  };
+
+  // Simulate CONTROL toggled
+  std::array<BYTE, 256> keyboard_state;
+  keyboard_state[VK_CONTROL] = 1;
+  SetKeyboardState(keyboard_state.data());
+
+  LPARAM lparam = CreateKeyEventLparam(30, false, false);
+
+  EXPECT_CALL(window, OnKey(65, 30, WM_KEYDOWN, 0, false, false, _))
+      .Times(1)
+      .WillOnce(respond_false);
+  EXPECT_CALL(window, OnText(_)).Times(1);
+
+  // send a "A" key down event.
+  Win32Message messages[] = {{WM_KEYDOWN, 65, lparam, kWmResultDontCheck},
+                             {WM_CHAR, 65, lparam, kWmResultDontCheck}};
+  window.InjectMessageList(2, messages);
+
+  keyboard_state.fill(0);
+  SetKeyboardState(keyboard_state.data());
+}
+
+TEST(MockWindow, Paint) {
+  MockWindow window;
+  EXPECT_CALL(window, OnPaint()).Times(1);
+  window.InjectWindowMessage(WM_PAINT, 0, 0);
+}
+
+// Verify direct manipulation isn't notified of pointer hit tests.
+TEST(MockWindow, PointerHitTest) {
+  UINT32 pointer_id = 123;
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto text_input_manager = std::make_unique<MockTextInputManager>();
+
+  EXPECT_CALL(*windows_proc_table, GetPointerType(Eq(pointer_id), _))
+      .Times(1)
+      .WillOnce([](UINT32 pointer_id, POINTER_INPUT_TYPE* type) {
+        *type = PT_POINTER;
+        return TRUE;
+      });
+
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager));
+
+  auto direct_manipulation =
+      std::make_unique<MockDirectManipulationOwner>(&window);
+
+  EXPECT_CALL(*direct_manipulation, SetContact).Times(0);
+
+  window.SetDirectManipulationOwner(std::move(direct_manipulation));
+  window.InjectWindowMessage(DM_POINTERHITTEST, MAKEWPARAM(pointer_id, 0), 0);
+}
+
+// Verify direct manipulation is notified of touchpad hit tests.
+TEST(MockWindow, TouchPadHitTest) {
+  UINT32 pointer_id = 123;
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto text_input_manager = std::make_unique<MockTextInputManager>();
+
+  EXPECT_CALL(*windows_proc_table, GetPointerType(Eq(pointer_id), _))
+      .Times(1)
+      .WillOnce([](UINT32 pointer_id, POINTER_INPUT_TYPE* type) {
+        *type = PT_TOUCHPAD;
+        return TRUE;
+      });
+
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager));
+
+  auto direct_manipulation =
+      std::make_unique<MockDirectManipulationOwner>(&window);
+
+  EXPECT_CALL(*direct_manipulation, SetContact(Eq(pointer_id))).Times(1);
+
+  window.SetDirectManipulationOwner(std::move(direct_manipulation));
+  window.InjectWindowMessage(DM_POINTERHITTEST, MAKEWPARAM(pointer_id, 0), 0);
+}
+
+// Verify direct manipulation isn't notified of unknown hit tests.
+// This can happen if determining the pointer type fails, for example,
+// if GetPointerType is unsupported by the current Windows version.
+// See: https://github.com/flutter/flutter/issues/109412
+TEST(MockWindow, UnknownPointerTypeSkipsDirectManipulation) {
+  UINT32 pointer_id = 123;
+  auto windows_proc_table = std::make_unique<MockWindowsProcTable>();
+  auto text_input_manager = std::make_unique<MockTextInputManager>();
+
+  EXPECT_CALL(*windows_proc_table, GetPointerType(Eq(pointer_id), _))
+      .Times(1)
+      .WillOnce(
+          [](UINT32 pointer_id, POINTER_INPUT_TYPE* type) { return FALSE; });
+
+  MockWindow window(std::move(windows_proc_table),
+                    std::move(text_input_manager));
+
+  auto direct_manipulation =
+      std::make_unique<MockDirectManipulationOwner>(&window);
+
+  EXPECT_CALL(*direct_manipulation, SetContact).Times(0);
+
+  window.SetDirectManipulationOwner(std::move(direct_manipulation));
+  window.InjectWindowMessage(DM_POINTERHITTEST, MAKEWPARAM(pointer_id, 0), 0);
+}
+
+// Test that the root UIA object is queried by WM_GETOBJECT.
+TEST(MockWindow, DISABLED_GetObjectUia) {
+  MockWindow window;
+  bool uia_called = false;
+  ON_CALL(window, OnGetObject)
+      .WillByDefault([&uia_called](UINT msg, WPARAM wpar, LPARAM lpar) {
+#ifdef FLUTTER_ENGINE_USE_UIA
+        uia_called = true;
+#endif  // FLUTTER_ENGINE_USE_UIA
+        return static_cast<LRESULT>(0);
+      });
+  EXPECT_CALL(window, OnGetObject).Times(1);
+
+  window.InjectWindowMessage(WM_GETOBJECT, 0, UiaRootObjectId);
+
+  EXPECT_TRUE(uia_called);
+}
+
+}  // namespace testing
+}  // namespace flutter

@@ -4,23 +4,16 @@
 
 import '../artifacts.dart';
 import '../base/common.dart';
+import '../base/config.dart';
 import '../base/file_system.dart';
+import '../base/logger.dart';
+import '../base/os.dart';
 import '../build_info.dart';
 import '../cache.dart';
+import '../context/tool_context.dart';
 import '../flutter_manifest.dart';
-import '../globals.dart' as globals;
 import '../project.dart';
-
-String flutterMacOSFrameworkDir(BuildMode mode, FileSystem fileSystem,
-    Artifacts artifacts) {
-  final String flutterMacOSFramework = artifacts.getArtifactPath(
-    Artifact.flutterMacOSFramework,
-    platform: TargetPlatform.darwin,
-    mode: mode,
-  );
-  return fileSystem.path
-      .normalize(fileSystem.path.dirname(flutterMacOSFramework));
-}
+import 'xcodeproj.dart';
 
 /// Writes or rewrites Xcode property files with the specified information.
 ///
@@ -32,16 +25,24 @@ String flutterMacOSFrameworkDir(BuildMode mode, FileSystem fileSystem,
 Future<void> updateGeneratedXcodeProperties({
   required FlutterProject project,
   required BuildInfo buildInfo,
+  required ToolContext toolContext,
   String? targetOverride,
   bool useMacOSConfig = false,
   String? buildDirOverride,
+  String? configurationBuildDir,
+  String? macOSDeploymentTarget,
+  bool printWarnings = false,
 }) async {
   final List<String> xcodeBuildSettings = await _xcodeBuildSettingsLines(
     project: project,
     buildInfo: buildInfo,
+    toolContext: toolContext,
     targetOverride: targetOverride,
     useMacOSConfig: useMacOSConfig,
     buildDirOverride: buildDirOverride,
+    configurationBuildDir: configurationBuildDir,
+    macOSDeploymentTarget: macOSDeploymentTarget,
+    printWarnings: printWarnings,
   );
 
   _updateGeneratedXcodePropertiesFile(
@@ -53,6 +54,7 @@ Future<void> updateGeneratedXcodeProperties({
   _updateGeneratedEnvironmentVariablesScript(
     project: project,
     xcodeBuildSettings: xcodeBuildSettings,
+    os: toolContext.os,
     useMacOSConfig: useMacOSConfig,
   );
 }
@@ -65,16 +67,29 @@ void _updateGeneratedXcodePropertiesFile({
   required List<String> xcodeBuildSettings,
   bool useMacOSConfig = false,
 }) {
-  final StringBuffer localsBuffer = StringBuffer();
+  final buffer = StringBuffer();
 
-  localsBuffer.writeln('// This is a generated file; do not edit or check into version control.');
-  xcodeBuildSettings.forEach(localsBuffer.writeln);
+  buffer.writeln('// This is a generated file; do not edit or check into version control.');
+  xcodeBuildSettings.forEach(buffer.writeln);
+
+  final newContent = buffer.toString();
+
   final File generatedXcodePropertiesFile = useMacOSConfig
-    ? project.macos.generatedXcodePropertiesFile
-    : project.ios.generatedXcodePropertiesFile;
+      ? project.macos.generatedXcodePropertiesFile
+      : project.ios.generatedXcodePropertiesFile;
 
-  generatedXcodePropertiesFile.createSync(recursive: true);
-  generatedXcodePropertiesFile.writeAsStringSync(localsBuffer.toString());
+  if (!generatedXcodePropertiesFile.existsSync()) {
+    generatedXcodePropertiesFile.createSync(recursive: true);
+  } else {
+    // Don't overwrite the generated properties if they haven't changed.
+    // This ensures flutter assemble targets aren't invalidated unnecessarily.
+    final String oldContent = generatedXcodePropertiesFile.readAsStringSync();
+    if (oldContent == newContent) {
+      return;
+    }
+  }
+
+  generatedXcodePropertiesFile.writeAsStringSync(newContent);
 }
 
 /// Generate a script to export all the FLUTTER_ environment variables needed
@@ -83,45 +98,59 @@ void _updateGeneratedXcodePropertiesFile({
 void _updateGeneratedEnvironmentVariablesScript({
   required FlutterProject project,
   required List<String> xcodeBuildSettings,
+  required OperatingSystemUtils os,
   bool useMacOSConfig = false,
 }) {
-  final StringBuffer localsBuffer = StringBuffer();
+  final exportFileBuffer = StringBuffer();
+  final envBuffer = StringBuffer();
 
-  localsBuffer.writeln('#!/bin/sh');
-  localsBuffer.writeln('# This is a generated file; do not edit or check into version control.');
-  for (final String line in xcodeBuildSettings) {
-    if (!line.contains('[')) { // Exported conditional Xcode build settings do not work.
-      localsBuffer.writeln('export "$line"');
+  exportFileBuffer.writeln('#!/bin/sh');
+  exportFileBuffer.writeln(
+    '# This is a generated file; do not edit or check into version control.',
+  );
+  for (final line in xcodeBuildSettings) {
+    if (!line.contains('[')) {
+      // Exported conditional Xcode build settings do not work.
+      exportFileBuffer.writeln('export "$line"');
+      envBuffer.writeln(line);
     }
   }
 
   final File generatedModuleBuildPhaseScript = useMacOSConfig
-    ? project.macos.generatedEnvironmentVariableExportScript
-    : project.ios.generatedEnvironmentVariableExportScript;
+      ? project.macos.generatedEnvironmentVariableExportScript
+      : project.ios.generatedEnvironmentVariableExportScript;
   generatedModuleBuildPhaseScript.createSync(recursive: true);
-  generatedModuleBuildPhaseScript.writeAsStringSync(localsBuffer.toString());
-  globals.os.chmod(generatedModuleBuildPhaseScript, '755');
+  generatedModuleBuildPhaseScript.writeAsStringSync(exportFileBuffer.toString());
+  os.chmod(generatedModuleBuildPhaseScript, '755');
+
+  final File envFile = useMacOSConfig
+      ? project.macos.generatedNativeIntegrationEnvironmentFile
+      : project.ios.generatedNativeIntegrationEnvironmentFile;
+  envFile.createSync(recursive: true);
+  envFile.writeAsStringSync(envBuffer.toString());
 }
 
 /// Build name parsed and validated from build info and manifest. Used for CFBundleShortVersionString.
 String? parsedBuildName({
   required FlutterManifest manifest,
+  required Logger logger,
   BuildInfo? buildInfo,
 }) {
   final String? buildNameToParse = buildInfo?.buildName ?? manifest.buildName;
-  return validatedBuildNameForPlatform(TargetPlatform.ios, buildNameToParse, globals.logger);
+  return validatedBuildNameForPlatform(TargetPlatform.ios, buildNameToParse, logger);
 }
 
 /// Build number parsed and validated from build info and manifest. Used for CFBundleVersion.
 String? parsedBuildNumber({
   required FlutterManifest manifest,
+  required Logger logger,
   BuildInfo? buildInfo,
 }) {
   String? buildNumberToParse = buildInfo?.buildNumber ?? manifest.buildNumber;
   final String? buildNumber = validatedBuildNumberForPlatform(
     TargetPlatform.ios,
     buildNumberToParse,
-    globals.logger,
+    logger,
   );
   if (buildNumber != null && buildNumber.isNotEmpty) {
     return buildNumber;
@@ -129,28 +158,42 @@ String? parsedBuildNumber({
   // Drop back to parsing build name if build number is not present. Build number is optional in the manifest, but
   // FLUTTER_BUILD_NUMBER is required as the backing value for the required CFBundleVersion.
   buildNumberToParse = buildInfo?.buildName ?? manifest.buildName;
-  return validatedBuildNumberForPlatform(
-    TargetPlatform.ios,
-    buildNumberToParse,
-    globals.logger,
-  );
+  return validatedBuildNumberForPlatform(TargetPlatform.ios, buildNumberToParse, logger);
 }
 
 /// List of lines of build settings. Example: 'FLUTTER_BUILD_DIR=build'
 Future<List<String>> _xcodeBuildSettingsLines({
   required FlutterProject project,
   required BuildInfo buildInfo,
+  required bool printWarnings,
+  required ToolContext toolContext,
   String? targetOverride,
   bool useMacOSConfig = false,
   String? buildDirOverride,
+  String? configurationBuildDir,
+  String? macOSDeploymentTarget,
 }) async {
-  final List<String> xcodeBuildSettings = <String>[];
+  final ToolContext(
+    :Artifacts artifacts,
+    :Cache cache,
+    :Config config,
+    :FileSystem fs,
+    :Logger logger,
+  ) = toolContext;
+  final xcodeBuildSettings = <String>[];
 
-  final String flutterRoot = globals.fs.path.normalize(Cache.flutterRoot!);
+  final String flutterRoot = fs.path.normalize(cache.flutterRoot);
   xcodeBuildSettings.add('FLUTTER_ROOT=$flutterRoot');
 
   // This holds because requiresProjectRoot is true for this command
-  xcodeBuildSettings.add('FLUTTER_APPLICATION_PATH=${globals.fs.path.normalize(project.directory.path)}');
+  xcodeBuildSettings.add('FLUTTER_APPLICATION_PATH=${fs.path.normalize(project.directory.path)}');
+
+  final String packageDirectory = useMacOSConfig
+      ? project.macos.flutterFrameworkSwiftPackageDirectory.path
+      : project.ios.flutterFrameworkSwiftPackageDirectory.path;
+  xcodeBuildSettings.add(
+    'FLUTTER_FRAMEWORK_SWIFT_PACKAGE_PATH=${fs.path.normalize(packageDirectory)}',
+  );
 
   // Tell CocoaPods behavior to codesign in parallel with rest of scripts to speed it up.
   // Value must be "true", not "YES". https://github.com/CocoaPods/CocoaPods/pull/6088
@@ -162,21 +205,39 @@ Future<List<String>> _xcodeBuildSettingsLines({
   }
 
   // The build outputs directory, relative to FLUTTER_APPLICATION_PATH.
-  xcodeBuildSettings.add('FLUTTER_BUILD_DIR=${buildDirOverride ?? getBuildDirectory()}');
+  xcodeBuildSettings.add('FLUTTER_BUILD_DIR=${buildDirOverride ?? getBuildDirectory(config, fs)}');
 
-  final String buildName = parsedBuildName(manifest: project.manifest, buildInfo: buildInfo) ?? '1.0.0';
+  final String buildName =
+      parsedBuildName(manifest: project.manifest, logger: logger, buildInfo: buildInfo) ?? '1.0.0';
   xcodeBuildSettings.add('FLUTTER_BUILD_NAME=$buildName');
 
-  final String buildNumber = parsedBuildNumber(manifest: project.manifest, buildInfo: buildInfo) ?? '1';
+  final String buildNumber =
+      parsedBuildNumber(manifest: project.manifest, logger: logger, buildInfo: buildInfo) ?? '1';
   xcodeBuildSettings.add('FLUTTER_BUILD_NUMBER=$buildNumber');
 
-  final LocalEngineInfo? localEngineInfo = globals.artifacts?.localEngineInfo;
-  if (localEngineInfo != null) {
-    final String engineOutPath = localEngineInfo.engineOutPath;
-    xcodeBuildSettings.add('FLUTTER_ENGINE=${globals.fs.path.dirname(globals.fs.path.dirname(engineOutPath))}');
+  // CoreDevices in debug and profile mode are launched, but not built, via Xcode.
+  // Set the CONFIGURATION_BUILD_DIR so Xcode knows where to find the app
+  // bundle to launch.
+  if (configurationBuildDir != null) {
+    xcodeBuildSettings.add('CONFIGURATION_BUILD_DIR=$configurationBuildDir');
+  }
 
-    final String localEngineName = localEngineInfo.localEngineName;
+  // The Flutter Assemble aggregate target cannot read the app target's
+  // MACOSX_DEPLOYMENT_TARGET, so the app's resolved value is forwarded here.
+  if (macOSDeploymentTarget != null && macOSDeploymentTarget.isNotEmpty) {
+    xcodeBuildSettings.add('FLUTTER_MACOS_DEPLOYMENT_TARGET=$macOSDeploymentTarget');
+  }
+
+  final LocalEngineInfo? localEngineInfo = artifacts.localEngineInfo;
+  if (localEngineInfo != null) {
+    final String engineOutPath = localEngineInfo.targetOutPath;
+    xcodeBuildSettings.add('FLUTTER_ENGINE=${fs.path.dirname(fs.path.dirname(engineOutPath))}');
+
+    final String localEngineName = localEngineInfo.localTargetName;
     xcodeBuildSettings.add('LOCAL_ENGINE=$localEngineName');
+
+    final String localEngineHostName = localEngineInfo.localHostName;
+    xcodeBuildSettings.add('LOCAL_ENGINE_HOST=$localEngineHostName');
 
     // Tell Xcode not to build universal binaries for local engines, which are
     // single-architecture.
@@ -210,12 +271,14 @@ Future<List<String>> _xcodeBuildSettingsLines({
     // If any plugins or their dependencies do not support arm64 simulators
     // (to run natively without Rosetta translation on an ARM Mac),
     // the app will fail to build unless it also excludes arm64 simulators.
-    String excludedSimulatorArchs = 'i386';
-    if (!(await project.ios.pluginsSupportArmSimulator())) {
+    var excludedSimulatorArchs = 'i386';
+    if (!(await project.ios.pluginsSupportArmSimulator(printWarnings: printWarnings))) {
       excludedSimulatorArchs += ' arm64';
     }
-    xcodeBuildSettings.add('EXCLUDED_ARCHS[sdk=iphonesimulator*]=$excludedSimulatorArchs');
-    xcodeBuildSettings.add('EXCLUDED_ARCHS[sdk=iphoneos*]=armv7');
+    xcodeBuildSettings.add(
+      'EXCLUDED_ARCHS[sdk=${XcodeSdk.IPhoneSimulator.platformName}*]=$excludedSimulatorArchs',
+    );
+    xcodeBuildSettings.add('EXCLUDED_ARCHS[sdk=${XcodeSdk.IPhoneOS.platformName}*]=armv7');
   }
 
   for (final MapEntry<String, String> config in buildInfo.toEnvironmentConfig().entries) {

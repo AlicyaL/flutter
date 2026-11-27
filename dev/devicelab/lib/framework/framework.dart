@@ -33,6 +33,34 @@ const int maximumRuns = 30;
 /// succeed, fail and be retried independently of others.
 typedef TaskFunction = Future<TaskResult> Function();
 
+/// Runs every benchmark in [benchmarks] and merges their results with
+/// [TaskResult.merge]. Each still gets a fresh `flutter drive`. Fails if any
+/// benchmark failed.
+TaskFunction runBenchmarks(Map<String, TaskFunction> benchmarks) {
+  return () async {
+    final results = <String, TaskResult>{};
+    final failures = <String>[];
+    for (final MapEntry<String, TaskFunction>(key: name, value: benchmark) in benchmarks.entries) {
+      section('Running benchmark "$name"');
+      try {
+        final TaskResult result = await benchmark();
+        if (result.failed) {
+          failures.add('$name: ${result.message}');
+        } else {
+          results[name] = result;
+        }
+      } catch (error, stackTrace) {
+        print(stackTrace);
+        failures.add('$name: $error');
+      }
+    }
+    if (failures.isNotEmpty) {
+      return TaskResult.failure(failures.join('\n'));
+    }
+    return TaskResult.merge(results);
+  };
+}
+
 bool _isTaskRegistered = false;
 
 /// Registers a [task] to run, returns the result when it is complete.
@@ -45,7 +73,7 @@ bool _isTaskRegistered = false;
 ///
 /// If no `processManager` is provided, a default [LocalProcessManager] is created
 /// for the task.
-Future<TaskResult> task(TaskFunction task, { ProcessManager? processManager }) async {
+Future<TaskResult> task(TaskFunction task, {ProcessManager? processManager}) async {
   if (_isTaskRegistered) {
     throw StateError('A task is already registered');
   }
@@ -59,32 +87,54 @@ Future<TaskResult> task(TaskFunction task, { ProcessManager? processManager }) a
     print('${rec.level.name}: ${rec.time}: ${rec.message}');
   });
 
-  final _TaskRunner runner = _TaskRunner(task, processManager);
+  final runner = _TaskRunner(task, processManager);
   runner.keepVmAliveUntilTaskRunRequested();
   return runner.whenDone;
 }
 
 class _TaskRunner {
   _TaskRunner(this.task, this.processManager) {
-    registerExtension('ext.cocoonRunTask',
-        (String method, Map<String, String> parameters) async {
+    final String successResponse = json.encode(const <String, String>{'result': 'success'});
+
+    registerExtension('ext.cocoonRunTask', (String method, Map<String, String> parameters) async {
       final Duration? taskTimeout = parameters.containsKey('timeoutInMinutes')
-        ? Duration(minutes: int.parse(parameters['timeoutInMinutes']!))
-        : null;
-      final bool runFlutterConfig = parameters['runFlutterConfig'] != 'false'; // used by tests to avoid changing the configuration
-      final bool runProcessCleanup = parameters['runProcessCleanup'] != 'false';
+          ? Duration(minutes: int.parse(parameters['timeoutInMinutes']!))
+          : null;
+      final runFlutterConfig =
+          parameters['runFlutterConfig'] !=
+          'false'; // used by tests to avoid changing the configuration
+      final runProcessCleanup = parameters['runProcessCleanup'] != 'false';
       final String? localEngine = parameters['localEngine'];
+      final String? localEngineHost = parameters['localEngineHost'];
       final TaskResult result = await run(
         taskTimeout,
         runProcessCleanup: runProcessCleanup,
         runFlutterConfig: runFlutterConfig,
         localEngine: localEngine,
+        localEngineHost: localEngineHost,
       );
+      const taskResultReceivedTimeout = Duration(seconds: 30);
+      _taskResultReceivedTimeout = Timer(taskResultReceivedTimeout, () {
+        logger.severe(
+          'Task runner did not acknowledge task results in $taskResultReceivedTimeout.',
+        );
+        _closeKeepAlivePort();
+        exitCode = 1;
+      });
       return ServiceExtensionResponse.result(json.encode(result.toJson()));
     });
-    registerExtension('ext.cocoonRunnerReady',
-        (String method, Map<String, String> parameters) async {
-      return ServiceExtensionResponse.result('"ready"');
+    registerExtension('ext.cocoonRunnerReady', (
+      String method,
+      Map<String, String> parameters,
+    ) async {
+      return ServiceExtensionResponse.result(successResponse);
+    });
+    registerExtension('ext.cocoonTaskResultReceived', (
+      String method,
+      Map<String, String> parameters,
+    ) async {
+      _closeKeepAlivePort();
+      return ServiceExtensionResponse.result(successResponse);
     });
   }
 
@@ -102,6 +152,7 @@ class _TaskRunner {
   // TODO(ianh): workaround for https://github.com/dart-lang/sdk/issues/23797
   RawReceivePort? _keepAlivePort;
   Timer? _startTaskTimeout;
+  Timer? _taskResultReceivedTimeout;
   bool _taskStarted = false;
 
   final Completer<TaskResult> _completer = Completer<TaskResult>();
@@ -111,15 +162,17 @@ class _TaskRunner {
   /// Signals that this task runner finished running the task.
   Future<TaskResult> get whenDone => _completer.future;
 
-  Future<TaskResult> run(Duration? taskTimeout, {
+  Future<TaskResult> run(
+    Duration? taskTimeout, {
     bool runFlutterConfig = true,
     bool runProcessCleanup = true,
     required String? localEngine,
+    required String? localEngineHost,
   }) async {
     try {
       _taskStarted = true;
       print('Running task with a timeout of $taskTimeout.');
-      final String exe = Platform.isWindows ? '.exe' : '';
+      final exe = Platform.isWindows ? '.exe' : '';
       late Set<RunningProcessInfo> beforeRunningDartInstances;
       if (runProcessCleanup) {
         section('Checking running Dart$exe processes');
@@ -127,9 +180,11 @@ class _TaskRunner {
           processName: 'dart$exe',
           processManager: processManager,
         );
-        final Set<RunningProcessInfo> allProcesses = await getRunningProcesses(processManager: processManager);
+        final Set<RunningProcessInfo> allProcesses = await getRunningProcesses(
+          processManager: processManager,
+        );
         beforeRunningDartInstances.forEach(print);
-        for (final RunningProcessInfo info in allProcesses) {
+        for (final info in allProcesses) {
           if (info.commandLine.contains('iproxy')) {
             print('[LEAK]: ${info.commandLine} ${info.creationDate} ${info.pid} ');
           }
@@ -138,13 +193,18 @@ class _TaskRunner {
 
       if (runFlutterConfig) {
         print('Enabling configs for macOS and Linux...');
-        final int configResult = await exec(path.join(flutterDirectory.path, 'bin', 'flutter'), <String>[
-          'config',
-          '-v',
-          '--enable-macos-desktop',
-          '--enable-linux-desktop',
-          if (localEngine != null) ...<String>['--local-engine', localEngine],
-        ], canFail: true);
+        final int configResult = await exec(
+          path.join(flutterDirectory.path, 'bin', 'flutter'),
+          <String>[
+            'config',
+            '-v',
+            '--enable-macos-desktop',
+            '--enable-linux-desktop',
+            if (localEngine != null) ...<String>['--local-engine', localEngine],
+            if (localEngineHost != null) ...<String>['--local-engine-host', localEngineHost],
+          ],
+          canFail: true,
+        );
         if (configResult != 0) {
           print('Failed to enable configuration, tasks may not run.');
         }
@@ -159,7 +219,8 @@ class _TaskRunner {
       IOSink? sink;
       try {
         if (device != null && device.canStreamLogs && hostAgent.dumpDirectory != null) {
-          sink = File(path.join(hostAgent.dumpDirectory!.path, '${device.deviceId}.log')).openWrite();
+          sink = File(path.join(hostAgent.dumpDirectory!.path, '${device.deviceId}.log'))
+              .openWrite();
           await device.startLoggingToSink(sink);
         }
 
@@ -182,7 +243,7 @@ class _TaskRunner {
           processName: 'dart$exe',
           processManager: processManager,
         );
-        for (final RunningProcessInfo info in afterRunningDartInstances) {
+        for (final info in afterRunningDartInstances) {
           if (!beforeRunningDartInstances.contains(info)) {
             print('$info was leaked by this test.');
             if (result is TaskResultCheckProcesses) {
@@ -206,7 +267,6 @@ class _TaskRunner {
     } finally {
       await checkForRebootRequired();
       await forceQuitRunningProcesses();
-      _closeKeepAlivePort();
     }
   }
 
@@ -252,7 +312,7 @@ class _TaskRunner {
     _keepAlivePort = RawReceivePort();
 
     // Timeout if nothing bothers to connect and ask us to run the task.
-    const Duration taskStartTimeout = Duration(seconds: 60);
+    const taskStartTimeout = Duration(seconds: 60);
     _startTaskTimeout = Timer(taskStartTimeout, () {
       if (!_taskStarted) {
         logger.severe('Task did not start in $taskStartTimeout.');
@@ -265,28 +325,32 @@ class _TaskRunner {
   /// Disables the keepalive port, allowing the VM to exit.
   void _closeKeepAlivePort() {
     _startTaskTimeout?.cancel();
+    _taskResultReceivedTimeout?.cancel();
     _keepAlivePort?.close();
   }
 
   Future<TaskResult> _performTask() {
-    final Completer<TaskResult> completer = Completer<TaskResult>();
-    Chain.capture(() async {
-      completer.complete(await task());
-    }, onError: (dynamic taskError, Chain taskErrorStack) {
-      final String message = 'Task failed: $taskError';
-      stderr
-        ..writeln(message)
-        ..writeln('\nStack trace:')
-        ..writeln(taskErrorStack.terse);
-      // IMPORTANT: We're completing the future _successfully_ but with a value
-      // that indicates a task failure. This is intentional. At this point we
-      // are catching errors coming from arbitrary (and untrustworthy) task
-      // code. Our goal is to convert the failure into a readable message.
-      // Propagating it further is not useful.
-      if (!completer.isCompleted) {
-        completer.complete(TaskResult.failure(message));
-      }
-    });
+    final completer = Completer<TaskResult>();
+    Chain.capture(
+      () async {
+        completer.complete(await task());
+      },
+      onError: (dynamic taskError, Chain taskErrorStack) {
+        final message = 'Task failed: $taskError';
+        stderr
+          ..writeln(message)
+          ..writeln('\nStack trace:')
+          ..writeln(taskErrorStack.terse);
+        // IMPORTANT: We're completing the future _successfully_ but with a value
+        // that indicates a task failure. This is intentional. At this point we
+        // are catching errors coming from arbitrary (and untrustworthy) task
+        // code. Our goal is to convert the failure into a readable message.
+        // Propagating it further is not useful.
+        if (!completer.isCompleted) {
+          completer.complete(TaskResult.failure(message));
+        }
+      },
+    );
     return completer.future;
   }
 }

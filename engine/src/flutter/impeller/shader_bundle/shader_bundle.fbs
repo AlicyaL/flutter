@@ -1,0 +1,163 @@
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+namespace impeller.fb.shaderbundle;
+
+// This is the shader bundle format version number - it's value should be
+// incremented any time there is a change to this file which changes the
+// resulting flat buffer format.
+enum ShaderBundleFormatVersion:uint32 {
+  kVersion = 3
+}
+
+enum ShaderStage:byte {
+  kVertex,
+  kFragment,
+  kCompute,
+}
+
+// The subset of impeller::ShaderType that may be used for vertex attributes.
+enum InputDataType:uint32 {
+  kBoolean,
+  kSignedByte,
+  kUnsignedByte,
+  kSignedShort,
+  kUnsignedShort,
+  kSignedInt,
+  kUnsignedInt,
+  kSignedInt64,
+  kUnsignedInt64,
+  kFloat,
+  kDouble,
+}
+
+// The subset of impeller::ShaderType that may be used for uniform bindings.
+enum UniformDataType:uint32 {
+  kBoolean,
+  kSignedByte,
+  kUnsignedByte,
+  kSignedShort,
+  kUnsignedShort,
+  kSignedInt,
+  kUnsignedInt,
+  kSignedInt64,
+  kUnsignedInt64,
+  kHalfFloat,
+  kFloat,
+  kDouble,
+  kSampledImage,
+}
+
+// This contains the same attribute reflection data as
+// impeller::ShaderStageIOSlot.
+table ShaderInput {
+  name: string;
+  location: uint64;
+  set: uint64;
+  binding: uint64;
+  type: InputDataType;
+  bit_width: uint64;
+  vec_size: uint64;
+  columns: uint64;
+  offset: uint64;
+}
+
+table ShaderUniformStructField {
+  name: string;
+  type: UniformDataType;
+  offset_in_bytes: uint64;
+  element_size_in_bytes: uint64;
+  total_size_in_bytes: uint64;
+  // Zero indicates that this field is not an array element.
+  array_elements: uint64;
+  // The number of components per column. For a vector this is the vector
+  // length; for a matrix this is the row count. Combined with `columns`, this
+  // disambiguates types that share the same `element_size_in_bytes`, e.g.
+  // vec4 and mat2.
+  vec_size: uint64;
+  // The number of columns. 1 for scalars and vectors; N for an NxN matrix.
+  columns: uint64;
+}
+
+table ShaderUniformStruct {
+  name: string;
+  ext_res_0: uint64;
+  set: uint64;
+  binding: uint64;
+  size_in_bytes: uint64; // Includes all alignment padding.
+  fields: [ShaderUniformStructField];
+}
+
+table ShaderUniformTexture {
+  name: string;
+  ext_res_0: uint64;
+  set: uint64;
+  binding: uint64;
+}
+
+// How a shader accesses a storage resource, as declared by the `readonly` or
+// `writeonly` qualifier on it.
+enum ShaderResourceAccess:byte {
+  kReadWrite,
+  kReadOnly,
+  kWriteOnly,
+}
+
+// A storage buffer (an SSBO) that a compute shader declares.
+table ShaderStorageBuffer {
+  // The name of the buffer block.
+  name: string;
+  // The backend's index for the buffer: the Metal buffer index, or the binding
+  // on Vulkan. impeller::kOptimizedOutBinding if the backend compiler removed
+  // the buffer because the shader never uses it.
+  ext_res_0: uint64;
+  // The descriptor set the shader declares the buffer in.
+  set: uint64;
+  // The binding the shader declares the buffer at.
+  binding: uint64;
+  // How the shader accesses the buffer.
+  access: ShaderResourceAccess;
+  // The size of the block, counting a trailing runtime-sized array as empty.
+  size_in_bytes: uint64;
+  // The stride of the block's trailing runtime-sized array, or zero if the
+  // block does not end in one.
+  runtime_array_stride: uint64;
+}
+
+// The workgroup size a compute shader declares with `local_size`.
+struct WorkgroupSize {
+  x: uint32;
+  y: uint32;
+  z: uint32;
+}
+
+table BackendShader {
+  stage: ShaderStage;
+  entrypoint: string;
+  inputs: [ShaderInput];
+  uniform_structs: [ShaderUniformStruct];
+  uniform_textures: [ShaderUniformTexture];
+  shader: [ubyte];
+  // The storage buffers a compute shader declares. Empty for other stages.
+  storage_buffers: [ShaderStorageBuffer];
+  // Present for compute shaders only.
+  workgroup_size: WorkgroupSize;
+}
+
+table Shader {
+  name: string;
+  metal_ios: BackendShader;
+  metal_desktop: BackendShader;
+  opengl_es: BackendShader;
+  opengl_desktop: BackendShader;
+  vulkan: BackendShader;
+}
+
+table ShaderBundle {
+  shaders: [Shader];
+  format_version: uint32;  // This is intended to hold ShaderBundleFormatVersion.kVersion.
+}
+
+root_type ShaderBundle;
+file_identifier "IPSB";

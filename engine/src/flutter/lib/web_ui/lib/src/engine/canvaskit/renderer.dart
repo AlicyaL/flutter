@@ -1,0 +1,395 @@
+// Copyright 2013 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import 'dart:async';
+import 'dart:js_interop';
+import 'dart:typed_data';
+
+import 'package:ui/src/engine.dart';
+import 'package:ui/ui.dart' as ui;
+import 'package:ui/ui_web/src/ui_web.dart' as ui_web;
+
+bool get isWebParagraphEnabled =>
+    !FlutterConfiguration.flutterWebUseSkwasm &&
+    configuration.preferWebParagraph &&
+    browserSupportsWebParagraph;
+
+class CanvasKitRenderer extends Renderer {
+  static CanvasKitRenderer get instance => _instance;
+  static late CanvasKitRenderer _instance;
+
+  Future<void>? _initialized;
+
+  @override
+  String get rendererTag => 'canvaskit';
+
+  /// Whether the renderer is using software rendering.
+  bool get isSoftware => _pictureToImageSurface.isSoftware;
+
+  /// The CanvasKit font registry behind [fontCollection].
+  ///
+  /// Not used when `WebParagraph` is enabled, in which case [fontCollection]
+  /// is a [WebFontCollection] and text is laid out by the browser.
+  late final CkFontCollection ckFontCollection = CkFontCollection();
+
+  late final FlutterFontCollection _fontCollection = isWebParagraphEnabled
+      ? WebFontCollection()
+      : EngineFontCollection(ckFontCollection);
+
+  @override
+  FlutterFontCollection get fontCollection => _fontCollection;
+
+  static Rasterizer _createRasterizer() {
+    if (configuration.canvasKitForceMultiSurfaceRasterizer || isSafari || isFirefox) {
+      return MultiSurfaceRasterizer(
+        (OnscreenCanvasProvider canvasProvider) => CkOnscreenSurface(canvasProvider),
+      );
+    }
+    return OffscreenCanvasRasterizer(
+      (OffscreenCanvasProvider canvasProvider) => CkOffscreenSurface(canvasProvider),
+    );
+  }
+
+  @override
+  void debugResetRasterizer() {
+    // Release the WebGL contexts held by the previous rasterizer.
+    _pictureToImageSurface.dispose();
+    rasterizer.dispose();
+    rasterizer = _createRasterizer();
+    _pictureToImageSurface = rasterizer.createPictureToImageSurface() as CkSurface;
+    debugClear();
+  }
+
+  @override
+  Future<void> initialize() async {
+    _initialized ??= () async {
+      if (windowFlutterCanvasKit != null) {
+        canvasKit = windowFlutterCanvasKit!;
+      } else if (windowFlutterCanvasKitLoaded != null) {
+        // CanvasKit is being preloaded by flutter.js. Wait for it to complete.
+        canvasKit = await windowFlutterCanvasKitLoaded!.toDart;
+      } else {
+        canvasKit = await downloadCanvasKit();
+        windowFlutterCanvasKit = canvasKit;
+      }
+      rasterizer = _createRasterizer();
+      _pictureToImageSurface = rasterizer.createPictureToImageSurface() as CkSurface;
+      _instance = this;
+      await super.initialize();
+    }();
+    return _initialized;
+  }
+
+  @override
+  BackendPaint createPaint(EnginePaint paint, {required ui.TileMode defaultBlurTileMode}) =>
+      CkPaint(paint, defaultBlurTileMode: defaultBlurTileMode);
+
+  @override
+  BackendVertices createVertices(
+    ui.VertexMode mode,
+    Float32List positions, {
+    Float32List? textureCoordinates,
+    Int32List? colors,
+    Uint16List? indices,
+  }) => CkVertices(
+    mode,
+    positions,
+    textureCoordinates: textureCoordinates,
+    colors: colors,
+    indices: indices,
+  );
+
+  @override
+  ui.Canvas createCanvas(ui.PictureRecorder recorder, [ui.Rect? cullRect]) {
+    final ui.Rect rect = EngineCanvas.resolveCullRect(recorder, cullRect);
+    return (recorder as CkPictureRecorder).beginRecording(rect);
+  }
+
+  @override
+  BackendGradient createGradientLinear(
+    Float32List endPoints,
+    Uint32List colors,
+    Float32List? colorStops,
+    ui.TileMode tileMode,
+    Float32List? matrix4,
+  ) {
+    return CkGradient.linear(endPoints, colors, colorStops, tileMode, matrix4);
+  }
+
+  @override
+  BackendGradient createGradientRadial(
+    double centerX,
+    double centerY,
+    double radius,
+    Uint32List colors,
+    Float32List? colorStops,
+    ui.TileMode tileMode,
+    Float32List? matrix4,
+  ) {
+    return CkGradient.radial(centerX, centerY, radius, colors, colorStops, tileMode, matrix4);
+  }
+
+  @override
+  BackendGradient createGradientConical(
+    double startX,
+    double startY,
+    double startRadius,
+    double endX,
+    double endY,
+    double endRadius,
+    Uint32List colors,
+    Float32List? colorStops,
+    ui.TileMode tileMode,
+    Float32List? matrix4,
+  ) {
+    return CkGradient.conical(
+      startX,
+      startY,
+      startRadius,
+      endX,
+      endY,
+      endRadius,
+      colors,
+      colorStops,
+      tileMode,
+      matrix4,
+    );
+  }
+
+  @override
+  BackendGradient createGradientSweep(
+    double centerX,
+    double centerY,
+    Uint32List colors,
+    Float32List? colorStops,
+    ui.TileMode tileMode,
+    double startAngle,
+    double endAngle,
+    Float32List? matrix4,
+  ) {
+    return CkGradient.sweep(
+      centerX,
+      centerY,
+      colors,
+      colorStops,
+      tileMode,
+      startAngle,
+      endAngle,
+      matrix4,
+    );
+  }
+
+  @override
+  ui.PictureRecorder createPictureRecorder() => CkPictureRecorder();
+
+  @override
+  ui.SceneBuilder createSceneBuilder() => LayerSceneBuilder();
+
+  @override
+  BackendImageFilter createBlurImageFilter({
+    required double sigmaX,
+    required double sigmaY,
+    required ui.TileMode tileMode,
+    ui.Rect? bounds,
+  }) {
+    // TODO(harryterkelsen): CanvasKit cannot express bounded blur; falls back
+    // to unbounded like native Skia.
+    // https://github.com/flutter/flutter/issues/175899
+    return CkBlurImageFilter(sigmaX: sigmaX, sigmaY: sigmaY, tileMode: tileMode);
+  }
+
+  @override
+  BackendImageFilter createDilateImageFilter({required double radiusX, required double radiusY}) {
+    return CkDilateImageFilter(radiusX: radiusX, radiusY: radiusY);
+  }
+
+  @override
+  BackendImageFilter createErodeImageFilter({required double radiusX, required double radiusY}) {
+    return CkErodeImageFilter(radiusX: radiusX, radiusY: radiusY);
+  }
+
+  @override
+  BackendImageFilter createMatrixImageFilter({
+    required Float64List matrix,
+    required ui.FilterQuality filterQuality,
+  }) {
+    return CkMatrixImageFilter(matrix: matrix, filterQuality: filterQuality);
+  }
+
+  @override
+  BackendImageFilter createComposeImageFilter({
+    required BackendImageFilter outer,
+    required BackendImageFilter inner,
+  }) {
+    return CkComposeImageFilter(outer: outer, inner: inner);
+  }
+
+  @override
+  BackendImageFilter createColorFilterImageFilter({required BackendColorFilter filter}) {
+    return CkColorFilterImageFilter(filter as CkColorFilter);
+  }
+
+  @override
+  BackendColorFilter createColorFilter(EngineColorFilter filter) => CkColorFilter(filter);
+
+  @override
+  BackendMaskFilter createMaskFilter(EngineMaskFilter filter) => CkMaskFilter(filter);
+
+  @override
+  BackendAnimatedImage createAnimatedImage(Uint8List bytes, {int? targetWidth, int? targetHeight}) {
+    return CkAnimatedImage.decodeFromBytes(
+      bytes,
+      'encoded image bytes',
+      targetWidth: targetWidth,
+      targetHeight: targetHeight,
+    );
+  }
+
+  @override
+  /// Converts a normalized [ImageSource] into a CanvasKit-specific [BackendImage].
+  ///
+  /// This method implements a highly optimized resource allocation strategy that
+  /// behaves differently depending on the active rendering mode:
+  ///
+  /// - **Software Rendering Fallback (`isSoftware`):** If the CanvasKit backend is running
+  ///    without GPU acceleration, we call `MakeImageFromCanvasImageSource`. This eagerly
+  ///    rasterizes the DOM source on the CPU and copies its pixels into a C++ WASM-allocated
+  ///    heap buffer.
+  /// - **Hardware-Accelerated WebGL Path (`!isSoftware`):** To avoid blocking the main
+  ///    thread and prevent massive GPU memory spikes, we use "lazy" texture uploads:
+  ///    - **ImageBitmap Source:** We call `MakeLazyImageFromImageBitmap`. The second argument
+  ///      (`true`) indicates that the bitmap pixels use premultiplied alpha. CanvasKit retains
+  ///      the bitmap for lazy GPU texture generation across WebGL contexts; closing the bitmap
+  ///      is managed by [EngineImage] and [PictureImageTracker] once all references are released.
+  ///    - **Other Texture Sources:** We call `MakeLazyImageFromTextureSourceWithInfo` to register
+  ///      the texture source (e.g. canvas or video frame) with WebGL.
+  ///    In both cases, the actual upload of the texture to the GPU is deferred until the
+  ///    image is drawn on the screen for the first time, ensuring smooth animations.
+  ///
+  ///    Additionally, lazy texture uploads allow a single texture source to be uploaded
+  ///    to multiple WebGL contexts. This is critical in "MultiSurfaceRasterizer" mode,
+  ///    where multiple WebGL contexts are active on-screen concurrently, and the same
+  ///    image may need to be rendered across different surfaces.
+  BackendImage createImageFromImageSource(ImageSource source) {
+    SkImage? skImage;
+    final DomCanvasImageSource canvasImageSource = source.canvasImageSource;
+    if (isSoftware) {
+      skImage = canvasKit.MakeImageFromCanvasImageSource(canvasImageSource);
+    } else {
+      if (canvasImageSource.isA<DomImageBitmap>()) {
+        skImage = canvasKit.MakeLazyImageFromImageBitmap(canvasImageSource as DomImageBitmap, true);
+      } else {
+        skImage = canvasKit.MakeLazyImageFromTextureSourceWithInfo(
+          canvasImageSource,
+          SkPartialImageInfo(
+            width: source.width.toDouble(),
+            height: source.height.toDouble(),
+            alphaType: canvasKit.AlphaType.Premul,
+            colorType: canvasKit.ColorType.RGBA_8888,
+            colorSpace: SkColorSpaceSRGB,
+          ),
+        );
+      }
+    }
+    if (skImage == null) {
+      throw Exception('Failed to convert image source to an SkImage.');
+    }
+    return CkImageDelegate(skImage);
+  }
+
+  @override
+  bool get isMultiThreaded => false;
+
+  @override
+  bool get supportsResizingAnimatedImages => false;
+
+  @override
+  bool get supportsAnimatedImages => true;
+
+  @override
+  BackendImage decodeBackendImageFromPixels(
+    Uint8List pixels, {
+    required int width,
+    required int height,
+    required ui.PixelFormat format,
+    int? rowBytes,
+  }) {
+    final SkImage? skImage = canvasKit.MakeImage(
+      SkImageInfo(
+        width: width.toDouble(),
+        height: height.toDouble(),
+        colorType: format == ui.PixelFormat.rgba8888
+            ? canvasKit.ColorType.RGBA_8888
+            : canvasKit.ColorType.BGRA_8888,
+        alphaType: canvasKit.AlphaType.Premul,
+        colorSpace: SkColorSpaceSRGB,
+      ),
+      pixels,
+      rowBytes ?? 4 * width,
+    );
+
+    if (skImage == null) {
+      throw Exception('Failed to create image from pixels.');
+    }
+
+    return CkImageDelegate(skImage);
+  }
+
+  @override
+  BackendImageShader createImageShader(
+    EngineImage image,
+    ui.TileMode tmx,
+    ui.TileMode tmy,
+    Float64List? matrix4,
+    ui.FilterQuality filterQuality,
+  ) {
+    return CkImageShader(image.backendImage as CkImageDelegate, tmx, tmy, matrix4, filterQuality);
+  }
+
+  @override
+  CkPathConstructors pathConstructors = CkPathConstructors();
+
+  @override
+  BackendParagraphBuilder createParagraphBuilder(EngineParagraphStyle style) =>
+      CkParagraphBuilder(style, ckFontCollection);
+
+  @override
+  WebParagraphPainter createWebParagraphPainter(WebParagraph paragraph) =>
+      CanvasKitPainter(paragraph);
+
+  @override
+  void clearFragmentProgramCache() {
+    _programs.clear();
+  }
+
+  static final Map<String, Future<ui.FragmentProgram>> _programs =
+      <String, Future<ui.FragmentProgram>>{};
+
+  @override
+  Future<ui.FragmentProgram> createFragmentProgram(String assetKey) {
+    if (_programs.containsKey(assetKey)) {
+      return _programs[assetKey]!;
+    }
+    return _programs[assetKey] = ui_web.assetManager.load(assetKey).then((ByteData data) {
+      return CkFragmentProgram.fromBytes(assetKey, data.buffer.asUint8List());
+    });
+  }
+
+  @override
+  void dumpDebugInfo() {
+    var i = 0;
+    for (final ViewRasterizer viewRasterizer in rasterizers.values) {
+      final Map<String, dynamic>? debugJson = viewRasterizer.dumpDebugInfo();
+      if (debugJson != null) {
+        downloadDebugInfo('flutter-scene$i', debugJson);
+        i++;
+      }
+    }
+  }
+
+  late CkSurface _pictureToImageSurface;
+
+  @override
+  CkSurface get pictureToImageSurface => _pictureToImageSurface;
+}

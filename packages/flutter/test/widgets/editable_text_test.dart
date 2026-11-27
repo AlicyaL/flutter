@@ -2,7 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// reduced-test-set:
+//   This file is run as part of a reduced test set in CI on Mac and Windows
+//   machines.
+@Tags(<String>['reduced-test-set'])
+library;
+
 import 'dart:convert' show jsonDecode;
+import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -11,14 +19,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
 
-import '../rendering/mock_canvas.dart';
 import '../widgets/clipboard_utils.dart';
+import 'editable_text_tester.dart';
 import 'editable_text_utils.dart';
 import 'live_text_utils.dart';
 import 'semantics_tester.dart';
 
-Matcher matchesMethodCall(String method, { dynamic args }) => _MatchesMethodCall(method, arguments: args == null ? null : wrapMatcher(args));
+Matcher matchesMethodCall(String method, {dynamic args}) =>
+    _MatchesMethodCall(method, arguments: args == null ? null : wrapMatcher(args));
 
 class _MatchesMethodCall extends Matcher {
   const _MatchesMethodCall(this.name, {this.arguments});
@@ -44,15 +54,10 @@ class _MatchesMethodCall extends Matcher {
   }
 }
 
-late TextEditingController controller;
-final FocusNode focusNode = FocusNode(debugLabel: 'EditableText Node');
-final FocusScopeNode focusScopeNode = FocusScopeNode(debugLabel: 'EditableText Scope Node');
 const TextStyle textStyle = TextStyle();
 const Color cursorColor = Color.fromARGB(0xFF, 0xFF, 0x00, 0x00);
 
-enum HandlePositionInViewport {
-  leftEdge, rightEdge, within,
-}
+enum HandlePositionInViewport { leftEdge, rightEdge, within }
 
 typedef _VoidFutureCallback = Future<void> Function();
 
@@ -64,20 +69,33 @@ TextEditingValue collapsedAtEnd(String text) {
 }
 
 void main() {
-  final MockClipboard mockClipboard = MockClipboard();
-  TestWidgetsFlutterBinding.ensureInitialized()
-    .defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, mockClipboard.handleMethodCall);
+  late TextEditingController controller;
+  late FocusNode focusNode;
+  late FocusScopeNode focusScopeNode;
 
   setUp(() async {
+    final mockClipboard = MockClipboard();
+    TestWidgetsFlutterBinding.ensureInitialized().defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      mockClipboard.handleMethodCall,
+    );
     debugResetSemanticsIdCounter();
-    controller = TextEditingController();
     // Fill the clipboard so that the Paste option is available in the text
     // selection menu.
     await Clipboard.setData(const ClipboardData(text: 'Clipboard data'));
+    controller = TextEditingController();
+    focusNode = FocusNode(debugLabel: 'EditableText Node');
+    focusScopeNode = FocusScopeNode(debugLabel: 'EditableText Scope Node');
   });
 
   tearDown(() {
+    TestWidgetsFlutterBinding.ensureInitialized().defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      null,
+    );
     controller.dispose();
+    focusNode.dispose();
+    focusScopeNode.dispose();
   });
 
   // Tests that the desired keyboard action button is requested.
@@ -119,12 +137,13 @@ void main() {
     expect(tester.testTextInput.setClientArgs!['inputAction'], equals(serializedActionName));
   }
 
+  // TODO(justinmc): Widgets tests should not import Material.
+  // https://github.com/flutter/flutter/issues/177028
   testWidgets(
     'Tapping the Live Text button calls onLiveTextInput',
     (WidgetTester tester) async {
-      bool invokedLiveTextInputSuccessfully = false;
+      var invokedLiveTextInputSuccessfully = false;
       final GlobalKey key = GlobalKey();
-      final TextEditingController controller = TextEditingController(text: '');
       await tester.pumpWidget(
         MaterialApp(
           home: Align(
@@ -136,17 +155,14 @@ void main() {
                 controller: controller,
                 showSelectionHandles: true,
                 autofocus: true,
-                focusNode: FocusNode(),
-                style: Typography.material2018().black.subtitle1!,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
                 cursorColor: Colors.blue,
                 backgroundCursorColor: Colors.grey,
                 keyboardType: TextInputType.text,
                 textAlign: TextAlign.right,
                 selectionControls: materialTextSelectionHandleControls,
-                contextMenuBuilder: (
-                  BuildContext context,
-                  EditableTextState editableTextState,
-                ) {
+                contextMenuBuilder: (BuildContext context, EditableTextState editableTextState) {
                   return CupertinoAdaptiveTextSelectionToolbar.editable(
                     key: key,
                     clipboardStatus: ClipboardStatus.pasteable,
@@ -154,6 +170,9 @@ void main() {
                     onCut: null,
                     onPaste: null,
                     onSelectAll: null,
+                    onLookUp: null,
+                    onSearchWeb: null,
+                    onShare: null,
                     onLiveTextInput: () {
                       invokedLiveTextInputSuccessfully = true;
                     },
@@ -185,16 +204,263 @@ void main() {
     skip: kIsWeb, // [intended]
   );
 
+  testWidgets(
+    'Tapping the Live Text button reports error when channel fails',
+    (WidgetTester tester) async {
+      final TargetPlatform? originalPlatform = debugDefaultTargetPlatformOverride;
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final FlutterExceptionHandler? oldOnError = FlutterError.onError;
+      final errors = <FlutterErrorDetails>[];
+      FlutterError.onError = (FlutterErrorDetails details) {
+        errors.add(details);
+      };
+
+      final liveTextInputTester = LiveTextInputTester();
+      liveTextInputTester.mockLiveTextInputEnabled = true;
+
+      final controller = TextEditingController();
+      final focusNode = FocusNode();
+
+      try {
+        await tester.pumpWidget(
+          TestWidgetsApp(
+            home: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 400,
+                child: EditableText(
+                  maxLines: 10,
+                  controller: controller,
+                  focusNode: focusNode,
+                  style: const TextStyle(),
+                  cursorColor: const Color(0xff0000ff),
+                  backgroundCursorColor: const Color(0xff00ffff),
+                  toolbarOptions: ToolbarOptions.empty,
+                  contextMenuBuilder: (BuildContext context, EditableTextState state) {
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        focusNode.requestFocus();
+        await tester.pump();
+
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+
+        // Mock TextInput.startLiveTextInput failure
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.textInput,
+          (MethodCall methodCall) async {
+            if (methodCall.method == 'TextInput.startLiveTextInput') {
+              throw Exception('Channel failed');
+            }
+            return null;
+          },
+        );
+
+        // Find the button item.
+        final List<ContextMenuButtonItem> items = state.contextMenuButtonItems;
+        final ContextMenuButtonItem liveTextItem = items.firstWhere(
+          (ContextMenuButtonItem item) => item.type == ContextMenuButtonType.liveTextInput,
+          orElse: () => throw Exception(
+            'Live Text button not found in items: ${items.map((i) => i.type).toList()}',
+          ),
+        );
+
+        liveTextItem.onPressed!();
+        await tester.pump();
+
+        expect(errors, hasLength(1));
+        expect(errors.single.exception, isA<Exception>());
+        expect(errors.single.exception.toString(), contains('Channel failed'));
+        expect(errors.single.context.toString(), contains('while starting Live Text input'));
+      } finally {
+        debugDefaultTargetPlatformOverride = originalPlatform;
+        FlutterError.onError = oldOnError;
+        liveTextInputTester.dispose();
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.textInput,
+          null,
+        );
+        controller.dispose();
+        focusNode.dispose();
+      }
+    },
+    skip: kIsWeb, // [intended]
+  );
+
+  testWidgets('default text selection width style', (WidgetTester tester) async {
+    const blue = Color(0xFF2196F3);
+    const grey = Color(0xFF9E9E9E);
+    const black = Color(0xFF000000);
+    const selectionColor = Color(0xFFFFFF00);
+    controller.text = 'a b c\na b c d e f g';
+
+    await tester.pumpWidget(
+      TestWidgetsApp(
+        home: Center(
+          child: EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            maxLines: null,
+            style: const TextStyle(
+              fontFamily: 'FlutterTest',
+              fontSize: 14.0,
+              color: black,
+              height: 2.0,
+            ),
+            cursorColor: blue,
+            backgroundCursorColor: grey,
+            selectionColor: selectionColor,
+            keyboardType: TextInputType.text,
+          ),
+        ),
+      ),
+    );
+
+    controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(TestWidgetsApp),
+      matchesGoldenFile('editable_text_golden.TextSelectionWidthStyle.1.png'),
+    );
+  }, variant: TargetPlatformVariant.all());
+
+  // Regression test for https://github.com/flutter/flutter/issues/174689.
+  testWidgets('Tight selectionWidthStyle does not expand to a longer next line', (
+    WidgetTester tester,
+  ) async {
+    const backgroundCursorColor = Color(0xFF9E9E9E);
+    const selectionColor = Color(0xFF000000);
+    const fontSize = 10.0;
+    const characterWidth = fontSize; // FlutterTest is a square monospace font.
+    controller.text = 'abc\nabcdefghij';
+
+    await tester.pumpWidget(
+      TestWidgetsApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            maxLines: null,
+            selectionWidthStyle: BoxWidthStyle.tight,
+            style: const TextStyle(fontFamily: 'FlutterTest', fontSize: fontSize, height: 1.0),
+            cursorColor: cursorColor,
+            backgroundCursorColor: backgroundCursorColor,
+            selectionColor: selectionColor,
+          ),
+        ),
+      ),
+    );
+
+    final RenderEditable renderEditable = findRenderEditable(tester);
+    expect(renderEditable.selectionWidthStyle, BoxWidthStyle.tight);
+
+    // Select the first line, including the line feed character. The second line
+    // is longer, but BoxWidthStyle.tight should not expand the highlight to the
+    // second line's width.
+    controller.selection = const TextSelection(baseOffset: 0, extentOffset: 4);
+    await tester.pump();
+
+    const expectedSelectionRect = Rect.fromLTRB(0.0, 0.0, 3 * characterWidth, fontSize);
+
+    expect(renderEditable, paints..rect(color: selectionColor, rect: expectedSelectionRect));
+  });
+
+  group('Check the passed groupId value', () {
+    testWidgets('The value of the passed-in groupId should match the groupId of the EditableText', (
+      WidgetTester tester,
+    ) async {
+      final groupIds = <String>['Group A', 'Group B', 'Group C'];
+      final keys = List<GlobalKey>.generate(3, (_) => GlobalKey());
+      final inputFields = <Widget>[
+        TestTextField(key: keys[0], groupId: groupIds[0]),
+        TestTextField(key: keys[1], groupId: groupIds[1]),
+        TestTextField(key: keys[2], groupId: groupIds[2]),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: Column(
+              children: inputFields.map((Widget child) {
+                return Material(child: child);
+              }).toList(),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      for (var i = 0; i < 3; i++) {
+        final EditableText editableText = tester.widget(
+          find.descendant(of: find.byKey(keys[i]), matching: find.byType(EditableText)),
+        );
+        expect(editableText.groupId, groupIds[i]);
+      }
+    });
+
+    testWidgets(
+      'When the value of groupId is not passed in, the default type should be EditableText',
+      (WidgetTester tester) async {
+        final keys = List<GlobalKey>.generate(3, (_) => GlobalKey());
+        final inputFields = <Widget>[
+          TestTextField(key: keys[0]),
+          TestTextField(key: keys[1]),
+          TestTextField(key: keys[2]),
+        ];
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Align(
+              alignment: Alignment.topLeft,
+              child: Column(
+                children: inputFields.map((Widget child) {
+                  return Material(child: child);
+                }).toList(),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pump();
+
+        for (var i = 0; i < 3; i++) {
+          final EditableText editableText = tester.widget(
+            find.descendant(of: find.byKey(keys[i]), matching: find.byType(EditableText)),
+          );
+          expect(editableText.groupId == EditableText, true);
+        }
+      },
+    );
+  });
+
   // Regression test for https://github.com/flutter/flutter/issues/126312.
-  testWidgets('when open input connection in didUpdateWidget, should not throw', (WidgetTester tester) async {
+  testWidgets('when open input connection in didUpdateWidget, should not throw', (
+    WidgetTester tester,
+  ) async {
     final Key key = GlobalKey();
+
+    final controller1 = TextEditingController(text: 'blah blah');
+    addTearDown(controller1.dispose);
+    final controller2 = TextEditingController(text: 'blah blah');
+    addTearDown(controller2.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           key: key,
           backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(text: 'blah blah'),
+          controller: controller1,
           focusNode: focusNode,
           readOnly: true,
           style: textStyle,
@@ -216,7 +482,7 @@ void main() {
           child: EditableText(
             key: key,
             backgroundCursorColor: Colors.grey,
-            controller: TextEditingController(text: 'blah blah'),
+            controller: controller2,
             focusNode: focusNode,
             style: textStyle,
             cursorColor: cursorColor,
@@ -227,14 +493,15 @@ void main() {
     );
   });
 
-  testWidgets('Text with selection can be shown on the screen when the keyboard shown', (WidgetTester tester) async {
+  testWidgets('Text with selection can be shown on the screen when the keyboard shown', (
+    WidgetTester tester,
+  ) async {
     // Regression test for https://github.com/flutter/flutter/issues/119628
     addTearDown(tester.view.reset);
 
-    final ScrollController scrollController = ScrollController();
-    final TextEditingController textController = TextEditingController.fromValue(
-      const TextEditingValue(text: 'I love flutter'),
-    );
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
+    controller.value = const TextEditingValue(text: 'I love flutter');
 
     final Widget widget = MaterialApp(
       home: Scaffold(
@@ -246,7 +513,7 @@ void main() {
               SizedBox(
                 height: 20.0,
                 child: EditableText(
-                  controller: textController,
+                  controller: controller,
                   backgroundCursorColor: Colors.grey,
                   focusNode: focusNode,
                   style: const TextStyle(),
@@ -262,10 +529,7 @@ void main() {
 
     await tester.showKeyboard(find.byType(EditableText));
     tester.view.viewInsets = const FakeViewPadding(bottom: 500);
-    textController.selection = TextSelection(
-      baseOffset: 0,
-      extentOffset: textController.text.length,
-    );
+    controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
 
     await tester.pump();
 
@@ -275,10 +539,13 @@ void main() {
   });
 
   // Related issue: https://github.com/flutter/flutter/issues/98115
-  testWidgets('ScheduleShowCaretOnScreen with no animation when the view changes metrics', (WidgetTester tester) async {
+  testWidgets('ScheduleShowCaretOnScreen with no animation when the view changes metrics', (
+    WidgetTester tester,
+  ) async {
     addTearDown(tester.view.reset);
 
-    final ScrollController scrollController = ScrollController();
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
     final Widget widget = MaterialApp(
       home: Scaffold(
         body: SingleChildScrollView(
@@ -286,20 +553,14 @@ void main() {
           child: Column(
             children: <Widget>[
               Column(
-                children: List<Widget>.generate(
-                  5,
-                  (_) {
-                    return Container(
-                      height: 1200.0,
-                      color: Colors.black12,
-                    );
-                  },
-                ),
+                children: List<Widget>.generate(5, (_) {
+                  return Container(height: 1200.0, color: Colors.black12);
+                }),
               ),
               SizedBox(
                 height: 20,
                 child: EditableText(
-                  controller: TextEditingController(),
+                  controller: controller,
                   backgroundCursorColor: Colors.grey,
                   focusNode: focusNode,
                   style: const TextStyle(),
@@ -322,8 +583,9 @@ void main() {
   });
 
   // Regression test for https://github.com/flutter/flutter/issues/34538.
-  testWidgets('RTL arabic correct caret placement after trailing whitespace', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController();
+  testWidgets('RTL arabic correct caret placement after trailing whitespace', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -351,30 +613,46 @@ void main() {
     final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     // Simulates Gboard Persian input.
-    state.updateEditingValue(const TextEditingValue(text: 'گ', selection: TextSelection.collapsed(offset: 1)));
+    state.updateEditingValue(
+      const TextEditingValue(text: 'گ', selection: TextSelection.collapsed(offset: 1)),
+    );
     await tester.pump();
-    double previousCaretXPosition = state.renderEditable.getLocalRectForCaret(state.textEditingValue.selection.base).left;
+    double previousCaretXPosition = state.renderEditable
+        .getLocalRectForCaret(state.textEditingValue.selection.base)
+        .left;
 
-    state.updateEditingValue(const TextEditingValue(text: 'گی', selection: TextSelection.collapsed(offset: 2)));
+    state.updateEditingValue(
+      const TextEditingValue(text: 'گی', selection: TextSelection.collapsed(offset: 2)),
+    );
     await tester.pump();
-    double caretXPosition = state.renderEditable.getLocalRectForCaret(state.textEditingValue.selection.base).left;
+    double caretXPosition = state.renderEditable
+        .getLocalRectForCaret(state.textEditingValue.selection.base)
+        .left;
     expect(caretXPosition, lessThan(previousCaretXPosition));
     previousCaretXPosition = caretXPosition;
 
-    state.updateEditingValue(const TextEditingValue(text: 'گیگ', selection: TextSelection.collapsed(offset: 3)));
+    state.updateEditingValue(
+      const TextEditingValue(text: 'گیگ', selection: TextSelection.collapsed(offset: 3)),
+    );
     await tester.pump();
-    caretXPosition = state.renderEditable.getLocalRectForCaret(state.textEditingValue.selection.base).left;
+    caretXPosition = state.renderEditable
+        .getLocalRectForCaret(state.textEditingValue.selection.base)
+        .left;
     expect(caretXPosition, lessThan(previousCaretXPosition));
     previousCaretXPosition = caretXPosition;
 
     // Enter a whitespace in a RTL input field moves the caret to the left.
-    state.updateEditingValue(const TextEditingValue(text: 'گیگ ', selection: TextSelection.collapsed(offset: 4)));
+    state.updateEditingValue(
+      const TextEditingValue(text: 'گیگ ', selection: TextSelection.collapsed(offset: 4)),
+    );
     await tester.pump();
-    caretXPosition = state.renderEditable.getLocalRectForCaret(state.textEditingValue.selection.base).left;
+    caretXPosition = state.renderEditable
+        .getLocalRectForCaret(state.textEditingValue.selection.base)
+        .left;
     expect(caretXPosition, lessThan(previousCaretXPosition));
 
     expect(state.currentTextEditingValue.text, equals('گیگ '));
-  }, skip: isBrowser); // https://github.com/flutter/flutter/issues/78550.
+  });
 
   testWidgets('has expected defaults', (WidgetTester tester) async {
     await tester.pumpWidget(
@@ -393,8 +671,7 @@ void main() {
       ),
     );
 
-    final EditableText editableText =
-        tester.firstWidget(find.byType(EditableText));
+    final EditableText editableText = tester.firstWidget(find.byType(EditableText));
     expect(editableText.maxLines, equals(1));
     expect(editableText.obscureText, isFalse);
     expect(editableText.autocorrect, isTrue);
@@ -404,9 +681,12 @@ void main() {
     expect(editableText.cursorWidth, 2.0);
     expect(editableText.cursorHeight, isNull);
     expect(editableText.textHeightBehavior, isNull);
+    expect(editableText.hintLocales, isNull);
   });
 
-  testWidgets('when backgroundCursorColor is updated, RenderEditable should be updated', (WidgetTester tester) async {
+  testWidgets('when backgroundCursorColor is updated, RenderEditable should be updated', (
+    WidgetTester tester,
+  ) async {
     Widget buildWidget(Color backgroundCursorColor) {
       return MediaQuery(
         data: const MediaQueryData(),
@@ -454,15 +734,19 @@ void main() {
     await tester.showKeyboard(find.byType(EditableText));
     controller.text = 'test';
     await tester.idle();
-    final EditableText editableText =
-        tester.firstWidget(find.byType(EditableText));
+    final EditableText editableText = tester.firstWidget(find.byType(EditableText));
     expect(editableText.maxLines, equals(1));
     expect(tester.testTextInput.editingState!['text'], equals('test'));
-    expect((tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'], equals('TextInputType.text'));
+    expect(
+      (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+      equals('TextInputType.text'),
+    );
     expect(tester.testTextInput.setClientArgs!['inputAction'], equals('TextInputAction.done'));
   });
 
-  testWidgets('Keyboard is configured for "unspecified" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "unspecified" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.unspecified,
@@ -470,7 +754,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "none" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "none" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.none,
@@ -478,7 +764,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "done" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "done" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.done,
@@ -486,7 +774,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "send" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "send" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.send,
@@ -494,7 +784,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "go" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "go" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.go,
@@ -502,7 +794,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "search" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "search" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.search,
@@ -510,7 +804,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "send" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "send" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.send,
@@ -518,7 +814,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "next" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "next" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.next,
@@ -526,7 +824,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "previous" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "previous" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.previous,
@@ -534,7 +834,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "continue" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "continue" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.continueAction,
@@ -542,7 +844,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "join" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "join" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.join,
@@ -550,7 +854,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "route" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "route" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.route,
@@ -558,7 +864,9 @@ void main() {
     );
   });
 
-  testWidgets('Keyboard is configured for "emergencyCall" action when explicitly requested', (WidgetTester tester) async {
+  testWidgets('Keyboard is configured for "emergencyCall" action when explicitly requested', (
+    WidgetTester tester,
+  ) async {
     await desiredKeyboardActionIsRequested(
       tester: tester,
       action: TextInputAction.emergencyCall,
@@ -566,7 +874,9 @@ void main() {
     );
   });
 
-  testWidgets('insertContent does not throw and parses data correctly', (WidgetTester tester) async {
+  testWidgets('insertContent does not throw and parses data correctly', (
+    WidgetTester tester,
+  ) async {
     String? latestUri;
     await tester.pumpWidget(
       MediaQuery(
@@ -598,7 +908,7 @@ void main() {
     await tester.enterText(find.byType(EditableText), 'test');
     await tester.idle();
 
-    const String uri = 'content://com.google.android.inputmethod.latin.fileprovider/test.gif';
+    const uri = 'content://com.google.android.inputmethod.latin.fileprovider/test.gif';
     final ByteData? messageBytes = const JSONMessageCodec().encodeMessage(<String, dynamic>{
       'args': <dynamic>[
         -1,
@@ -608,17 +918,12 @@ void main() {
       'method': 'TextInputClient.performAction',
     });
 
-    Object? error;
-    try {
-      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
-        'flutter/textinput',
-        messageBytes,
-            (ByteData? _) {},
-      );
-    } catch (e) {
-      error = e;
-    }
-    expect(error, isNull);
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'flutter/textinput',
+      messageBytes,
+      (ByteData? _) {},
+    );
+
     expect(latestUri, equals(uri));
   });
 
@@ -656,17 +961,11 @@ void main() {
       'method': 'TextInputClient.performPrivateCommand',
     });
 
-    Object? error;
-    try {
-      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
-        'flutter/textinput',
-        messageBytes,
-        (ByteData? _) {},
-      );
-    } catch (e) {
-      error = e;
-    }
-    expect(error, isNull);
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'flutter/textinput',
+      messageBytes,
+      (ByteData? _) {},
+    );
   });
 
   group('Infer keyboardType from autofillHints', () {
@@ -706,41 +1005,44 @@ void main() {
           kIsWeb ? equals('TextInputType.address') : equals('TextInputType.name'),
         );
       },
-      variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }),
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.iOS,
+        TargetPlatform.macOS,
+      }),
     );
 
-    testWidgets(
-      'infer keyboard types from autofillHints: non-ios',
-      (WidgetTester tester) async {
-        await tester.pumpWidget(
-          MediaQuery(
-            data: const MediaQueryData(),
-            child: Directionality(
-              textDirection: TextDirection.ltr,
-              child: FocusScope(
-                node: focusScopeNode,
-                autofocus: true,
-                child: EditableText(
-                  controller: controller,
-                  backgroundCursorColor: Colors.grey,
-                  focusNode: focusNode,
-                  style: textStyle,
-                  cursorColor: cursorColor,
-                  autofillHints: const <String>[AutofillHints.streetAddressLine1],
-                ),
+    testWidgets('infer keyboard types from autofillHints: non-ios', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: FocusScope(
+              node: focusScopeNode,
+              autofocus: true,
+              child: EditableText(
+                controller: controller,
+                backgroundCursorColor: Colors.grey,
+                focusNode: focusNode,
+                style: textStyle,
+                cursorColor: cursorColor,
+                autofillHints: const <String>[AutofillHints.streetAddressLine1],
               ),
             ),
           ),
-        );
+        ),
+      );
 
-        await tester.tap(find.byType(EditableText));
-        await tester.showKeyboard(find.byType(EditableText));
-        controller.text = 'test';
-        await tester.idle();
-        expect(tester.testTextInput.editingState!['text'], equals('test'));
-        expect((tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'], equals('TextInputType.address'));
-      },
-    );
+      await tester.tap(find.byType(EditableText));
+      await tester.showKeyboard(find.byType(EditableText));
+      controller.text = 'test';
+      await tester.idle();
+      expect(tester.testTextInput.editingState!['text'], equals('test'));
+      expect(
+        (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+        equals('TextInputType.address'),
+      );
+    });
 
     testWidgets(
       'inferred keyboard types can be overridden: ios',
@@ -772,13 +1074,53 @@ void main() {
         controller.text = 'test';
         await tester.idle();
         expect(tester.testTextInput.editingState!['text'], equals('test'));
-        expect((tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'], equals('TextInputType.text'));
+        expect(
+          (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+          equals('TextInputType.text'),
+        );
       },
-      variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }),
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.iOS,
+        TargetPlatform.macOS,
+      }),
     );
 
+    testWidgets('inferred keyboard types can be overridden: non-ios', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: FocusScope(
+              node: focusScopeNode,
+              autofocus: true,
+              child: EditableText(
+                controller: controller,
+                backgroundCursorColor: Colors.grey,
+                focusNode: focusNode,
+                style: textStyle,
+                cursorColor: cursorColor,
+                keyboardType: TextInputType.text,
+                autofillHints: const <String>[AutofillHints.streetAddressLine1],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(EditableText));
+      await tester.showKeyboard(find.byType(EditableText));
+      controller.text = 'test';
+      await tester.idle();
+      expect(tester.testTextInput.editingState!['text'], equals('test'));
+      expect(
+        (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+        equals('TextInputType.text'),
+      );
+    });
+
     testWidgets(
-      'inferred keyboard types can be overridden: non-ios',
+      'infer keyboard types from autofillHints emailOTPCode: ios',
       (WidgetTester tester) async {
         await tester.pumpWidget(
           MediaQuery(
@@ -794,8 +1136,7 @@ void main() {
                   focusNode: focusNode,
                   style: textStyle,
                   cursorColor: cursorColor,
-                  keyboardType: TextInputType.text,
-                  autofillHints: const <String>[AutofillHints.streetAddressLine1],
+                  autofillHints: const <String>[AutofillHints.emailOTPCode],
                 ),
               ),
             ),
@@ -807,9 +1148,51 @@ void main() {
         controller.text = 'test';
         await tester.idle();
         expect(tester.testTextInput.editingState!['text'], equals('test'));
-        expect((tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'], equals('TextInputType.text'));
+        expect(
+          (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+          equals('TextInputType.text'),
+        );
       },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.iOS,
+        TargetPlatform.macOS,
+      }),
     );
+
+    testWidgets('infer keyboard types from autofillHints emailOTPCode: non-ios', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: FocusScope(
+              node: focusScopeNode,
+              autofocus: true,
+              child: EditableText(
+                controller: controller,
+                backgroundCursorColor: Colors.grey,
+                focusNode: focusNode,
+                style: textStyle,
+                cursorColor: cursorColor,
+                autofillHints: const <String>[AutofillHints.emailOTPCode],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(EditableText));
+      await tester.showKeyboard(find.byType(EditableText));
+      controller.text = 'test';
+      await tester.idle();
+      expect(tester.testTextInput.editingState!['text'], equals('test'));
+      expect(
+        (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+        equals('TextInputType.text'),
+      );
+    });
   });
 
   testWidgets('multiline keyboard is requested when set explicitly', (WidgetTester tester) async {
@@ -839,11 +1222,16 @@ void main() {
     controller.text = 'test';
     await tester.idle();
     expect(tester.testTextInput.editingState!['text'], equals('test'));
-    expect((tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'], equals('TextInputType.multiline'));
+    expect(
+      (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+      equals('TextInputType.multiline'),
+    );
     expect(tester.testTextInput.setClientArgs!['inputAction'], equals('TextInputAction.newline'));
   });
 
-  testWidgets('EditableText sends enableInteractiveSelection to config', (WidgetTester tester) async {
+  testWidgets('EditableText sends enableInteractiveSelection to config', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -895,8 +1283,66 @@ void main() {
     expect(state.textInputConfiguration.enableInteractiveSelection, isFalse);
   });
 
+  testWidgets('EditableText sends viewId to config', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      wrapWithView: false,
+      View(
+        view: FakeFlutterView(tester.view, viewId: 77),
+        child: MediaQuery(
+          data: const MediaQueryData(),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: FocusScope(
+              node: focusScopeNode,
+              autofocus: true,
+              child: EditableText(
+                controller: controller,
+                backgroundCursorColor: Colors.grey,
+                focusNode: focusNode,
+                style: textStyle,
+                cursorColor: cursorColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+    expect(state.textInputConfiguration.viewId, 77);
+
+    await tester.pumpWidget(
+      wrapWithView: false,
+      View(
+        view: FakeFlutterView(tester.view, viewId: 88),
+        child: MediaQuery(
+          data: const MediaQueryData(),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: FocusScope(
+              node: focusScopeNode,
+              autofocus: true,
+              child: EditableText(
+                enableInteractiveSelection: false,
+                controller: controller,
+                backgroundCursorColor: Colors.grey,
+                focusNode: focusNode,
+                keyboardType: TextInputType.multiline,
+                style: textStyle,
+                cursorColor: cursorColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    state = tester.state<EditableTextState>(find.byType(EditableText));
+    expect(state.textInputConfiguration.viewId, 88);
+  });
+
   testWidgets('selection persists when unfocused', (WidgetTester tester) async {
-    const TextEditingValue value = TextEditingValue(
+    const value = TextEditingValue(
       text: 'test test',
       selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 5, extentOffset: 7),
     );
@@ -926,10 +1372,7 @@ void main() {
 
     // On web, focusing a single-line input selects the entire field.
     final TextEditingValue webValue = value.copyWith(
-      selection: TextSelection(
-        baseOffset: 0,
-        extentOffset: controller.value.text.length,
-      ),
+      selection: TextSelection(baseOffset: 0, extentOffset: controller.value.text.length),
     );
     if (kIsWeb) {
       expect(controller.value, webValue);
@@ -949,91 +1392,11 @@ void main() {
     expect(focusNode.hasFocus, isFalse);
   });
 
-  testWidgets('selection rects re-sent when refocused', (WidgetTester tester) async {
-    final List<List<SelectionRect>> log = <List<SelectionRect>>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
-      if (methodCall.method == 'TextInput.setSelectionRects') {
-        final List<dynamic> args = methodCall.arguments as List<dynamic>;
-        final List<SelectionRect> selectionRects = <SelectionRect>[];
-        for (final dynamic rect in args) {
-          selectionRects.add(SelectionRect(
-            position: (rect as List<dynamic>)[4] as int,
-            bounds: Rect.fromLTWH(rect[0] as double, rect[1] as double, rect[2] as double, rect[3] as double),
-          ));
-        }
-        log.add(selectionRects);
-      }
-      return null;
-    });
-
-    final TextEditingController controller = TextEditingController();
-    final ScrollController scrollController = ScrollController();
-    controller.text = 'Text1';
-
-    Future<void> pumpEditableText({ double? width, double? height, TextAlign textAlign = TextAlign.start }) async {
-      await tester.pumpWidget(
-        MediaQuery(
-          data: const MediaQueryData(),
-          child: Directionality(
-            textDirection: TextDirection.ltr,
-            child: Center(
-              child: SizedBox(
-                width: width,
-                height: height,
-                child: EditableText(
-                  controller: controller,
-                  textAlign: textAlign,
-                  scrollController: scrollController,
-                  maxLines: null,
-                  focusNode: focusNode,
-                  cursorWidth: 0,
-                  style: Typography.material2018().black.titleMedium!,
-                  cursorColor: Colors.blue,
-                  backgroundCursorColor: Colors.grey,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    const List<SelectionRect> expectedRects = <SelectionRect>[
-      SelectionRect(position: 0, bounds: Rect.fromLTRB(0.0, 0.0, 14.0, 14.0)),
-      SelectionRect(position: 1, bounds: Rect.fromLTRB(14.0, 0.0, 28.0, 14.0)),
-      SelectionRect(position: 2, bounds: Rect.fromLTRB(28.0, 0.0, 42.0, 14.0)),
-      SelectionRect(position: 3, bounds: Rect.fromLTRB(42.0, 0.0, 56.0, 14.0)),
-      SelectionRect(position: 4, bounds: Rect.fromLTRB(56.0, 0.0, 70.0, 14.0))
-    ];
-
-    await pumpEditableText();
-    expect(log, isEmpty);
-
-    await tester.showKeyboard(find.byType(EditableText));
-    // First update.
-    expect(log.single, expectedRects);
-    log.clear();
-
-    await tester.pumpAndSettle();
-    expect(log, isEmpty);
-
-    focusNode.unfocus();
-    await tester.pumpAndSettle();
-    expect(log, isEmpty);
-
-    focusNode.requestFocus();
-    //await tester.showKeyboard(find.byType(EditableText));
-    await tester.pumpAndSettle();
-    // Should re-receive the same rects.
-    expect(log.single, expectedRects);
-    log.clear();
-
-    // On web, we should rely on the browser's implementation of Scribble, so we will not send selection rects.
-  }, skip: kIsWeb, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS })); // [intended]
-
-  testWidgets('EditableText does not derive selection color from DefaultSelectionStyle', (WidgetTester tester) async {
+  testWidgets('EditableText does not derive selection color from DefaultSelectionStyle', (
+    WidgetTester tester,
+  ) async {
     // Regression test for https://github.com/flutter/flutter/issues/103341.
-    const TextEditingValue value = TextEditingValue(
+    const value = TextEditingValue(
       text: 'test test',
       selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 5, extentOffset: 7),
     );
@@ -1055,14 +1418,16 @@ void main() {
               cursorColor: cursorColor,
             ),
           ),
-        )
+        ),
       ),
     );
     final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     expect(state.renderEditable.selectionColor, null);
   });
 
-  testWidgets('visiblePassword keyboard is requested when set explicitly', (WidgetTester tester) async {
+  testWidgets('visiblePassword keyboard is requested when set explicitly', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -1089,13 +1454,15 @@ void main() {
     controller.text = 'test';
     await tester.idle();
     expect(tester.testTextInput.editingState!['text'], equals('test'));
-    expect((tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'], equals('TextInputType.visiblePassword'));
+    expect(
+      (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+      equals('TextInputType.visiblePassword'),
+    );
     expect(tester.testTextInput.setClientArgs!['inputAction'], equals('TextInputAction.done'));
   });
 
   testWidgets('enableSuggestions flag is sent to the engine properly', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController();
-    const bool enableSuggestions = false;
+    const enableSuggestions = false;
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -1123,9 +1490,10 @@ void main() {
     expect(tester.testTextInput.setClientArgs!['enableSuggestions'], enableSuggestions);
   });
 
-  testWidgets('enableIMEPersonalizedLearning flag is sent to the engine properly', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController();
-    const bool enableIMEPersonalizedLearning = false;
+  testWidgets('enableIMEPersonalizedLearning flag is sent to the engine properly', (
+    WidgetTester tester,
+  ) async {
+    const enableIMEPersonalizedLearning = false;
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -1150,12 +1518,105 @@ void main() {
     await tester.tap(find.byType(EditableText));
     await tester.showKeyboard(find.byType(EditableText));
     await tester.idle();
-    expect(tester.testTextInput.setClientArgs!['enableIMEPersonalizedLearning'], enableIMEPersonalizedLearning);
+    expect(
+      tester.testTextInput.setClientArgs!['enableIMEPersonalizedLearning'],
+      enableIMEPersonalizedLearning,
+    );
+  });
+
+  testWidgets('hintLocales is sent to the engine', (WidgetTester tester) async {
+    const hintLocales = <Locale>[Locale('en'), Locale('fr')];
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: FocusScope(
+            node: focusScopeNode,
+            autofocus: true,
+            child: EditableText(
+              controller: controller,
+              backgroundCursorColor: Colors.grey,
+              focusNode: focusNode,
+              hintLocales: hintLocales,
+              style: textStyle,
+              cursorColor: cursorColor,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(EditableText));
+    await tester.showKeyboard(find.byType(EditableText));
+    await tester.idle();
+
+    // hintLocales is sent to the engine as a list of language tags.
+    final List<String> localesLanguageTags = hintLocales
+        .map((Locale locale) => locale.toLanguageTag())
+        .toList();
+    expect(tester.testTextInput.setClientArgs!['hintLocales'], localesLanguageTags);
+  });
+
+  testWidgets('enableInlinePrediction is sent to the engine properly', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: FocusScope(
+            node: focusScopeNode,
+            autofocus: true,
+            child: EditableText(
+              controller: controller,
+              backgroundCursorColor: Colors.grey,
+              focusNode: focusNode,
+              enableInlinePrediction: true,
+              style: textStyle,
+              cursorColor: cursorColor,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(EditableText));
+    await tester.showKeyboard(find.byType(EditableText));
+    await tester.idle();
+    expect(tester.testTextInput.setClientArgs!['enableInlinePrediction'], true);
+  });
+
+  testWidgets('enableInlinePrediction defaults to null in engine args', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: FocusScope(
+            node: focusScopeNode,
+            autofocus: true,
+            child: EditableText(
+              controller: controller,
+              backgroundCursorColor: Colors.grey,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(EditableText));
+    await tester.showKeyboard(find.byType(EditableText));
+    await tester.idle();
+    expect(tester.testTextInput.setClientArgs!['enableInlinePrediction'], isNull);
   });
 
   group('smartDashesType and smartQuotesType', () {
     testWidgets('sent to the engine properly', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
       const SmartDashesType smartDashesType = SmartDashesType.disabled;
       const SmartQuotesType smartQuotesType = SmartQuotesType.disabled;
       await tester.pumpWidget(
@@ -1183,12 +1644,17 @@ void main() {
       await tester.tap(find.byType(EditableText));
       await tester.showKeyboard(find.byType(EditableText));
       await tester.idle();
-      expect(tester.testTextInput.setClientArgs!['smartDashesType'], smartDashesType.index.toString());
-      expect(tester.testTextInput.setClientArgs!['smartQuotesType'], smartQuotesType.index.toString());
+      expect(
+        tester.testTextInput.setClientArgs!['smartDashesType'],
+        smartDashesType.index.toString(),
+      );
+      expect(
+        tester.testTextInput.setClientArgs!['smartQuotesType'],
+        smartQuotesType.index.toString(),
+      );
     });
 
     testWidgets('default to true when obscureText is false', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
       await tester.pumpWidget(
         MediaQuery(
           data: const MediaQueryData(),
@@ -1217,7 +1683,6 @@ void main() {
     });
 
     testWidgets('default to false when obscureText is true', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
       await tester.pumpWidget(
         MediaQuery(
           data: const MediaQueryData(),
@@ -1248,11 +1713,8 @@ void main() {
   });
 
   testWidgets('selection overlay will update when text grow bigger', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController.fromValue(
-        const TextEditingValue(
-          text: 'initial value',
-        ),
-    );
+    controller.value = const TextEditingValue(text: 'initial value');
+
     Future<void> pumpEditableTextWithTextStyle(TextStyle style) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -1278,7 +1740,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.idle();
 
-    List<RenderBox> handles = List<RenderBox>.from(
+    var handles = List<RenderBox>.of(
       tester.renderObjectList<RenderBox>(
         find.descendant(
           of: find.byType(CompositedTransformFollower),
@@ -1294,7 +1756,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Handles should be updated with bigger font size.
-    handles = List<RenderBox>.from(
+    handles = List<RenderBox>.of(
       tester.renderObjectList<RenderBox>(
         find.descendant(
           of: find.byType(CompositedTransformFollower),
@@ -1308,8 +1770,17 @@ void main() {
   });
 
   testWidgets('can update style of previous activated EditableText', (WidgetTester tester) async {
+    final controller1 = TextEditingController();
+    addTearDown(controller1.dispose);
+    final controller2 = TextEditingController();
+    addTearDown(controller2.dispose);
+    final controller3 = TextEditingController();
+    addTearDown(controller3.dispose);
+    final controller4 = TextEditingController();
+    addTearDown(controller4.dispose);
     final Key key1 = UniqueKey();
     final Key key2 = UniqueKey();
+
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -1322,7 +1793,7 @@ void main() {
               children: <Widget>[
                 EditableText(
                   key: key1,
-                  controller: TextEditingController(),
+                  controller: controller1,
                   backgroundCursorColor: Colors.grey,
                   focusNode: focusNode,
                   style: const TextStyle(fontSize: 9),
@@ -1330,7 +1801,7 @@ void main() {
                 ),
                 EditableText(
                   key: key2,
-                  controller: TextEditingController(),
+                  controller: controller2,
                   backgroundCursorColor: Colors.grey,
                   focusNode: focusNode,
                   style: const TextStyle(fontSize: 9),
@@ -1365,7 +1836,7 @@ void main() {
               children: <Widget>[
                 EditableText(
                   key: key1,
-                  controller: TextEditingController(),
+                  controller: controller3,
                   backgroundCursorColor: Colors.grey,
                   focusNode: focusNode,
                   style: const TextStyle(fontSize: 20),
@@ -1373,7 +1844,7 @@ void main() {
                 ),
                 EditableText(
                   key: key2,
-                  controller: TextEditingController(),
+                  controller: controller4,
                   backgroundCursorColor: Colors.grey,
                   focusNode: focusNode,
                   style: const TextStyle(fontSize: 9),
@@ -1390,7 +1861,9 @@ void main() {
     expect(tester.takeException(), null);
   });
 
-  testWidgets('Multiline keyboard with newline action is requested when maxLines = null', (WidgetTester tester) async {
+  testWidgets('Multiline keyboard with newline action is requested when maxLines = null', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -1417,11 +1890,16 @@ void main() {
     controller.text = 'test';
     await tester.idle();
     expect(tester.testTextInput.editingState!['text'], equals('test'));
-    expect((tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'], equals('TextInputType.multiline'));
+    expect(
+      (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+      equals('TextInputType.multiline'),
+    );
     expect(tester.testTextInput.setClientArgs!['inputAction'], equals('TextInputAction.newline'));
   });
 
-  testWidgets('Text keyboard is requested when explicitly set and maxLines = null', (WidgetTester tester) async {
+  testWidgets('Text keyboard is requested when explicitly set and maxLines = null', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -1449,11 +1927,16 @@ void main() {
     controller.text = 'test';
     await tester.idle();
     expect(tester.testTextInput.editingState!['text'], equals('test'));
-    expect((tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'], equals('TextInputType.text'));
+    expect(
+      (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+      equals('TextInputType.text'),
+    );
     expect(tester.testTextInput.setClientArgs!['inputAction'], equals('TextInputAction.done'));
   });
 
-  testWidgets('Correct keyboard is requested when set explicitly and maxLines > 1', (WidgetTester tester) async {
+  testWidgets('Correct keyboard is requested when set explicitly and maxLines > 1', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -1481,7 +1964,10 @@ void main() {
     controller.text = 'test';
     await tester.idle();
     expect(tester.testTextInput.editingState!['text'], equals('test'));
-    expect((tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'], equals('TextInputType.phone'));
+    expect(
+      (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+      equals('TextInputType.phone'),
+    );
     expect(tester.testTextInput.setClientArgs!['inputAction'], equals('TextInputAction.done'));
   });
 
@@ -1512,7 +1998,10 @@ void main() {
     controller.text = 'test';
     await tester.idle();
     expect(tester.testTextInput.editingState!['text'], equals('test'));
-    expect((tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'], equals('TextInputType.multiline'));
+    expect(
+      (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+      equals('TextInputType.multiline'),
+    );
     expect(tester.testTextInput.setClientArgs!['inputAction'], equals('TextInputAction.newline'));
   });
 
@@ -1542,16 +2031,16 @@ void main() {
     controller.text = 'test';
     await tester.idle();
     expect(tester.testTextInput.editingState!['text'], equals('test'));
-    expect((tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'], equals('TextInputType.text'));
+    expect(
+      (tester.testTextInput.setClientArgs!['inputType'] as Map<String, dynamic>)['name'],
+      equals('TextInputType.text'),
+    );
     expect(tester.testTextInput.setClientArgs!['inputAction'], equals('TextInputAction.done'));
   });
 
-  // Test case for https://github.com/flutter/flutter/issues/123523.
-  testWidgets(
-      'The focus and callback behavior are correct when TextInputClient.onConnectionClosed message received',
-      (WidgetTester tester) async {
-    bool onSubmittedInvoked = false;
-    bool onEditingCompleteInvoked = false;
+  testWidgets('can re-acquire focus when the platform sends onFocusReceived', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -1567,12 +2056,6 @@ void main() {
               style: textStyle,
               autofocus: true,
               cursorColor: cursorColor,
-              onSubmitted: (String text) {
-                onSubmittedInvoked = true;
-              },
-              onEditingComplete: () {
-                onEditingCompleteInvoked = true;
-              },
             ),
           ),
         ),
@@ -1584,20 +2067,290 @@ void main() {
     editableText.connectionClosed();
     await tester.pump();
 
-    if (kIsWeb) {
-      expect(onSubmittedInvoked, isTrue);
-      expect(onEditingCompleteInvoked, isTrue);
-      // Because we add the onEditingComplete and we didn't unfocus there, so focus still exists.
+    expect(focusNode.hasFocus, isFalse);
+
+    final bool acquiredFocus = editableText.onFocusReceived();
+    expect(acquiredFocus, isTrue);
+    await tester.pump();
+
+    expect(focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('can re-acquire focus in Offstage', (WidgetTester tester) async {
+    final editableTextKey = GlobalKey<EditableTextState>();
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Offstage(
+            child: FocusScope(
+              node: focusScopeNode,
+              autofocus: true,
+              child: EditableText(
+                key: editableTextKey,
+                backgroundCursorColor: Colors.grey,
+                controller: controller,
+                focusNode: focusNode,
+                style: textStyle,
+                autofocus: true,
+                cursorColor: cursorColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(focusNode.hasFocus, isTrue);
+    final EditableTextState editableText = editableTextKey.currentState!;
+    editableText.connectionClosed();
+    await tester.pump();
+
+    expect(focusNode.hasFocus, isFalse);
+
+    final bool acquiredFocus = editableText.onFocusReceived();
+    expect(acquiredFocus, isTrue);
+    await tester.pump();
+
+    expect(focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('does not refocus when it is unmounted', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: FocusScope(
+            node: focusScopeNode,
+            autofocus: true,
+            child: EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              autofocus: true,
+              cursorColor: cursorColor,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(focusNode.hasFocus, isTrue);
+    final EditableTextState editableText = tester.state(find.byType(EditableText));
+    editableText.connectionClosed();
+    await tester.pump();
+
+    expect(focusNode.hasFocus, isFalse);
+
+    await tester.pumpWidget(
+      const MediaQuery(
+        data: MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Text('Text field does not exist anymore!'),
+        ),
+      ),
+    );
+
+    final bool acquiredFocus = editableText.onFocusReceived();
+    expect(acquiredFocus, isFalse);
+    await tester.pump();
+
+    expect(focusNode.hasFocus, isFalse);
+  });
+
+  testWidgets('does not refocus when it is hidden by a new route', (WidgetTester tester) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final focusNode = FocusNode(debugLabel: 'EditableText Node');
+    addTearDown(() {
+      focusNode.dispose();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        home: Column(
+          children: [
+            EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              autofocus: true,
+              cursorColor: cursorColor,
+            ),
+            TextButton(
+              onPressed: () async {
+                if (navigatorKey.currentState == null) {
+                  return;
+                }
+                await navigatorKey.currentState!.push(
+                  MaterialPageRoute<void>(
+                    settings: const RouteSettings(name: '/TestMaterialRoute'),
+                    builder: (BuildContext innerContext) {
+                      return SizedBox(
+                        width: 600,
+                        height: 600,
+                        child: Container(color: Colors.blue),
+                      );
+                    },
+                  ),
+                );
+              },
+              child: const Text('Push Route'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final EditableTextState editableText = tester.state(find.byType(EditableText));
+    expect(editableText.widget.focusNode.hasFocus, isTrue);
+    editableText.connectionClosed();
+    await tester.pump();
+
+    expect(editableText.widget.focusNode.hasFocus, isFalse);
+
+    // Push a new route.
+    await tester.tap(find.text('Push Route'));
+    await tester.pumpAndSettle();
+
+    // The text field is hidden by the new route, so it should not regain focus.
+    bool acquiredFocus = editableText.onFocusReceived();
+    expect(acquiredFocus, isFalse);
+    await tester.pump();
+    expect(editableText.widget.focusNode.hasFocus, isFalse);
+
+    // Pop the route.
+    navigatorKey.currentState!.pop();
+    await tester.pumpAndSettle();
+
+    // The text field is visible again, so it should regain focus this time.
+    acquiredFocus = editableText.onFocusReceived();
+    expect(acquiredFocus, isTrue);
+    await tester.pump();
+    expect(editableText.widget.focusNode.hasFocus, isTrue);
+  }, skip: true); // https://github.com/flutter/flutter/issues/46235
+
+  testWidgets('does not refocus when scrolled away in a ListView', (WidgetTester tester) async {
+    final focusNode = FocusNode(debugLabel: 'EditableText Node');
+    final scrollController = ScrollController();
+    addTearDown(() {
+      focusNode.dispose();
+      scrollController.dispose();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 500,
+            height: 300,
+            child: ListView(
+              controller: scrollController,
+              children: [
+                EditableText(
+                  backgroundCursorColor: Colors.grey,
+                  controller: controller,
+                  focusNode: focusNode,
+                  style: textStyle,
+                  // autofocus: true,
+                  cursorColor: cursorColor,
+                ),
+                for (var i = 0; i < 50; i++)
+                  Text('Line of text $i', style: const TextStyle(fontSize: 20, height: 2)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(EditableText));
+    await tester.pump();
+
+    EditableTextState editableText = tester.state(find.byType(EditableText));
+    expect(editableText.widget.focusNode.hasFocus, isTrue);
+    editableText.connectionClosed();
+    await tester.pump();
+
+    expect(editableText.widget.focusNode.hasFocus, isFalse);
+
+    // Scroll far away from the text field.
+    final ScrollPosition position = scrollController.position;
+    scrollController.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
+
+    // The text field is unmounted, so it should not regain focus.
+    bool acquiredFocus = editableText.onFocusReceived();
+    expect(acquiredFocus, isFalse);
+    await tester.pump();
+    expect(editableText.widget.focusNode.hasFocus, isFalse);
+
+    // Scroll back to the text field.
+    scrollController.jumpTo(position.minScrollExtent);
+    await tester.pumpAndSettle();
+
+    // The text field is visible again, so it should regain focus this time.
+    editableText = tester.state(find.byType(EditableText));
+    acquiredFocus = editableText.onFocusReceived();
+    expect(acquiredFocus, isTrue);
+    await tester.pump();
+    expect(editableText.widget.focusNode.hasFocus, isTrue);
+  });
+
+  // Test case for
+  // https://github.com/flutter/flutter/issues/123523
+  // https://github.com/flutter/flutter/issues/134846 .
+  testWidgets(
+    'The focus and callback behavior are correct when TextInputClient.onConnectionClosed message received',
+    (WidgetTester tester) async {
+      var onSubmittedInvoked = false;
+      var onEditingCompleteInvoked = false;
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: FocusScope(
+              node: focusScopeNode,
+              autofocus: true,
+              child: EditableText(
+                backgroundCursorColor: Colors.grey,
+                controller: controller,
+                focusNode: focusNode,
+                style: textStyle,
+                autofocus: true,
+                cursorColor: cursorColor,
+                onSubmitted: (String text) {
+                  onSubmittedInvoked = true;
+                },
+                onEditingComplete: () {
+                  onEditingCompleteInvoked = true;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
       expect(focusNode.hasFocus, isTrue);
-    } else {
-      // For mobile and other platforms, calling connectionClosed will only unfocus.
+      final EditableTextState editableText = tester.state(find.byType(EditableText));
+      editableText.connectionClosed();
+      await tester.pump();
+
       expect(focusNode.hasFocus, isFalse);
       expect(onEditingCompleteInvoked, isFalse);
       expect(onSubmittedInvoked, isFalse);
-    }
-  });
+    },
+  );
 
-  testWidgets('connection is closed when TextInputClient.onConnectionClosed message received', (WidgetTester tester) async {
+  testWidgets('connection is closed when TextInputClient.onConnectionClosed message received', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -1623,8 +2376,7 @@ void main() {
     controller.text = 'test';
     await tester.idle();
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     expect(tester.testTextInput.editingState!['text'], equals('test'));
     expect(state.wantKeepAlive, true);
 
@@ -1666,8 +2418,7 @@ void main() {
     controller.text = 'test3';
     await tester.idle();
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     expect(tester.testTextInput.editingState!['text'], equals('test3'));
     expect(state.wantKeepAlive, true);
 
@@ -1691,28 +2442,28 @@ void main() {
     expect(state.wantKeepAlive, true);
   });
 
-  testWidgets('closed connection reopened when user focused on another field', (WidgetTester tester) async {
-    final EditableText testNameField =
-      EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        focusNode: focusNode,
-        maxLines: null,
-        keyboardType: TextInputType.text,
-        style: textStyle,
-        cursorColor: cursorColor,
-      );
+  testWidgets('closed connection reopened when user focused on another field', (
+    WidgetTester tester,
+  ) async {
+    final testNameField = EditableText(
+      backgroundCursorColor: Colors.grey,
+      controller: controller,
+      focusNode: focusNode,
+      maxLines: null,
+      keyboardType: TextInputType.text,
+      style: textStyle,
+      cursorColor: cursorColor,
+    );
 
-    final EditableText testPhoneField =
-      EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        focusNode: focusNode,
-        keyboardType: TextInputType.phone,
-        maxLines: 3,
-        style: textStyle,
-        cursorColor: cursorColor,
-      );
+    final testPhoneField = EditableText(
+      backgroundCursorColor: Colors.grey,
+      controller: controller,
+      focusNode: focusNode,
+      keyboardType: TextInputType.phone,
+      maxLines: 3,
+      style: textStyle,
+      cursorColor: cursorColor,
+    );
 
     await tester.pumpWidget(
       MediaQuery(
@@ -1722,12 +2473,7 @@ void main() {
           child: FocusScope(
             node: focusScopeNode,
             autofocus: true,
-            child: ListView(
-              children: <Widget>[
-                testNameField,
-                testPhoneField,
-              ],
-            ),
+            child: ListView(children: <Widget>[testNameField, testPhoneField]),
           ),
         ),
       ),
@@ -1740,8 +2486,7 @@ void main() {
     await tester.idle();
 
     expect(tester.testTextInput.editingState!['text'], equals('test'));
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byWidget(testNameField));
+    final EditableTextState state = tester.state<EditableTextState>(find.byWidget(testNameField));
     expect(state.wantKeepAlive, true);
 
     tester.testTextInput.log.clear();
@@ -1766,74 +2511,74 @@ void main() {
     expect(state.wantKeepAlive, true);
   });
 
-  testWidgets(
-    'kept-alive EditableText does not crash when layout is skipped',
-    (WidgetTester tester) async {
-      // Regression test for https://github.com/flutter/flutter/issues/84896.
-      EditableText.debugDeterministicCursor = true;
-      const Key key = ValueKey<String>('EditableText');
-      await tester.pumpWidget(
-        MediaQuery(
-          data: const MediaQueryData(),
-          child: Directionality(
-            textDirection: TextDirection.ltr,
-            child: ListView(
-              children: <Widget>[
-                EditableText(
-                  key: key,
-                  backgroundCursorColor: Colors.grey,
-                  controller: controller,
-                  focusNode: focusNode,
-                  autofocus: true,
-                  maxLines: null,
-                  keyboardType: TextInputType.text,
-                  style: textStyle,
-                  textAlign: TextAlign.left,
-                  cursorColor: cursorColor,
-                  showCursor: false,
-                ),
-              ],
-            ),
+  testWidgets('kept-alive EditableText does not crash when layout is skipped', (
+    WidgetTester tester,
+  ) async {
+    // Regression test for https://github.com/flutter/flutter/issues/84896.
+    EditableText.debugDeterministicCursor = true;
+    const Key key = ValueKey<String>('EditableText');
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: ListView(
+            children: <Widget>[
+              EditableText(
+                key: key,
+                backgroundCursorColor: Colors.grey,
+                controller: controller,
+                focusNode: focusNode,
+                autofocus: true,
+                maxLines: null,
+                keyboardType: TextInputType.text,
+                style: textStyle,
+                textAlign: TextAlign.left,
+                cursorColor: cursorColor,
+                showCursor: false,
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
 
-      // Wait for autofocus.
-      await tester.pump();
-      expect(focusNode.hasFocus, isTrue);
+    // Wait for autofocus.
+    await tester.pump();
+    expect(focusNode.hasFocus, isTrue);
 
-      // Prepend an additional item to make EditableText invisible. It's still
-      // kept in the tree via the keepalive mechanism. Change the text alignment
-      // and showCursor. The RenderEditable now needs to relayout and repaint.
-      await tester.pumpWidget(
-        MediaQuery(
-          data: const MediaQueryData(),
-          child: Directionality(
-            textDirection: TextDirection.ltr,
-            child: ListView(
-              children: <Widget>[
-                const SizedBox(height: 6000),
-                EditableText(
-                  key: key,
-                  backgroundCursorColor: Colors.grey,
-                  controller: controller,
-                  focusNode: focusNode,
-                  autofocus: true,
-                  maxLines: null,
-                  keyboardType: TextInputType.text,
-                  style: textStyle,
-                  textAlign: TextAlign.right,
-                  cursorColor: cursorColor,
-                  showCursor: true,
-                ),
-              ],
-            ),
+    // Prepend an additional item to make EditableText invisible. It's still
+    // kept in the tree via the keepalive mechanism. Change the text alignment
+    // and showCursor. The RenderEditable now needs to relayout and repaint.
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: ListView(
+            children: <Widget>[
+              const SizedBox(height: 6000),
+              EditableText(
+                key: key,
+                backgroundCursorColor: Colors.grey,
+                controller: controller,
+                focusNode: focusNode,
+                autofocus: true,
+                maxLines: null,
+                keyboardType: TextInputType.text,
+                style: textStyle,
+                textAlign: TextAlign.right,
+                cursorColor: cursorColor,
+                showCursor: true,
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
 
-      EditableText.debugDeterministicCursor = false;
-      expect(tester.takeException(), isNull);
+    EditableText.debugDeterministicCursor = false;
+    expect(tester.takeException(), isNull);
   });
 
   // Toolbar is not used in Flutter Web unless the browser context menu is
@@ -1858,8 +2603,7 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     // Can't show the toolbar when there's no focus.
     expect(state.showToolbar(), false);
@@ -1867,10 +2611,7 @@ void main() {
     expect(find.text('Paste'), findsNothing);
 
     // Can show the toolbar when focused even though there's no text.
-    state.renderEditable.selectWordsInRange(
-      from: Offset.zero,
-      cause: SelectionChangedCause.tap,
-    );
+    state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
     await tester.pump();
     // On web, we don't let Flutter show the toolbar.
     expect(state.showToolbar(), kIsWeb ? isFalse : isTrue);
@@ -1906,53 +2647,57 @@ void main() {
 
     tearDown(() async {
       await BrowserContextMenu.enableContextMenu();
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.contextMenu, null);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.contextMenu,
+        null,
+      );
     });
 
-    testWidgets('web can show flutter context menu when the browser context menu is disabled', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            backgroundCursorColor: Colors.grey,
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            selectionControls: materialTextSelectionControls,
+    testWidgets(
+      'web can show flutter context menu when the browser context menu is disabled',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              selectionControls: materialTextSelectionControls,
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      // Can't show the toolbar when there's no focus.
-      expect(state.showToolbar(), false);
-      await tester.pumpAndSettle();
-      expect(find.text('Paste'), findsNothing);
+        // Can't show the toolbar when there's no focus.
+        expect(state.showToolbar(), false);
+        await tester.pumpAndSettle();
+        expect(find.text('Paste'), findsNothing);
 
-      // Can show the toolbar when focused even though there's no text.
-      state.renderEditable.selectWordsInRange(
-        from: Offset.zero,
-        cause: SelectionChangedCause.tap,
-      );
-      await tester.pump();
-      expect(state.showToolbar(), isTrue);
-      await tester.pumpAndSettle();
-      expect(find.text('Paste'), findsOneWidget);
+        // Can show the toolbar when focused even though there's no text.
+        state.renderEditable.selectWordsInRange(
+          from: Offset.zero,
+          cause: SelectionChangedCause.tap,
+        );
+        await tester.pump();
+        expect(state.showToolbar(), isTrue);
+        await tester.pumpAndSettle();
+        expect(find.text('Paste'), findsOneWidget);
 
-      // Hide the menu again.
-      state.hideToolbar();
-      await tester.pump();
-      expect(find.text('Paste'), findsNothing);
+        // Hide the menu again.
+        state.hideToolbar();
+        await tester.pump();
+        expect(find.text('Paste'), findsNothing);
 
-      // Can show the menu with text and a selection.
-      controller.text = 'blah';
-      await tester.pump();
-      expect(state.showToolbar(), isTrue);
-      await tester.pumpAndSettle();
-      expect(find.text('Paste'), findsOneWidget);
-    },
+        // Can show the menu with text and a selection.
+        controller.text = 'blah';
+        await tester.pump();
+        expect(state.showToolbar(), isTrue);
+        await tester.pumpAndSettle();
+        expect(find.text('Paste'), findsOneWidget);
+      },
       skip: !kIsWeb, // [intended]
     );
   });
@@ -1971,14 +2716,10 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-      tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     // Show the toolbar
-    state.renderEditable.selectWordsInRange(
-      from: Offset.zero,
-      cause: SelectionChangedCause.tap,
-    );
+    state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
     await tester.pump();
 
     // On web, we don't let Flutter show the toolbar.
@@ -1992,53 +2733,57 @@ void main() {
     expect(find.text('Paste'), findsNothing);
   });
 
-  testWidgets('toolbar hidden on mobile when orientation changes', (WidgetTester tester) async {
-    addTearDown(tester.view.reset);
+  testWidgets(
+    'toolbar hidden on mobile when orientation changes',
+    (WidgetTester tester) async {
+      addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          backgroundCursorColor: Colors.grey,
-          controller: controller,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+            selectionControls: materialTextSelectionControls,
+          ),
         ),
-      ),
-    );
+      );
 
-    final EditableTextState state =
-      tester.state<EditableTextState>(find.byType(EditableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-    // Show the toolbar
-    state.renderEditable.selectWordsInRange(
-      from: Offset.zero,
-      cause: SelectionChangedCause.tap,
-    );
-    await tester.pump();
+      // Show the toolbar
+      state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
+      await tester.pump();
 
-    expect(state.showToolbar(), true);
-    await tester.pumpAndSettle();
-    expect(find.text('Paste'), findsOneWidget);
+      expect(state.showToolbar(), true);
+      await tester.pumpAndSettle();
+      expect(find.text('Paste'), findsOneWidget);
 
-    // Hide the menu by changing orientation.
-    tester.view.physicalSize = const Size(1800.0, 2400.0);
-    await tester.pumpAndSettle();
-    expect(find.text('Paste'), findsNothing);
+      // Hide the menu by changing orientation.
+      tester.view.physicalSize = const Size(1800.0, 2400.0);
+      await tester.pumpAndSettle();
+      expect(find.text('Paste'), findsNothing);
 
-    // Handles should be hidden as well on Android
-    expect(
-      find.descendant(
-        of: find.byType(CompositedTransformFollower),
-        matching: find.byType(Padding),
-      ),
-      defaultTargetPlatform == TargetPlatform.android ? findsNothing : findsOneWidget,
-    );
+      // Handles should be hidden as well on Android
+      expect(
+        find.descendant(
+          of: find.byType(CompositedTransformFollower),
+          matching: find.byType(Padding),
+        ),
+        defaultTargetPlatform == TargetPlatform.android ? findsNothing : findsOneWidget,
+      );
 
-    // On web, we don't show the Flutter toolbar and instead rely on the browser
-    // toolbar. Until we change that, this test should remain skipped.
-  }, skip: kIsWeb, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS, TargetPlatform.android })); // [intended]
+      // On web, we don't show the Flutter toolbar and instead rely on the browser
+      // toolbar. Until we change that, this test should remain skipped.
+    },
+    skip: kIsWeb, // [intended]
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.iOS,
+      TargetPlatform.android,
+    }),
+  );
 
   testWidgets('Paste is shown only when there is something to paste', (WidgetTester tester) async {
     await tester.pumpWidget(
@@ -2054,17 +2799,13 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     // Make sure the clipboard has a valid string on it.
     await Clipboard.setData(const ClipboardData(text: 'Clipboard data'));
 
     // Show the toolbar.
-    state.renderEditable.selectWordsInRange(
-      from: Offset.zero,
-      cause: SelectionChangedCause.tap,
-    );
+    state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
     await tester.pump();
 
     // The Paste button is shown (except on web, which doesn't show the Flutter
@@ -2090,81 +2831,157 @@ void main() {
     expect(find.text('Paste'), findsNothing);
   });
 
-  testWidgets('Copy selection does not collapse selection on desktop and iOS', (WidgetTester tester) async {
-    final TextEditingController localController = TextEditingController(text: 'Hello world');
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          backgroundCursorColor: Colors.grey,
-          controller: localController,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
+  testWidgets('pasteText reports error to FlutterError when Clipboard.getData throws', (
+    WidgetTester tester,
+  ) async {
+    final errors = <FlutterErrorDetails>[];
+    final FlutterExceptionHandler? oldOnError = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      errors.add(details);
+    };
+
+    try {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
+        MethodCall methodCall,
+      ) async {
+        if (methodCall.method == 'Clipboard.getData') {
+          throw PlatformException(code: 'CLIPBOARD_ERROR', message: 'Failed to read clipboard');
+        }
+        return null; // Fall through for other methods
+      });
+
+      final controller = TextEditingController(text: 'text');
+      controller.selection = const TextSelection.collapsed(offset: 0);
+      addTearDown(controller.dispose);
+      final focusNode = FocusNode();
+      addTearDown(focusNode.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            focusNode: focusNode,
+            style: const TextStyle(),
+            cursorColor: Colors.red,
+            enableInteractiveSelection: true,
+          ),
         ),
-      ),
-    );
+      );
 
-    final EditableTextState state =
-    tester.state<EditableTextState>(find.byType(EditableText));
+      // Get a context inside EditableText to access its internal Actions
+      final BuildContext childContext = tester.element(
+        find
+            .descendant(of: find.byType(EditableText), matching: find.byType(RawGestureDetector))
+            .first,
+      );
+      Actions.invoke(childContext, const PasteTextIntent(SelectionChangedCause.toolbar));
 
-    // Show the toolbar.
-    state.renderEditable.selectWordsInRange(
-      from: Offset.zero,
-      cause: SelectionChangedCause.tap,
-    );
-    await tester.pump();
+      await tester.idle(); // Allow async work to complete (like platform channels)
 
-    final TextSelection copySelectionRange = localController.selection;
+      expect(errors, isNotEmpty);
+      expect(errors.first.exception, isA<PlatformException>());
+      expect((errors.first.exception as PlatformException).code, 'CLIPBOARD_ERROR');
+    } finally {
+      FlutterError.onError = oldOnError;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null);
+    }
+  });
 
-    state.showToolbar();
-    await tester.pumpAndSettle();
+  testWidgets(
+    'Copy selection does not collapse selection on desktop and iOS',
+    (WidgetTester tester) async {
+      final localController = TextEditingController(text: 'Hello world');
+      addTearDown(localController.dispose);
 
-    expect(find.text('Copy'), findsOneWidget);
-
-    await tester.tap(find.text('Copy'));
-    await tester.pumpAndSettle();
-    expect(copySelectionRange, localController.selection);
-    expect(find.text('Copy'), findsNothing);
-  }, skip: kIsWeb, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS, TargetPlatform.macOS, TargetPlatform.linux, TargetPlatform.windows })); // [intended]
-
-  testWidgets('Copy selection collapses selection and hides the toolbar on Android and Fuchsia', (WidgetTester tester) async {
-    final TextEditingController localController = TextEditingController(text: 'Hello world');
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          backgroundCursorColor: Colors.grey,
-          controller: localController,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: localController,
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+            selectionControls: materialTextSelectionControls,
+          ),
         ),
-      ),
-    );
+      );
 
-    final EditableTextState state =
-    tester.state<EditableTextState>(find.byType(EditableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-    // Show the toolbar.
-    state.renderEditable.selectWordsInRange(
-      from: Offset.zero,
-      cause: SelectionChangedCause.tap,
-    );
-    await tester.pump();
+      // Show the toolbar.
+      state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
+      await tester.pump();
 
-    final TextSelection copySelectionRange = localController.selection;
+      final TextSelection copySelectionRange = localController.selection;
 
-    state.showToolbar();
-    await tester.pumpAndSettle();
+      state.showToolbar();
+      await tester.pumpAndSettle();
 
-    expect(find.text('Copy'), findsOneWidget);
+      expect(find.text('Copy'), findsOneWidget);
 
-    await tester.tap(find.text('Copy'));
-    await tester.pumpAndSettle();
-    expect(localController.selection, TextSelection.collapsed(offset: copySelectionRange.extentOffset));
-    expect(find.text('Copy'), findsNothing);
-  }, skip: kIsWeb, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.android, TargetPlatform.fuchsia })); // [intended]
+      await tester.tap(find.text('Copy'));
+      await tester.pumpAndSettle();
+      expect(copySelectionRange, localController.selection);
+      expect(find.text('Copy'), findsNothing);
+    },
+    skip: kIsWeb, // [intended]
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.iOS,
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'Copy selection collapses selection and hides the toolbar on Android and Fuchsia',
+    (WidgetTester tester) async {
+      final localController = TextEditingController(text: 'Hello world');
+      addTearDown(localController.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: localController,
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+            selectionControls: materialTextSelectionControls,
+          ),
+        ),
+      );
+
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+
+      // Show the toolbar.
+      state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
+      await tester.pump();
+
+      final TextSelection copySelectionRange = localController.selection;
+
+      expect(find.byType(TextSelectionToolbar), findsNothing);
+      state.showToolbar();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TextSelectionToolbar), findsOneWidget);
+      expect(find.text('Copy'), findsOneWidget);
+
+      await tester.tap(find.text('Copy'));
+      await tester.pumpAndSettle();
+      expect(
+        localController.selection,
+        TextSelection.collapsed(offset: copySelectionRange.extentOffset),
+      );
+      expect(find.text('Copy'), findsNothing);
+    },
+    skip: kIsWeb, // [intended]
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.android,
+      TargetPlatform.fuchsia,
+    }),
+  );
 
   testWidgets('can show the toolbar after clearing all text', (WidgetTester tester) async {
     // Regression test for https://github.com/flutter/flutter/issues/35998.
@@ -2181,16 +2998,12 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     // Add text and an empty selection.
     controller.text = 'blah';
     await tester.pump();
-    state.renderEditable.selectWordsInRange(
-      from: Offset.zero,
-      cause: SelectionChangedCause.tap,
-    );
+    state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
     await tester.pump();
 
     // Clear the text and selection.
@@ -2206,16 +3019,15 @@ void main() {
   });
 
   testWidgets('can dynamically disable options in toolbar', (WidgetTester tester) async {
+    controller.text = 'blah blah';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(text: 'blah blah'),
+          controller: controller,
           focusNode: focusNode,
-          toolbarOptions: const ToolbarOptions(
-            copy: true,
-            selectAll: true,
-          ),
+          toolbarOptions: const ToolbarOptions(copy: true, selectAll: true),
           style: textStyle,
           cursorColor: cursorColor,
           selectionControls: materialTextSelectionControls,
@@ -2223,14 +3035,10 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-    tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     // Select something. Doesn't really matter what.
-    state.renderEditable.selectWordsInRange(
-      from: Offset.zero,
-      cause: SelectionChangedCause.tap,
-    );
+    state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
     await tester.pump();
     // On web, we don't let Flutter show the toolbar.
     expect(state.showToolbar(), kIsWeb ? isFalse : isTrue);
@@ -2241,13 +3049,17 @@ void main() {
     expect(find.text('Cut'), findsNothing);
   });
 
-  testWidgets('can dynamically disable select all option in toolbar - cupertino', (WidgetTester tester) async {
+  testWidgets('can dynamically disable select all option in toolbar - cupertino', (
+    WidgetTester tester,
+  ) async {
     // Regression test: https://github.com/flutter/flutter/issues/40711
+    controller.text = 'blah blah';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(text: 'blah blah'),
+          controller: controller,
           focusNode: focusNode,
           toolbarOptions: ToolbarOptions.empty,
           style: textStyle,
@@ -2257,8 +3069,7 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-      tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     await tester.tap(find.byType(EditableText));
     await tester.pump();
     // On web, we don't let Flutter show the toolbar.
@@ -2270,17 +3081,19 @@ void main() {
     expect(find.text('Cut'), findsNothing);
   });
 
-  testWidgets('can dynamically disable select all option in toolbar - material', (WidgetTester tester) async {
+  testWidgets('can dynamically disable select all option in toolbar - material', (
+    WidgetTester tester,
+  ) async {
     // Regression test: https://github.com/flutter/flutter/issues/40711
+    controller.text = 'blah blah';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(text: 'blah blah'),
+          controller: controller,
           focusNode: focusNode,
-          toolbarOptions: const ToolbarOptions(
-            copy: true,
-          ),
+          toolbarOptions: const ToolbarOptions(copy: true),
           style: textStyle,
           cursorColor: cursorColor,
           selectionControls: materialTextSelectionControls,
@@ -2288,38 +3101,33 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-      tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     // Select something. Doesn't really matter what.
-    state.renderEditable.selectWordsInRange(
-      from: Offset.zero,
-      cause: SelectionChangedCause.tap,
-    );
+    state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
     await tester.pump();
     // On web, we don't let Flutter show the toolbar.
-    expect(state.showToolbar(),  kIsWeb ? isFalse : isTrue);
+    expect(state.showToolbar(), kIsWeb ? isFalse : isTrue);
     await tester.pump();
     expect(find.text('Select all'), findsNothing);
-    expect(find.text('Copy'),  kIsWeb ? findsNothing : findsOneWidget);
+    expect(find.text('Copy'), kIsWeb ? findsNothing : findsOneWidget);
     expect(find.text('Paste'), findsNothing);
     expect(find.text('Cut'), findsNothing);
   });
 
-  testWidgets('cut and paste are disabled in read only mode even if explicitly set', (WidgetTester tester) async {
+  testWidgets('cut and paste are disabled in read only mode even if explicitly set', (
+    WidgetTester tester,
+  ) async {
+    controller.text = 'blah blah';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(text: 'blah blah'),
+          controller: controller,
           focusNode: focusNode,
           readOnly: true,
-          toolbarOptions: const ToolbarOptions(
-            copy: true,
-            cut: true,
-            paste: true,
-            selectAll: true,
-          ),
+          toolbarOptions: const ToolbarOptions(copy: true, cut: true, paste: true, selectAll: true),
           style: textStyle,
           cursorColor: cursorColor,
           selectionControls: materialTextSelectionControls,
@@ -2327,14 +3135,10 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-    tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     // Select something. Doesn't really matter what.
-    state.renderEditable.selectWordsInRange(
-      from: Offset.zero,
-      cause: SelectionChangedCause.tap,
-    );
+    state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
     await tester.pump();
     // On web, we don't let Flutter show the toolbar.
     expect(state.showToolbar(), kIsWeb ? isFalse : isTrue);
@@ -2345,20 +3149,19 @@ void main() {
     expect(find.text('Cut'), findsNothing);
   });
 
-  testWidgets('cut and copy are disabled in obscured mode even if explicitly set', (WidgetTester tester) async {
+  testWidgets('cut and copy are disabled in obscured mode even if explicitly set', (
+    WidgetTester tester,
+  ) async {
+    controller.text = 'blah blah';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(text: 'blah blah'),
+          controller: controller,
           focusNode: focusNode,
           obscureText: true,
-          toolbarOptions: const ToolbarOptions(
-            copy: true,
-            cut: true,
-            paste: true,
-            selectAll: true,
-          ),
+          toolbarOptions: const ToolbarOptions(copy: true, cut: true, paste: true, selectAll: true),
           style: textStyle,
           cursorColor: cursorColor,
           selectionControls: materialTextSelectionControls,
@@ -2366,8 +3169,7 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-    tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     await tester.tap(find.byType(EditableText));
     await tester.pump();
     // Select something, but not the whole thing.
@@ -2387,12 +3189,16 @@ void main() {
     expect(find.text('Cut'), findsNothing);
   });
 
-  testWidgets('cut and copy do nothing in obscured mode even if explicitly called', (WidgetTester tester) async {
+  testWidgets('cut and copy do nothing in obscured mode even if explicitly called', (
+    WidgetTester tester,
+  ) async {
+    controller.text = 'blah blah';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(text: 'blah blah'),
+          controller: controller,
           focusNode: focusNode,
           obscureText: true,
           style: textStyle,
@@ -2402,8 +3208,7 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-    tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     expect(state.selectAllEnabled, isTrue);
     expect(state.pasteEnabled, isTrue);
     expect(state.cutEnabled, isFalse);
@@ -2427,12 +3232,16 @@ void main() {
     expect(data!.text, isEmpty);
   });
 
-  testWidgets('select all does nothing if obscured and read-only, even if explicitly called', (WidgetTester tester) async {
+  testWidgets('select all does nothing if obscured and read-only, even if explicitly called', (
+    WidgetTester tester,
+  ) async {
+    controller.text = 'blah blah';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(text: 'blah blah'),
+          controller: controller,
           focusNode: focusNode,
           obscureText: true,
           readOnly: true,
@@ -2443,8 +3252,7 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-    tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     // Select all.
     state.selectAll(SelectionChangedCause.toolbar);
@@ -2454,10 +3262,12 @@ void main() {
 
   group('buttonItemsForToolbarOptions', () {
     testWidgets('returns null when toolbarOptions are empty', (WidgetTester tester) async {
+      controller.text = 'TEXT';
+
       await tester.pumpWidget(
         MaterialApp(
           home: EditableText(
-            controller: TextEditingController(text: 'TEXT'),
+            controller: controller,
             toolbarOptions: ToolbarOptions.empty,
             focusNode: focusNode,
             style: textStyle,
@@ -2467,278 +3277,286 @@ void main() {
         ),
       );
 
-      final EditableTextState state = tester.state<EditableTextState>(
-        find.byType(EditableText),
-      );
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
       expect(state.buttonItemsForToolbarOptions(), isNull);
     });
 
-    testWidgets('returns empty array when only cut is selected in toolbarOptions but cut is not enabled', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: TextEditingController(text: 'TEXT'),
-            toolbarOptions: const ToolbarOptions(cut: true),
-            readOnly: true,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            backgroundCursorColor: Colors.grey,
+    testWidgets(
+      'returns empty array when only cut is selected in toolbarOptions but cut is not enabled',
+      (WidgetTester tester) async {
+        controller.text = 'TEXT';
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              toolbarOptions: const ToolbarOptions(cut: true),
+              readOnly: true,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              backgroundCursorColor: Colors.grey,
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state = tester.state<EditableTextState>(
-        find.byType(EditableText),
-      );
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      expect(state.cutEnabled, isFalse);
-      expect(state.buttonItemsForToolbarOptions(), isEmpty);
-    });
+        expect(state.cutEnabled, isFalse);
+        expect(state.buttonItemsForToolbarOptions(), isEmpty);
+      },
+    );
 
-    testWidgets('returns only cut button when only cut is selected in toolbarOptions and cut is enabled', (WidgetTester tester) async {
-      const String text = 'TEXT';
-      final TextEditingController controller = TextEditingController(text: text);
+    testWidgets(
+      'returns only cut button when only cut is selected in toolbarOptions and cut is enabled',
+      (WidgetTester tester) async {
+        const text = 'TEXT';
+        controller.text = text;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: controller,
-            toolbarOptions: const ToolbarOptions(cut: true),
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            backgroundCursorColor: Colors.grey,
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              toolbarOptions: const ToolbarOptions(cut: true),
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              backgroundCursorColor: Colors.grey,
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state = tester.state<EditableTextState>(
-        find.byType(EditableText),
-      );
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      // Selecting all.
-      controller.selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: controller.text.length,
-      );
-      expect(state.cutEnabled, isTrue);
+        // Selecting all.
+        controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+        expect(state.cutEnabled, isTrue);
 
-      final List<ContextMenuButtonItem>? items = state.buttonItemsForToolbarOptions();
+        final List<ContextMenuButtonItem>? items = state.buttonItemsForToolbarOptions();
 
-      expect(items, isNotNull);
-      expect(items, hasLength(1));
+        expect(items, isNotNull);
+        expect(items, hasLength(1));
 
-      final ContextMenuButtonItem cutButton = items!.first;
-      expect(cutButton.type, ContextMenuButtonType.cut);
+        final ContextMenuButtonItem cutButton = items!.first;
+        expect(cutButton.type, ContextMenuButtonType.cut);
 
-      cutButton.onPressed?.call();
-      await tester.pump();
+        cutButton.onPressed?.call();
+        await tester.pump();
 
-      expect(controller.text, isEmpty);
-      final ClipboardData? data = await Clipboard.getData('text/plain');
-      expect(data, isNotNull);
-      expect(data!.text, equals(text));
-    });
+        expect(controller.text, isEmpty);
+        final ClipboardData? data = await Clipboard.getData('text/plain');
+        expect(data, isNotNull);
+        expect(data!.text, equals(text));
+      },
+    );
 
-    testWidgets('returns empty array when only copy is selected in toolbarOptions but copy is not enabled', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: TextEditingController(text: 'TEXT'),
-            toolbarOptions: const ToolbarOptions(copy: true),
-            obscureText: true,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            backgroundCursorColor: Colors.grey,
+    testWidgets(
+      'returns empty array when only copy is selected in toolbarOptions but copy is not enabled',
+      (WidgetTester tester) async {
+        controller.text = 'TEXT';
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              toolbarOptions: const ToolbarOptions(copy: true),
+              obscureText: true,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              backgroundCursorColor: Colors.grey,
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state = tester.state<EditableTextState>(
-        find.byType(EditableText),
-      );
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      expect(state.copyEnabled, isFalse);
-      expect(state.buttonItemsForToolbarOptions(), isEmpty);
-    });
+        expect(state.copyEnabled, isFalse);
+        expect(state.buttonItemsForToolbarOptions(), isEmpty);
+      },
+    );
 
-    testWidgets('returns only copy button when only copy is selected in toolbarOptions and copy is enabled', (WidgetTester tester) async {
-      const String text = 'TEXT';
-      final TextEditingController controller = TextEditingController(text: text);
+    testWidgets(
+      'returns only copy button when only copy is selected in toolbarOptions and copy is enabled',
+      (WidgetTester tester) async {
+        const text = 'TEXT';
+        controller.text = text;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: controller,
-            toolbarOptions: const ToolbarOptions(copy: true),
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            backgroundCursorColor: Colors.grey,
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              toolbarOptions: const ToolbarOptions(copy: true),
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              backgroundCursorColor: Colors.grey,
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state = tester.state<EditableTextState>(
-        find.byType(EditableText),
-      );
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      // Selecting all.
-      controller.selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: controller.text.length,
-      );
-      expect(state.copyEnabled, isTrue);
+        // Selecting all.
+        controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+        expect(state.copyEnabled, isTrue);
 
-      final List<ContextMenuButtonItem>? items = state.buttonItemsForToolbarOptions();
+        final List<ContextMenuButtonItem>? items = state.buttonItemsForToolbarOptions();
 
-      expect(items, isNotNull);
-      expect(items, hasLength(1));
+        expect(items, isNotNull);
+        expect(items, hasLength(1));
 
-      final ContextMenuButtonItem copyButton = items!.first;
-      expect(copyButton.type, ContextMenuButtonType.copy);
+        final ContextMenuButtonItem copyButton = items!.first;
+        expect(copyButton.type, ContextMenuButtonType.copy);
 
-      copyButton.onPressed?.call();
-      await tester.pump();
+        copyButton.onPressed?.call();
+        await tester.pump();
 
-      expect(controller.text, equals(text));
-      final ClipboardData? data = await Clipboard.getData('text/plain');
-      expect(data, isNotNull);
-      expect(data!.text, equals(text));
-    });
+        expect(controller.text, equals(text));
+        final ClipboardData? data = await Clipboard.getData('text/plain');
+        expect(data, isNotNull);
+        expect(data!.text, equals(text));
+      },
+    );
 
-    testWidgets('returns empty array when only paste is selected in toolbarOptions but paste is not enabled', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: TextEditingController(text: 'TEXT'),
-            toolbarOptions: const ToolbarOptions(paste: true),
-            readOnly: true,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            backgroundCursorColor: Colors.grey,
+    testWidgets(
+      'returns empty array when only paste is selected in toolbarOptions but paste is not enabled',
+      (WidgetTester tester) async {
+        controller.text = 'TEXT';
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              toolbarOptions: const ToolbarOptions(paste: true),
+              readOnly: true,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              backgroundCursorColor: Colors.grey,
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state = tester.state<EditableTextState>(
-        find.byType(EditableText),
-      );
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      expect(state.pasteEnabled, isFalse);
-      expect(state.buttonItemsForToolbarOptions(), isEmpty);
-    });
+        expect(state.pasteEnabled, isFalse);
+        expect(state.buttonItemsForToolbarOptions(), isEmpty);
+      },
+    );
 
-    testWidgets('returns only paste button when only paste is selected in toolbarOptions and paste is enabled', (WidgetTester tester) async {
-      const String text = 'TEXT';
-      final TextEditingController controller = TextEditingController(text: text);
+    testWidgets(
+      'returns only paste button when only paste is selected in toolbarOptions and paste is enabled',
+      (WidgetTester tester) async {
+        const text = 'TEXT';
+        controller.text = text;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: controller,
-            toolbarOptions: const ToolbarOptions(paste: true),
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            backgroundCursorColor: Colors.grey,
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              toolbarOptions: const ToolbarOptions(paste: true),
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              backgroundCursorColor: Colors.grey,
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state = tester.state<EditableTextState>(
-        find.byType(EditableText),
-      );
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      // Moving caret to the end.
-      controller.selection = TextSelection.collapsed(offset: controller.text.length);
-      expect(state.pasteEnabled, isTrue);
+        // Moving caret to the end.
+        controller.selection = TextSelection.collapsed(offset: controller.text.length);
+        expect(state.pasteEnabled, isTrue);
 
-      final List<ContextMenuButtonItem>? items = state.buttonItemsForToolbarOptions();
+        final List<ContextMenuButtonItem>? items = state.buttonItemsForToolbarOptions();
 
-      expect(items, isNotNull);
-      expect(items, hasLength(1));
+        expect(items, isNotNull);
+        expect(items, hasLength(1));
 
-      final ContextMenuButtonItem pasteButton = items!.first;
-      expect(pasteButton.type, ContextMenuButtonType.paste);
+        final ContextMenuButtonItem pasteButton = items!.first;
+        expect(pasteButton.type, ContextMenuButtonType.paste);
 
-      // Setting data which will be pasted into the clipboard.
-      await Clipboard.setData(const ClipboardData(text: text));
+        // Setting data which will be pasted into the clipboard.
+        await Clipboard.setData(const ClipboardData(text: text));
 
-      pasteButton.onPressed?.call();
-      await tester.pump();
+        pasteButton.onPressed?.call();
+        await tester.pump();
 
-      expect(controller.text, equals(text + text));
-    });
+        expect(controller.text, equals(text + text));
+      },
+    );
 
-    testWidgets('returns empty array when only selectAll is selected in toolbarOptions but selectAll is not enabled', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: TextEditingController(text: 'TEXT'),
-            toolbarOptions: const ToolbarOptions(selectAll: true),
-            readOnly: true,
-            obscureText: true,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            backgroundCursorColor: Colors.grey,
+    testWidgets(
+      'returns empty array when only selectAll is selected in toolbarOptions but selectAll is not enabled',
+      (WidgetTester tester) async {
+        controller.text = 'TEXT';
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              toolbarOptions: const ToolbarOptions(selectAll: true),
+              readOnly: true,
+              obscureText: true,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              backgroundCursorColor: Colors.grey,
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state = tester.state<EditableTextState>(
-        find.byType(EditableText),
-      );
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      expect(state.selectAllEnabled, isFalse);
-      expect(state.buttonItemsForToolbarOptions(), isEmpty);
-    });
+        expect(state.selectAllEnabled, isFalse);
+        expect(state.buttonItemsForToolbarOptions(), isEmpty);
+      },
+    );
 
-    testWidgets('returns only selectAll button when only selectAll is selected in toolbarOptions and selectAll is enabled', (WidgetTester tester) async {
-      const String text = 'TEXT';
-      final TextEditingController controller = TextEditingController(text: text);
+    testWidgets(
+      'returns only selectAll button when only selectAll is selected in toolbarOptions and selectAll is enabled',
+      (WidgetTester tester) async {
+        const text = 'TEXT';
+        controller.text = text;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: controller,
-            toolbarOptions: const ToolbarOptions(selectAll: true),
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            backgroundCursorColor: Colors.grey,
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              toolbarOptions: const ToolbarOptions(selectAll: true),
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              backgroundCursorColor: Colors.grey,
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state = tester.state<EditableTextState>(
-        find.byType(EditableText),
-      );
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      final List<ContextMenuButtonItem>? items = state.buttonItemsForToolbarOptions();
+        final List<ContextMenuButtonItem>? items = state.buttonItemsForToolbarOptions();
 
-      expect(items, isNotNull);
-      expect(items, hasLength(1));
+        expect(items, isNotNull);
+        expect(items, hasLength(1));
 
-      final ContextMenuButtonItem selectAllButton = items!.first;
-      expect(selectAllButton.type, ContextMenuButtonType.selectAll);
+        final ContextMenuButtonItem selectAllButton = items!.first;
+        expect(selectAllButton.type, ContextMenuButtonType.selectAll);
 
-      selectAllButton.onPressed?.call();
-      await tester.pump();
+        selectAllButton.onPressed?.call();
+        await tester.pump();
 
-      expect(controller.text, equals(text));
-      expect(state.textEditingValue.selection.textInside(text), equals(text));
-    });
+        expect(controller.text, equals(text));
+        expect(state.textEditingValue.selection.textInside(text), equals(text));
+      },
+    );
   });
 
   testWidgets('Handles the read-only flag correctly', (WidgetTester tester) async {
-    final TextEditingController controller =
-        TextEditingController(text: 'Lorem ipsum dolor sit amet');
+    controller.text = 'Lorem ipsum dolor sit amet';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
@@ -2765,10 +3583,7 @@ void main() {
       // with the `readOnly` flag set to true.
       expect(tester.testTextInput.hasAnyClients, isTrue);
       expect(tester.testTextInput.setClientArgs!['readOnly'], isTrue);
-      expect(
-        tester.testTextInput.editingState!['text'],
-        'Lorem ipsum dolor sit amet',
-      );
+      expect(tester.testTextInput.editingState!['text'], 'Lorem ipsum dolor sit amet');
       expect(tester.testTextInput.editingState!['selectionBase'], 0);
       expect(tester.testTextInput.editingState!['selectionExtent'], 5);
     } else {
@@ -2779,8 +3594,8 @@ void main() {
   });
 
   testWidgets('Does not accept updates when read-only', (WidgetTester tester) async {
-    final TextEditingController controller =
-        TextEditingController(text: 'Lorem ipsum dolor sit amet');
+    controller.text = 'Lorem ipsum dolor sit amet';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
@@ -2803,11 +3618,13 @@ void main() {
     if (kIsWeb) {
       // On the web, the input connection exists, but text updates should be
       // ignored.
-      tester.testTextInput.updateEditingValue(const TextEditingValue(
-        text: 'Foo bar',
-        selection: TextSelection(baseOffset: 0, extentOffset: 3),
-        composing: TextRange(start: 3, end: 4),
-      ));
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'Foo bar',
+          selection: TextSelection(baseOffset: 0, extentOffset: 3),
+          composing: TextRange(start: 3, end: 4),
+        ),
+      );
       // Only selection should change.
       expect(
         controller.value,
@@ -2820,10 +3637,8 @@ void main() {
   });
 
   testWidgets('Read-only fields do not format text', (WidgetTester tester) async {
+    controller.text = 'Lorem ipsum dolor sit amet';
     late SelectionChangedCause selectionCause;
-
-    final TextEditingController controller =
-        TextEditingController(text: 'Lorem ipsum dolor sit amet');
 
     await tester.pumpWidget(
       MaterialApp(
@@ -2849,361 +3664,94 @@ void main() {
 
     expect(tester.testTextInput.hasAnyClients, kIsWeb ? isTrue : isFalse);
     if (kIsWeb) {
-      tester.testTextInput.updateEditingValue(const TextEditingValue(
-        text: 'Foo bar',
-        selection: TextSelection(baseOffset: 0, extentOffset: 3),
-      ));
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'Foo bar',
+          selection: TextSelection(baseOffset: 0, extentOffset: 3),
+        ),
+      );
       // On web, the only way a text field can be updated from the engine is if
       // a keyboard is used.
       expect(selectionCause, SelectionChangedCause.keyboard);
     }
   });
 
-  testWidgets('Selection changes during Scribble interaction should have the scribble cause', (WidgetTester tester) async {
-    late SelectionChangedCause selectionCause;
+  testWidgets(
+    'Read-only fields can be traversed on all platforms',
+    (WidgetTester tester) async {
+      final controller1 = TextEditingController();
+      addTearDown(controller1.dispose);
+      final controller2 = TextEditingController();
+      addTearDown(controller2.dispose);
+      final focusNode1 = FocusNode();
+      addTearDown(focusNode1.dispose);
+      final focusNode2 = FocusNode();
+      addTearDown(focusNode2.dispose);
 
-    final TextEditingController controller =
-        TextEditingController(text: 'Lorem ipsum dolor sit amet');
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          controller: controller,
-          backgroundCursorColor: Colors.grey,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
-          onSelectionChanged: (TextSelection selection, SelectionChangedCause? cause) {
-            if (cause != null) {
-              selectionCause = cause;
-            }
-          },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Column(
+            children: <Widget>[
+              EditableText(
+                focusNode: focusNode1,
+                autofocus: true,
+                controller: controller1,
+                backgroundCursorColor: Colors.grey,
+                style: textStyle,
+                cursorColor: cursorColor,
+              ),
+              EditableText(
+                readOnly: true,
+                focusNode: focusNode2,
+                controller: controller2,
+                backgroundCursorColor: Colors.grey,
+                style: textStyle,
+                cursorColor: cursorColor,
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
 
-    await tester.showKeyboard(find.byType(EditableText));
+      expect(focusNode1.hasPrimaryFocus, true);
+      expect(focusNode2.hasPrimaryFocus, false);
 
-    // A normal selection update from the framework has 'keyboard' as the cause.
-    tester.testTextInput.updateEditingValue(TextEditingValue(
-      text: controller.text,
-      selection: const TextSelection(baseOffset: 2, extentOffset: 3),
-    ));
-    await tester.pumpAndSettle();
+      // Change focus to the readonly EditableText.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
 
-    expect(selectionCause, SelectionChangedCause.keyboard);
+      expect(focusNode1.hasPrimaryFocus, false);
+      expect(focusNode2.hasPrimaryFocus, true);
 
-    // A selection update during a scribble interaction has 'scribble' as the cause.
-    await tester.testTextInput.startScribbleInteraction();
-    tester.testTextInput.updateEditingValue(TextEditingValue(
-      text: controller.text,
-      selection: const TextSelection(baseOffset: 3, extentOffset: 4),
-    ));
-    await tester.pumpAndSettle();
+      // Change focus back to the first EditableText.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
 
-    expect(selectionCause, SelectionChangedCause.scribble);
+      expect(focusNode1.hasPrimaryFocus, true);
+      expect(focusNode2.hasPrimaryFocus, false);
+    },
+    variant: TargetPlatformVariant.all(),
+    skip: kIsWeb, // [intended]
+  );
 
-    await tester.testTextInput.finishScribbleInteraction();
-  }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS }));
-
-  testWidgets('Requests focus and changes the selection when onScribbleFocus is called', (WidgetTester tester) async {
-    final TextEditingController controller =
-        TextEditingController(text: 'Lorem ipsum dolor sit amet');
-    late SelectionChangedCause selectionCause;
+  testWidgets('Sends "updateConfig" when read-only flag is flipped', (WidgetTester tester) async {
+    var readOnly = true;
+    late StateSetter setState;
+    controller.text = 'Lorem ipsum dolor sit amet';
 
     await tester.pumpWidget(
       MaterialApp(
-        home: EditableText(
-          controller: controller,
-          backgroundCursorColor: Colors.grey,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
-          onSelectionChanged: (TextSelection selection, SelectionChangedCause? cause) {
-            if (cause != null) {
-              selectionCause = cause;
-            }
-          },
-        ),
-      ),
-    );
-
-    await tester.testTextInput.scribbleFocusElement(TextInput.scribbleClients.keys.first, Offset.zero);
-
-    expect(focusNode.hasFocus, true);
-    expect(selectionCause, SelectionChangedCause.scribble);
-
-    // On web, we should rely on the browser's implementation of Scribble, so the selection changed cause
-    // will never be SelectionChangedCause.scribble.
-  }, skip: kIsWeb, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS })); // [intended]
-
-  testWidgets('Declares itself for Scribble interaction if the bounds overlap the scribble rect and the widget is touchable', (WidgetTester tester) async {
-    final TextEditingController controller =
-        TextEditingController(text: 'Lorem ipsum dolor sit amet');
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          controller: controller,
-          backgroundCursorColor: Colors.grey,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
-        ),
-      ),
-    );
-
-    final List<dynamic> elementEntry = <dynamic>[TextInput.scribbleClients.keys.first, 0.0, 0.0, 800.0, 600.0];
-
-    List<List<dynamic>> elements = await tester.testTextInput.scribbleRequestElementsInRect(const Rect.fromLTWH(0, 0, 1, 1));
-    expect(elements.first, containsAll(elementEntry));
-
-    // Touch is outside the bounds of the widget.
-    elements = await tester.testTextInput.scribbleRequestElementsInRect(const Rect.fromLTWH(-1, -1, 1, 1));
-    expect(elements.length, 0);
-
-    // Widget is read only.
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          readOnly: true,
-          controller: controller,
-          backgroundCursorColor: Colors.grey,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
-        ),
-      ),
-    );
-
-    elements = await tester.testTextInput.scribbleRequestElementsInRect(const Rect.fromLTWH(0, 0, 1, 1));
-    expect(elements.length, 0);
-
-    // Widget is not touchable.
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Stack(children: <Widget>[
-            EditableText(
+        home: StatefulBuilder(
+          builder: (BuildContext context, StateSetter stateSetter) {
+            setState = stateSetter;
+            return EditableText(
+              readOnly: readOnly,
               controller: controller,
               backgroundCursorColor: Colors.grey,
               focusNode: focusNode,
               style: textStyle,
               cursorColor: cursorColor,
-              selectionControls: materialTextSelectionControls,
-            ),
-            Positioned(
-              left: 0,
-              top: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(color: Colors.black),
-            ),
-          ],
+            );
+          },
         ),
-      ),
-    );
-
-    elements = await tester.testTextInput.scribbleRequestElementsInRect(const Rect.fromLTWH(0, 0, 1, 1));
-    expect(elements.length, 0);
-
-    // Widget has scribble disabled.
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          controller: controller,
-          backgroundCursorColor: Colors.grey,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
-          scribbleEnabled: false,
-        ),
-      ),
-    );
-
-    elements = await tester.testTextInput.scribbleRequestElementsInRect(const Rect.fromLTWH(0, 0, 1, 1));
-    expect(elements.length, 0);
-
-
-    // On web, we should rely on the browser's implementation of Scribble, so the engine will
-    // never request the scribble elements.
-  }, skip: kIsWeb, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS })); // [intended]
-
-  testWidgets('single line Scribble fields can show a horizontal placeholder', (WidgetTester tester) async {
-    final TextEditingController controller =
-        TextEditingController(text: 'Lorem ipsum dolor sit amet');
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          controller: controller,
-          backgroundCursorColor: Colors.grey,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
-        ),
-      ),
-    );
-
-    await tester.showKeyboard(find.byType(EditableText));
-
-    tester.testTextInput.updateEditingValue(TextEditingValue(
-      text: controller.text,
-      selection: const TextSelection(baseOffset: 5, extentOffset: 5),
-    ));
-    await tester.pumpAndSettle();
-
-    await tester.testTextInput.scribbleInsertPlaceholder();
-    await tester.pumpAndSettle();
-
-    TextSpan textSpan = findRenderEditable(tester).text! as TextSpan;
-    expect(textSpan.children!.length, 3);
-    expect((textSpan.children![0] as TextSpan).text, 'Lorem');
-    expect(textSpan.children![1] is WidgetSpan, true);
-    expect((textSpan.children![2] as TextSpan).text, ' ipsum dolor sit amet');
-
-    await tester.testTextInput.scribbleRemovePlaceholder();
-    await tester.pumpAndSettle();
-
-    textSpan = findRenderEditable(tester).text! as TextSpan;
-    expect(textSpan.children, null);
-    expect(textSpan.text, 'Lorem ipsum dolor sit amet');
-
-    // Widget has scribble disabled.
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          controller: controller,
-          backgroundCursorColor: Colors.grey,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
-          scribbleEnabled: false,
-        ),
-      ),
-    );
-
-    await tester.showKeyboard(find.byType(EditableText));
-
-    tester.testTextInput.updateEditingValue(TextEditingValue(
-      text: controller.text,
-      selection: const TextSelection(baseOffset: 5, extentOffset: 5),
-    ));
-    await tester.pumpAndSettle();
-
-    await tester.testTextInput.scribbleInsertPlaceholder();
-    await tester.pumpAndSettle();
-
-    textSpan = findRenderEditable(tester).text! as TextSpan;
-    expect(textSpan.children, null);
-    expect(textSpan.text, 'Lorem ipsum dolor sit amet');
-
-    // On web, we should rely on the browser's implementation of Scribble, so the framework
-    // will not handle placeholders.
-  }, skip: kIsWeb, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS })); // [intended]
-
-  testWidgets('multiline Scribble fields can show a vertical placeholder', (WidgetTester tester) async {
-    final TextEditingController controller =
-        TextEditingController(text: 'Lorem ipsum dolor sit amet');
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          controller: controller,
-          backgroundCursorColor: Colors.grey,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
-          maxLines: 2,
-        ),
-      ),
-    );
-
-    await tester.showKeyboard(find.byType(EditableText));
-
-    tester.testTextInput.updateEditingValue(TextEditingValue(
-      text: controller.text,
-      selection: const TextSelection(baseOffset: 5, extentOffset: 5),
-    ));
-    await tester.pumpAndSettle();
-
-    await tester.testTextInput.scribbleInsertPlaceholder();
-    await tester.pumpAndSettle();
-
-    TextSpan textSpan = findRenderEditable(tester).text! as TextSpan;
-    expect(textSpan.children!.length, 4);
-    expect((textSpan.children![0] as TextSpan).text, 'Lorem');
-    expect(textSpan.children![1] is WidgetSpan, true);
-    expect(textSpan.children![2] is WidgetSpan, true);
-    expect((textSpan.children![3] as TextSpan).text, ' ipsum dolor sit amet');
-
-    await tester.testTextInput.scribbleRemovePlaceholder();
-    await tester.pumpAndSettle();
-
-    textSpan = findRenderEditable(tester).text! as TextSpan;
-    expect(textSpan.children, null);
-    expect(textSpan.text, 'Lorem ipsum dolor sit amet');
-
-    // Widget has scribble disabled.
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          controller: controller,
-          backgroundCursorColor: Colors.grey,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
-          maxLines: 2,
-          scribbleEnabled: false,
-        ),
-      ),
-    );
-
-    await tester.showKeyboard(find.byType(EditableText));
-
-    tester.testTextInput.updateEditingValue(TextEditingValue(
-      text: controller.text,
-      selection: const TextSelection(baseOffset: 5, extentOffset: 5),
-    ));
-    await tester.pumpAndSettle();
-
-    await tester.testTextInput.scribbleInsertPlaceholder();
-    await tester.pumpAndSettle();
-
-    textSpan = findRenderEditable(tester).text! as TextSpan;
-    expect(textSpan.children, null);
-    expect(textSpan.text, 'Lorem ipsum dolor sit amet');
-
-    // On web, we should rely on the browser's implementation of Scribble, so the framework
-    // will not handle placeholders.
-  }, skip: kIsWeb, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS })); // [intended]
-
-  testWidgets('Sends "updateConfig" when read-only flag is flipped', (WidgetTester tester) async {
-    bool readOnly = true;
-    late StateSetter setState;
-    final TextEditingController controller = TextEditingController(text: 'Lorem ipsum dolor sit amet');
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StatefulBuilder(builder: (BuildContext context, StateSetter stateSetter) {
-          setState = stateSetter;
-          return EditableText(
-            readOnly: readOnly,
-            controller: controller,
-            backgroundCursorColor: Colors.grey,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-          );
-        }),
       ),
     );
 
@@ -3217,7 +3765,9 @@ void main() {
       expect(tester.testTextInput.setClientArgs!['readOnly'], isTrue);
     }
 
-    setState(() { readOnly = false; });
+    setState(() {
+      readOnly = false;
+    });
     await tester.pump();
 
     expect(tester.testTextInput.hasAnyClients, isTrue);
@@ -3225,9 +3775,9 @@ void main() {
   });
 
   testWidgets('Sends "updateConfig" when obscureText is flipped', (WidgetTester tester) async {
-    bool obscureText = true;
+    var obscureText = true;
     late StateSetter setState;
-    final TextEditingController controller = TextEditingController(text: 'Lorem');
+    controller.text = 'Lorem';
 
     await tester.pumpWidget(
       MaterialApp(
@@ -3254,19 +3804,116 @@ void main() {
 
     expect(tester.testTextInput.setClientArgs!['obscureText'], isTrue);
 
-    setState(() { obscureText = false; });
+    setState(() {
+      obscureText = false;
+    });
     await tester.pump();
 
     expect(tester.testTextInput.setClientArgs!['obscureText'], isFalse);
   });
 
-  testWidgets('Fires onChanged when text changes via TextSelectionOverlay', (WidgetTester tester) async {
+  testWidgets('Sends "updateConfig" when keyboardType is changed', (WidgetTester tester) async {
+    TextInputType keyboardType = TextInputType.text;
+    late StateSetter setState;
+    controller.text = 'Lorem';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (BuildContext context, StateSetter stateSetter) {
+            setState = stateSetter;
+            return EditableText(
+              keyboardType: keyboardType,
+              controller: controller,
+              backgroundCursorColor: Colors.grey,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+            );
+          },
+        ),
+      ),
+    );
+
+    // Interact with the field to establish the input connection.
+    final Offset topLeft = tester.getTopLeft(find.byType(EditableText));
+    await tester.tapAt(topLeft + const Offset(0.0, 5.0));
+    await tester.pump();
+
+    expect(
+      (tester.testTextInput.setClientArgs!['inputType'] as Map<dynamic, dynamic>)['name'],
+      'TextInputType.text',
+    );
+
+    setState(() {
+      keyboardType = TextInputType.number;
+    });
+    await tester.pump();
+
+    expect(
+      (tester.testTextInput.setClientArgs!['inputType'] as Map<dynamic, dynamic>)['name'],
+      'TextInputType.number',
+    );
+  });
+
+  testWidgets('Sends viewId and updates config when it changes', (WidgetTester tester) async {
+    var viewId = 14;
+    late StateSetter setState;
+    final GlobalKey key = GlobalKey();
+
+    await tester.pumpWidget(
+      wrapWithView: false,
+      StatefulBuilder(
+        builder: (BuildContext context, StateSetter stateSetter) {
+          setState = stateSetter;
+          return View(
+            view: FakeFlutterView(tester.view, viewId: viewId),
+            child: MediaQuery(
+              data: const MediaQueryData(),
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: EditableText(
+                  key: key,
+                  controller: controller,
+                  backgroundCursorColor: Colors.grey,
+                  focusNode: focusNode,
+                  style: textStyle,
+                  cursorColor: cursorColor,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    // Focus the field to establish the input connection.
+    focusNode.requestFocus();
+    await tester.pump();
+
+    expect(tester.testTextInput.setClientArgs!['viewId'], 14);
+    expect(tester.testTextInput.log, contains(matchesMethodCall('TextInput.setClient')));
+    tester.testTextInput.log.clear();
+
+    setState(() {
+      viewId = 15;
+    });
+    await tester.pump();
+
+    expect(tester.testTextInput.setClientArgs!['viewId'], 15);
+    expect(tester.testTextInput.log, contains(matchesMethodCall('TextInput.updateConfig')));
+    tester.testTextInput.log.clear();
+  });
+
+  testWidgets('Fires onChanged when text changes via TextSelectionOverlay', (
+    WidgetTester tester,
+  ) async {
     late String changedValue;
     final Widget widget = MaterialApp(
       home: EditableText(
         backgroundCursorColor: Colors.grey,
-        controller: TextEditingController(),
-        focusNode: FocusNode(),
+        controller: controller,
+        focusNode: focusNode,
         style: Typography.material2018().black.titleMedium!,
         cursorColor: Colors.blue,
         selectionControls: materialTextSelectionControls,
@@ -3279,8 +3926,8 @@ void main() {
     await tester.pumpWidget(widget);
 
     // Populate a fake clipboard.
-    const String clipboardContent = 'Dobunezumi mitai ni utsukushiku naritai';
-    Clipboard.setData(const ClipboardData(text: clipboardContent));
+    const clipboardContent = 'Dobunezumi mitai ni utsukushiku naritai';
+    await Clipboard.setData(const ClipboardData(text: clipboardContent));
 
     // Long-press to bring up the text editing controls.
     final Finder textFinder = find.byType(EditableText);
@@ -3298,14 +3945,11 @@ void main() {
   }, skip: kIsWeb); // [intended]
 
   // The variants to test in the focus handling test.
-  final ValueVariant<TextInputAction> focusVariants = ValueVariant<
-      TextInputAction>(
-    TextInputAction.values.toSet(),
-  );
+  final focusVariants = ValueVariant<TextInputAction>(TextInputAction.values.toSet());
 
   testWidgets('Handles focus correctly when action is invoked', (WidgetTester tester) async {
     // The expectations for each of the types of TextInputAction.
-    const Map<TextInputAction, bool> actionShouldLoseFocus = <TextInputAction, bool>{
+    const actionShouldLoseFocus = <TextInputAction, bool>{
       TextInputAction.none: false,
       TextInputAction.unspecified: false,
       TextInputAction.done: true,
@@ -3325,12 +3969,11 @@ void main() {
     expect(actionShouldLoseFocus.containsKey(action), isTrue);
 
     Future<void> ensureCorrectFocusHandlingForAction(
-        TextInputAction action, {
-          required bool shouldLoseFocus,
-          bool shouldFocusNext = false,
-          bool shouldFocusPrevious = false,
-        }) async {
-      final FocusNode focusNode = FocusNode();
+      TextInputAction action, {
+      required bool shouldLoseFocus,
+      bool shouldFocusNext = false,
+      bool shouldFocusPrevious = false,
+    }) async {
       final GlobalKey previousKey = GlobalKey();
       final GlobalKey nextKey = GlobalKey();
 
@@ -3343,7 +3986,7 @@ void main() {
             ),
             EditableText(
               backgroundCursorColor: Colors.grey,
-              controller: TextEditingController(),
+              controller: controller,
               focusNode: focusNode,
               style: Typography.material2018().black.titleMedium!,
               cursorColor: Colors.blue,
@@ -3383,50 +4026,51 @@ void main() {
     }
   }, variant: focusVariants);
 
-  testWidgets('Does not lose focus by default when "done" action is pressed and onEditingComplete is provided', (WidgetTester tester) async {
-    final FocusNode focusNode = FocusNode();
+  testWidgets(
+    'Does not lose focus by default when "done" action is pressed and onEditingComplete is provided',
+    (WidgetTester tester) async {
+      final Widget widget = MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: Typography.material2018().black.titleMedium!,
+          cursorColor: Colors.blue,
+          selectionControls: materialTextSelectionControls,
+          keyboardType: TextInputType.text,
+          onEditingComplete: () {
+            // This prevents the default focus change behavior on submission.
+          },
+        ),
+      );
+      await tester.pumpWidget(widget);
+
+      // Select EditableText to give it focus.
+      final Finder textFinder = find.byType(EditableText);
+      await tester.tap(textFinder);
+      await tester.pump();
+
+      assert(focusNode.hasFocus);
+
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      // Still has focus even though "done" was pressed because onEditingComplete
+      // was provided and it overrides the default behavior.
+      expect(focusNode.hasFocus, true);
+    },
+  );
+
+  testWidgets('When "done" is pressed callbacks are invoked: onEditingComplete > onSubmitted', (
+    WidgetTester tester,
+  ) async {
+    var onEditingCompleteCalled = false;
+    var onSubmittedCalled = false;
 
     final Widget widget = MaterialApp(
       home: EditableText(
         backgroundCursorColor: Colors.grey,
-        controller: TextEditingController(),
-        focusNode: focusNode,
-        style: Typography.material2018().black.titleMedium!,
-        cursorColor: Colors.blue,
-        selectionControls: materialTextSelectionControls,
-        keyboardType: TextInputType.text,
-        onEditingComplete: () {
-          // This prevents the default focus change behavior on submission.
-        },
-      ),
-    );
-    await tester.pumpWidget(widget);
-
-    // Select EditableText to give it focus.
-    final Finder textFinder = find.byType(EditableText);
-    await tester.tap(textFinder);
-    await tester.pump();
-
-    assert(focusNode.hasFocus);
-
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
-
-    // Still has focus even though "done" was pressed because onEditingComplete
-    // was provided and it overrides the default behavior.
-    expect(focusNode.hasFocus, true);
-  });
-
-  testWidgets('When "done" is pressed callbacks are invoked: onEditingComplete > onSubmitted', (WidgetTester tester) async {
-    final FocusNode focusNode = FocusNode();
-
-    bool onEditingCompleteCalled = false;
-    bool onSubmittedCalled = false;
-
-    final Widget widget = MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: TextEditingController(),
+        controller: controller,
         focusNode: focusNode,
         style: Typography.material2018().black.titleMedium!,
         cursorColor: Colors.blue,
@@ -3457,16 +4101,16 @@ void main() {
     // and onSubmission callbacks.
   });
 
-  testWidgets('When "next" is pressed callbacks are invoked: onEditingComplete > onSubmitted', (WidgetTester tester) async {
-    final FocusNode focusNode = FocusNode();
-
-    bool onEditingCompleteCalled = false;
-    bool onSubmittedCalled = false;
+  testWidgets('When "next" is pressed callbacks are invoked: onEditingComplete > onSubmitted', (
+    WidgetTester tester,
+  ) async {
+    var onEditingCompleteCalled = false;
+    var onSubmittedCalled = false;
 
     final Widget widget = MaterialApp(
       home: EditableText(
         backgroundCursorColor: Colors.grey,
-        controller: TextEditingController(),
+        controller: controller,
         focusNode: focusNode,
         style: Typography.material2018().black.titleMedium!,
         cursorColor: Colors.blue,
@@ -3497,83 +4141,174 @@ void main() {
     // and onSubmission callbacks.
   });
 
-  testWidgets('When "newline" action is called on a Editable text with maxLines == 1 callbacks are invoked: onEditingComplete > onSubmitted', (WidgetTester tester) async {
-    final FocusNode focusNode = FocusNode();
+  testWidgets(
+    'When "newline" action is called on a Editable text with maxLines == 1 callbacks are invoked: onEditingComplete > onSubmitted',
+    (WidgetTester tester) async {
+      var onEditingCompleteCalled = false;
+      var onSubmittedCalled = false;
 
-    bool onEditingCompleteCalled = false;
-    bool onSubmittedCalled = false;
+      final Widget widget = MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: Typography.material2018().black.titleMedium!,
+          cursorColor: Colors.blue,
+          onEditingComplete: () {
+            onEditingCompleteCalled = true;
+            assert(!onSubmittedCalled);
+          },
+          onSubmitted: (String value) {
+            onSubmittedCalled = true;
+            assert(onEditingCompleteCalled);
+          },
+        ),
+      );
+      await tester.pumpWidget(widget);
 
-    final Widget widget = MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: TextEditingController(),
-        focusNode: focusNode,
-        style: Typography.material2018().black.titleMedium!,
-        cursorColor: Colors.blue,
-        onEditingComplete: () {
-          onEditingCompleteCalled = true;
-          assert(!onSubmittedCalled);
-        },
-        onSubmitted: (String value) {
-          onSubmittedCalled = true;
-          assert(onEditingCompleteCalled);
-        },
-      ),
+      // Select EditableText to give it focus.
+      final Finder textFinder = find.byType(EditableText);
+      await tester.tap(textFinder);
+      await tester.pump();
+
+      assert(focusNode.hasFocus);
+
+      // The execution path starting with receiveAction() will trigger the
+      // onEditingComplete and onSubmission callbacks.
+      await tester.testTextInput.receiveAction(TextInputAction.newline);
+      // The expectations we care about are up above in the onEditingComplete
+      // and onSubmission callbacks.
+    },
+  );
+
+  testWidgets(
+    'When "newline" action is called on a Editable text with maxLines != 1, onEditingComplete and onSubmitted callbacks are not invoked.',
+    (WidgetTester tester) async {
+      var onEditingCompleteCalled = false;
+      var onSubmittedCalled = false;
+
+      final Widget widget = MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: Typography.material2018().black.titleMedium!,
+          cursorColor: Colors.blue,
+          maxLines: 3,
+          onEditingComplete: () {
+            onEditingCompleteCalled = true;
+          },
+          onSubmitted: (String value) {
+            onSubmittedCalled = true;
+          },
+        ),
+      );
+      await tester.pumpWidget(widget);
+
+      // Select EditableText to give it focus.
+      final Finder textFinder = find.byType(EditableText);
+      await tester.tap(textFinder);
+      await tester.pump();
+
+      assert(focusNode.hasFocus);
+
+      // The execution path starting with receiveAction() will trigger the
+      // onEditingComplete and onSubmission callbacks.
+      await tester.testTextInput.receiveAction(TextInputAction.newline);
+
+      // These callbacks shouldn't have been triggered.
+      assert(!onSubmittedCalled);
+      assert(!onEditingCompleteCalled);
+    },
+  );
+
+  // Regression test for https://github.com/flutter/flutter/issues/132047.
+  testWidgets('Dragging selection base handle upwards scrolls the viewport', (
+    WidgetTester tester,
+  ) async {
+    final controller = TextEditingController(text: 'Line 1\n' * 100);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      TestWidgetsApp(home: TestTextField(controller: controller, maxLines: null)),
     );
-    await tester.pumpWidget(widget);
 
-    // Select EditableText to give it focus.
-    final Finder textFinder = find.byType(EditableText);
-    await tester.tap(textFinder);
+    await tester.tap(find.byType(TestTextField));
+    await tester.pumpAndSettle();
+
+    final ScrollableState scrollable = tester.state(find.byType(Scrollable));
+
+    // Populate the viewport and scroll to the bottom to prepare for an upward drag.
+    scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+
+    expect(scrollable.position.pixels, equals(scrollable.position.maxScrollExtent));
+
+    // Establish an initial selection at the end of the text.
+    controller.selection = const TextSelection(baseOffset: 500, extentOffset: 600);
+    await tester.pumpAndSettle();
+
+    final EditableTextState state = tester.state(find.byType(EditableText));
+
+    // Simulate a drag that moves the base (start) handle toward the beginning
+    // of the text while keeping the extent (end) handle stationary.
+    state.userUpdateTextEditingValue(
+      TextEditingValue(
+        text: 'Line 1\n' * 100,
+        selection: const TextSelection(baseOffset: 0, extentOffset: 600),
+      ),
+      SelectionChangedCause.drag,
+    );
+
+    await tester.pumpAndSettle();
+
+    // The scroll offset updates to follow the dragged handle upwards
+    // instead of locking up or snapping to the opposite end.
+    expect(
+      scrollable.position.pixels,
+      0.0,
+      reason:
+          'The viewport should follow the base handle upwards instead of snapping to the extent.',
+    );
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  testWidgets('Mouse drag selection from bottom to top does not snap to extent', (
+    WidgetTester tester,
+  ) async {
+    final controller = TextEditingController(text: 'Line 1\n' * 100);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      TestWidgetsApp(home: TestTextField(controller: controller, maxLines: null)),
+    );
+
+    final ScrollableState scrollable = tester.state(find.byType(Scrollable));
+
+    // Scroll to the bottom of the long text.
+    scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+
+    expect(scrollable.position.pixels, equals(scrollable.position.maxScrollExtent));
+
+    final Finder textField = find.byType(TestTextField);
+
+    // Simulate clicking and holding the mouse at the bottom left of the text field.
+    final TestGesture gesture = await tester.startGesture(
+      tester.getBottomLeft(textField) + const Offset(10, -10),
+      kind: PointerDeviceKind.mouse,
+    );
     await tester.pump();
 
-    assert(focusNode.hasFocus);
+    // Drag the mouse upwards to the top left of the text field to select text.
+    await gesture.moveTo(tester.getTopLeft(textField) + const Offset(10, 10));
+    await tester.pumpAndSettle();
 
-    // The execution path starting with receiveAction() will trigger the
-    // onEditingComplete and onSubmission callbacks.
-    await tester.testTextInput.receiveAction(TextInputAction.newline);
-    // The expectations we care about are up above in the onEditingComplete
-    // and onSubmission callbacks.
-  });
+    // The viewport should follow the mouse upwards (offset decreases).
+    // It should not snap back to the bottom (maxScrollExtent).
+    expect(scrollable.position.pixels, lessThan(scrollable.position.maxScrollExtent));
 
-  testWidgets('When "newline" action is called on a Editable text with maxLines != 1, onEditingComplete and onSubmitted callbacks are not invoked.', (WidgetTester tester) async {
-    final FocusNode focusNode = FocusNode();
-
-    bool onEditingCompleteCalled = false;
-    bool onSubmittedCalled = false;
-
-    final Widget widget = MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: TextEditingController(),
-        focusNode: focusNode,
-        style: Typography.material2018().black.titleMedium!,
-        cursorColor: Colors.blue,
-        maxLines: 3,
-        onEditingComplete: () {
-          onEditingCompleteCalled = true;
-        },
-        onSubmitted: (String value) {
-          onSubmittedCalled = true;
-        },
-      ),
-    );
-    await tester.pumpWidget(widget);
-
-    // Select EditableText to give it focus.
-    final Finder textFinder = find.byType(EditableText);
-    await tester.tap(textFinder);
-    await tester.pump();
-
-    assert(focusNode.hasFocus);
-
-    // The execution path starting with receiveAction() will trigger the
-    // onEditingComplete and onSubmission callbacks.
-    await tester.testTextInput.receiveAction(TextInputAction.newline);
-
-    // These callbacks shouldn't have been triggered.
-    assert(!onSubmittedCalled);
-    assert(!onEditingCompleteCalled);
+    // Release the mouse click.
+    await gesture.up();
   });
 
   testWidgets(
@@ -3599,10 +4334,15 @@ void main() {
 
       // This should unfocus the field. Don't restart the input.
       await tester.testTextInput.receiveAction(TextInputAction.done);
-      expect(tester.testTextInput.log, isNot(containsAllInOrder(<Matcher>[
-        matchesMethodCall('TextInput.clearClient'),
-        matchesMethodCall('TextInput.setClient'),
-      ])));
+      expect(
+        tester.testTextInput.log,
+        isNot(
+          containsAllInOrder(<Matcher>[
+            matchesMethodCall('TextInput.clearClient'),
+            matchesMethodCall('TextInput.setClient'),
+          ]),
+        ),
+      );
 
       widget = MaterialApp(
         home: EditableText(
@@ -3627,19 +4367,28 @@ void main() {
       // This will attempt to unfocus the field but the onSubmitted callback
       // will cancel that. Restart the input connection in this case.
       await tester.testTextInput.receiveAction(TextInputAction.done);
-      expect(tester.testTextInput.log, containsAllInOrder(<Matcher>[
-        matchesMethodCall('TextInput.clearClient'),
-        matchesMethodCall('TextInput.setClient'),
-      ]));
+      expect(
+        tester.testTextInput.log,
+        containsAllInOrder(<Matcher>[
+          matchesMethodCall('TextInput.clearClient'),
+          matchesMethodCall('TextInput.setClient'),
+        ]),
+      );
 
       tester.testTextInput.log.clear();
       // TextInputAction.unspecified does not unfocus the input field by default.
       await tester.testTextInput.receiveAction(TextInputAction.unspecified);
-      expect(tester.testTextInput.log, isNot(containsAllInOrder(<Matcher>[
-        matchesMethodCall('TextInput.clearClient'),
-        matchesMethodCall('TextInput.setClient'),
-      ])));
-  });
+      expect(
+        tester.testTextInput.log,
+        isNot(
+          containsAllInOrder(<Matcher>[
+            matchesMethodCall('TextInput.clearClient'),
+            matchesMethodCall('TextInput.setClient'),
+          ]),
+        ),
+      );
+    },
+  );
 
   testWidgets(
     'requesting focus in the onSubmitted callback should keep the onscreen keyboard visible',
@@ -3668,35 +4417,82 @@ void main() {
       // This will attempt to unfocus the field but the onSubmitted callback
       // will cancel that. Restart the input connection in this case.
       await tester.testTextInput.receiveAction(TextInputAction.done);
-      expect(tester.testTextInput.log, containsAllInOrder(<Matcher>[
-        matchesMethodCall('TextInput.clearClient'),
-        matchesMethodCall('TextInput.setClient'),
-        matchesMethodCall('TextInput.show'),
-      ]));
+      expect(
+        tester.testTextInput.log,
+        containsAllInOrder(<Matcher>[
+          matchesMethodCall('TextInput.clearClient'),
+          matchesMethodCall('TextInput.setClient'),
+          matchesMethodCall('TextInput.show'),
+        ]),
+      );
 
       tester.testTextInput.log.clear();
       // TextInputAction.unspecified does not unfocus the input field by default.
       await tester.testTextInput.receiveAction(TextInputAction.unspecified);
-      expect(tester.testTextInput.log, isNot(containsAllInOrder(<Matcher>[
-        matchesMethodCall('TextInput.clearClient'),
-        matchesMethodCall('TextInput.setClient'),
-        matchesMethodCall('TextInput.show'),
-      ])));
+      expect(
+        tester.testTextInput.log,
+        isNot(
+          containsAllInOrder(<Matcher>[
+            matchesMethodCall('TextInput.clearClient'),
+            matchesMethodCall('TextInput.setClient'),
+            matchesMethodCall('TextInput.show'),
+          ]),
+        ),
+      );
+    },
+  );
+
+  testWidgets('does not request keyboard after the keyboard changes the selection', (
+    WidgetTester tester,
+  ) async {
+    // Regression test for https://github.com/flutter/flutter/issues/154156.
+    final Widget widget = MaterialApp(
+      home: EditableText(
+        backgroundCursorColor: Colors.grey,
+        style: Typography.material2018().black.titleMedium!,
+        cursorColor: Colors.blue,
+        focusNode: focusNode,
+        controller: controller,
+      ),
+    );
+    controller.value = const TextEditingValue(
+      text: '123',
+      selection: TextSelection.collapsed(offset: 0),
+    );
+    await tester.pumpWidget(widget);
+
+    focusNode.requestFocus();
+    await tester.pump();
+
+    assert(focusNode.hasFocus);
+    tester.testTextInput.log.clear();
+
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+    state.userUpdateTextEditingValue(
+      const TextEditingValue(text: '123', selection: TextSelection.collapsed(offset: 1)),
+      SelectionChangedCause.keyboard,
+    );
+
+    expect(
+      tester.testTextInput.log.map((MethodCall m) => m.method),
+      isNot(contains('TextInput.show')),
+    );
   });
 
   testWidgets(
     'iOS autocorrection rectangle should appear on demand and dismiss when the text changes or when focus is lost',
     (WidgetTester tester) async {
-      const Color rectColor = Color(0xFFFF0000);
+      const rectColor = Color(0xFFFF0000);
+      controller.text = 'ABCDEFG';
 
-      void verifyAutocorrectionRectVisibility({ required bool expectVisible }) {
+      void verifyAutocorrectionRectVisibility({required bool expectVisible}) {
         PaintPattern evaluate() {
           if (expectVisible) {
             return paints..something((Symbol method, List<dynamic> arguments) {
               if (method != #drawRect) {
                 return false;
               }
-              final Paint paint = arguments[1] as Paint;
+              final paint = arguments[1] as Paint;
               return paint.color == rectColor;
             });
           } else {
@@ -3704,7 +4500,7 @@ void main() {
               if (method != #drawRect) {
                 return true;
               }
-              final Paint paint = arguments[1] as Paint;
+              final paint = arguments[1] as Paint;
               if (paint.color != rectColor) {
                 return true;
               }
@@ -3716,9 +4512,6 @@ void main() {
         expect(findRenderEditable(tester), evaluate());
       }
 
-      final FocusNode focusNode = FocusNode();
-      final TextEditingController controller = TextEditingController(text: 'ABCDEFG');
-
       final Widget widget = MaterialApp(
         home: EditableText(
           backgroundCursorColor: Colors.grey,
@@ -3728,7 +4521,7 @@ void main() {
           cursorColor: Colors.blue,
           autocorrectionTextRectColor: rectColor,
           showCursor: false,
-          onEditingComplete: () { },
+          onEditingComplete: () {},
         ),
       );
 
@@ -3766,15 +4559,95 @@ void main() {
     },
   );
 
+  testWidgets(
+    'iOS autocorrect value is inferred from AutofillHints - username',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: EditableText(
+              controller: controller,
+              backgroundCursorColor: Colors.grey,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              autofillHints: const <String>[AutofillHints.username],
+            ),
+          ),
+        ),
+      );
+
+      final EditableText editableText = tester.firstWidget(find.byType(EditableText));
+      expect(editableText.autocorrect, isFalse);
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.iOS}),
+    skip: kIsWeb, // [intended]
+  );
+
+  testWidgets(
+    'iOS autocorrect value is inferred from AutofillHints - password',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: EditableText(
+              controller: controller,
+              backgroundCursorColor: Colors.grey,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              autofillHints: const <String>[AutofillHints.password],
+            ),
+          ),
+        ),
+      );
+
+      final EditableText editableText = tester.firstWidget(find.byType(EditableText));
+      expect(editableText.autocorrect, isFalse);
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.iOS}),
+    skip: kIsWeb, // [intended]
+  );
+
+  testWidgets(
+    'iOS autocorrect value is inferred from AutofillHints - newPassword',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: EditableText(
+              controller: controller,
+              backgroundCursorColor: Colors.grey,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              autofillHints: const <String>[AutofillHints.newPassword],
+            ),
+          ),
+        ),
+      );
+
+      final EditableText editableText = tester.firstWidget(find.byType(EditableText));
+      expect(editableText.autocorrect, isFalse);
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.iOS}),
+    skip: kIsWeb, // [intended]
+  );
+
   testWidgets('Changing controller updates EditableText', (WidgetTester tester) async {
-    final TextEditingController controller1 =
-        TextEditingController(text: 'Wibble');
-    final TextEditingController controller2 =
-        TextEditingController(text: 'Wobble');
-    TextEditingController currentController = controller1;
+    final controller1 = TextEditingController(text: 'Wibble');
+    addTearDown(controller1.dispose);
+    final controller2 = TextEditingController(text: 'Wobble');
+    addTearDown(controller2.dispose);
+    var currentController = controller1;
     late StateSetter setState;
 
-    final FocusNode focusNode = FocusNode(debugLabel: 'EditableText Focus Node');
     Widget builder() {
       return StatefulBuilder(
         builder: (BuildContext context, StateSetter setter) {
@@ -3790,13 +4663,11 @@ void main() {
                       backgroundCursorColor: Colors.grey,
                       controller: currentController,
                       focusNode: focusNode,
-                      style: Typography.material2018()
-                          .black
-                          .titleMedium!,
+                      style: Typography.material2018().black.titleMedium!,
                       cursorColor: Colors.blue,
                       selectionControls: materialTextSelectionControls,
                       keyboardType: TextInputType.text,
-                      onChanged: (String value) { },
+                      onChanged: (String value) {},
                     ),
                   ),
                 ),
@@ -3810,8 +4681,10 @@ void main() {
     await tester.pumpWidget(builder());
     await tester.pump(); // An extra pump to allow focus request to go through.
 
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
@@ -3853,14 +4726,16 @@ void main() {
     );
   });
 
-  testWidgets('EditableText identifies as text field (w/ focus) in semantics', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
+  testWidgets('EditableText identifies as text field (w/ focus) in semantics', (
+    WidgetTester tester,
+  ) async {
+    final semantics = SemanticsTester(tester);
 
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
         child: Directionality(
-        textDirection: TextDirection.ltr,
+          textDirection: TextDirection.ltr,
           child: FocusScope(
             node: focusScopeNode,
             autofocus: true,
@@ -3876,7 +4751,12 @@ void main() {
       ),
     );
 
-    expect(semantics, includesNodeWith(flags: <SemanticsFlag>[SemanticsFlag.isTextField]));
+    expect(
+      semantics,
+      includesNodeWith(
+        flags: <SemanticsFlag>[SemanticsFlag.isTextField, SemanticsFlag.isFocusable],
+      ),
+    );
 
     await tester.tap(find.byType(EditableText));
     await tester.idle();
@@ -3884,23 +4764,26 @@ void main() {
 
     expect(
       semantics,
-      includesNodeWith(flags: <SemanticsFlag>[
-        SemanticsFlag.isTextField,
-        SemanticsFlag.isFocused,
-      ]),
+      includesNodeWith(
+        flags: <SemanticsFlag>[
+          SemanticsFlag.isTextField,
+          SemanticsFlag.isFocusable,
+          SemanticsFlag.isFocused,
+        ],
+      ),
     );
 
     semantics.dispose();
   });
 
   testWidgets('EditableText sets multi-line flag in semantics', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
+    final semantics = SemanticsTester(tester);
 
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
         child: Directionality(
-        textDirection: TextDirection.ltr,
+          textDirection: TextDirection.ltr,
           child: FocusScope(
             node: focusScopeNode,
             autofocus: true,
@@ -3918,7 +4801,9 @@ void main() {
 
     expect(
       semantics,
-      includesNodeWith(flags: <SemanticsFlag>[SemanticsFlag.isTextField]),
+      includesNodeWith(
+        flags: <SemanticsFlag>[SemanticsFlag.isTextField, SemanticsFlag.isFocusable],
+      ),
     );
 
     await tester.pumpWidget(
@@ -3944,20 +4829,22 @@ void main() {
 
     expect(
       semantics,
-      includesNodeWith(flags: <SemanticsFlag>[
-        SemanticsFlag.isTextField,
-        SemanticsFlag.isMultiline,
-      ]),
+      includesNodeWith(
+        flags: <SemanticsFlag>[
+          SemanticsFlag.isTextField,
+          SemanticsFlag.isFocusable,
+          SemanticsFlag.isMultiline,
+        ],
+      ),
     );
 
     semantics.dispose();
   });
 
   testWidgets('EditableText includes text as value in semantics', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
+    final semantics = SemanticsTester(tester);
 
-    const String value1 = 'EditableText content';
-
+    const value1 = 'EditableText content';
     controller.text = value1;
 
     await tester.pumpWidget(
@@ -3982,12 +4869,12 @@ void main() {
     expect(
       semantics,
       includesNodeWith(
-        flags: <SemanticsFlag>[SemanticsFlag.isTextField],
+        flags: <SemanticsFlag>[SemanticsFlag.isTextField, SemanticsFlag.isFocusable],
         value: value1,
       ),
     );
 
-    const String value2 = 'Changed the EditableText content';
+    const value2 = 'Changed the EditableText content';
     controller.text = value2;
     await tester.idle();
     await tester.pump();
@@ -3995,7 +4882,7 @@ void main() {
     expect(
       semantics,
       includesNodeWith(
-        flags: <SemanticsFlag>[SemanticsFlag.isTextField],
+        flags: <SemanticsFlag>[SemanticsFlag.isTextField, SemanticsFlag.isFocusable],
         value: value2,
       ),
     );
@@ -4004,32 +4891,28 @@ void main() {
   });
 
   testWidgets('exposes correct cursor movement semantics', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
+    final semantics = SemanticsTester(tester);
 
     controller.text = 'test';
 
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
       ),
-    ));
+    );
 
     focusNode.requestFocus();
     await tester.pump();
 
-    expect(
-      semantics,
-      includesNodeWith(
-        value: 'test',
-      ),
-    );
+    expect(semantics, includesNodeWith(value: 'test'));
 
-    controller.selection =
-        TextSelection.collapsed(offset: controller.text.length);
+    controller.selection = TextSelection.collapsed(offset: controller.text.length);
     await tester.pumpAndSettle();
 
     // At end, can only go backwards.
@@ -4046,8 +4929,7 @@ void main() {
       ),
     );
 
-    controller.selection =
-        TextSelection.collapsed(offset:controller.text.length - 2);
+    controller.selection = TextSelection.collapsed(offset: controller.text.length - 2);
     await tester.pumpAndSettle();
 
     // Somewhere in the middle, can go in both directions.
@@ -4087,22 +4969,23 @@ void main() {
   });
 
   testWidgets('can move cursor with a11y means - character', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
-    const bool doNotExtendSelection = false;
+    final semantics = SemanticsTester(tester);
+    const doNotExtendSelection = false;
 
     controller.text = 'test';
-    controller.selection =
-        TextSelection.collapsed(offset:controller.text.length);
+    controller.selection = TextSelection.collapsed(offset: controller.text.length);
 
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
       ),
-    ));
+    );
 
     expect(
       semantics,
@@ -4115,8 +4998,8 @@ void main() {
       ),
     );
 
-    final RenderEditable render = tester.allRenderObjects.whereType<RenderEditable>().first;
-    final int semanticsId = render.debugSemantics!.id;
+    final SemanticsNode node = find.semantics.byValue('test').evaluate().first;
+    final int semanticsId = node.id;
 
     expect(controller.selection.baseOffset, 4);
     expect(controller.selection.extentOffset, 4);
@@ -4192,22 +5075,23 @@ void main() {
   });
 
   testWidgets('can move cursor with a11y means - word', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
-    const bool doNotExtendSelection = false;
+    final semantics = SemanticsTester(tester);
+    const doNotExtendSelection = false;
 
     controller.text = 'test for words';
-    controller.selection =
-    TextSelection.collapsed(offset:controller.text.length);
+    controller.selection = TextSelection.collapsed(offset: controller.text.length);
 
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
       ),
-    ));
+    );
 
     expect(
       semantics,
@@ -4220,8 +5104,8 @@ void main() {
       ),
     );
 
-    final RenderEditable render = tester.allRenderObjects.whereType<RenderEditable>().first;
-    final int semanticsId = render.debugSemantics!.id;
+    final SemanticsNode node = find.semantics.byValue('test for words').evaluate().first;
+    final int semanticsId = node.id;
 
     expect(controller.selection.baseOffset, 14);
     expect(controller.selection.extentOffset, 14);
@@ -4305,23 +5189,24 @@ void main() {
   });
 
   testWidgets('can extend selection with a11y means - character', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
-    const bool extendSelection = true;
-    const bool doNotExtendSelection = false;
+    final semantics = SemanticsTester(tester);
+    const extendSelection = true;
+    const doNotExtendSelection = false;
 
     controller.text = 'test';
-    controller.selection =
-        TextSelection.collapsed(offset:controller.text.length);
+    controller.selection = TextSelection.collapsed(offset: controller.text.length);
 
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
       ),
-    ));
+    );
 
     expect(
       semantics,
@@ -4334,8 +5219,8 @@ void main() {
       ),
     );
 
-    final RenderEditable render = tester.allRenderObjects.whereType<RenderEditable>().first;
-    final int semanticsId = render.debugSemantics!.id;
+    final SemanticsNode node = find.semantics.byValue('test').evaluate().first;
+    final int semanticsId = node.id;
 
     expect(controller.selection.baseOffset, 4);
     expect(controller.selection.extentOffset, 4);
@@ -4421,23 +5306,24 @@ void main() {
   });
 
   testWidgets('can extend selection with a11y means - word', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
-    const bool extendSelection = true;
-    const bool doNotExtendSelection = false;
+    final semantics = SemanticsTester(tester);
+    const extendSelection = true;
+    const doNotExtendSelection = false;
 
     controller.text = 'test for words';
-    controller.selection =
-    TextSelection.collapsed(offset:controller.text.length);
+    controller.selection = TextSelection.collapsed(offset: controller.text.length);
 
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
       ),
-    ));
+    );
 
     expect(
       semantics,
@@ -4450,8 +5336,8 @@ void main() {
       ),
     );
 
-    final RenderEditable render = tester.allRenderObjects.whereType<RenderEditable>().first;
-    final int semanticsId = render.debugSemantics!.id;
+    final SemanticsNode node = find.semantics.byValue('test for words').evaluate().first;
+    final int semanticsId = node.id;
 
     expect(controller.selection.baseOffset, 14);
     expect(controller.selection.extentOffset, 14);
@@ -4535,22 +5421,24 @@ void main() {
   });
 
   testWidgets('password fields have correct semantics', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
+    final semantics = SemanticsTester(tester);
 
     controller.text = 'super-secret-password!!1';
 
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        obscureText: true,
-        controller: controller,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          obscureText: true,
+          controller: controller,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
       ),
-    ));
+    );
 
-    final String expectedValue = '•' *controller.text.length;
+    final String expectedValue = '•' * controller.text.length;
 
     expect(
       semantics,
@@ -4567,9 +5455,11 @@ void main() {
                         TestSemantics(
                           flags: <SemanticsFlag>[
                             SemanticsFlag.isTextField,
+                            SemanticsFlag.isFocusable,
                             SemanticsFlag.isObscured,
                           ],
                           value: expectedValue,
+                          inputType: SemanticsInputType.text,
                           textDirection: TextDirection.ltr,
                         ),
                       ],
@@ -4589,21 +5479,25 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('password fields become obscured with the right semantics when set', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
+  testWidgets('password fields become obscured with the right semantics when set', (
+    WidgetTester tester,
+  ) async {
+    final semantics = SemanticsTester(tester);
 
-    const String originalText = 'super-secret-password!!1';
+    const originalText = 'super-secret-password!!1';
     controller.text = originalText;
 
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
       ),
-    ));
+    );
 
     final String expectedValue = '•' * originalText.length;
 
@@ -4615,15 +5509,17 @@ void main() {
             TestSemantics.rootChild(
               children: <TestSemantics>[
                 TestSemantics(
-                  children:<TestSemantics>[
+                  children: <TestSemantics>[
                     TestSemantics(
                       flags: <SemanticsFlag>[SemanticsFlag.scopesRoute],
                       children: <TestSemantics>[
                         TestSemantics(
                           flags: <SemanticsFlag>[
                             SemanticsFlag.isTextField,
+                            SemanticsFlag.isFocusable,
                           ],
                           value: originalText,
+                          inputType: SemanticsInputType.text,
                           textDirection: TextDirection.ltr,
                         ),
                       ],
@@ -4643,16 +5539,18 @@ void main() {
     focusNode.requestFocus();
 
     // Now change it to make it obscure text.
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        obscureText: true,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          obscureText: true,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
       ),
-    ));
+    );
 
     expect((findRenderEditable(tester).text! as TextSpan).text, expectedValue);
 
@@ -4664,7 +5562,7 @@ void main() {
             TestSemantics.rootChild(
               children: <TestSemantics>[
                 TestSemantics(
-                  children:<TestSemantics>[
+                  children: <TestSemantics>[
                     TestSemantics(
                       flags: <SemanticsFlag>[SemanticsFlag.scopesRoute],
                       children: <TestSemantics>[
@@ -4672,6 +5570,7 @@ void main() {
                           flags: <SemanticsFlag>[
                             SemanticsFlag.isTextField,
                             SemanticsFlag.isObscured,
+                            SemanticsFlag.isFocusable,
                             SemanticsFlag.isFocused,
                           ],
                           actions: <SemanticsAction>[
@@ -4681,6 +5580,7 @@ void main() {
                             SemanticsAction.moveCursorBackwardByWord,
                           ],
                           value: expectedValue,
+                          inputType: SemanticsInputType.text,
                           textDirection: TextDirection.ltr,
                           // Focusing a single-line field on web selects it.
                           textSelection: kIsWeb
@@ -4704,83 +5604,98 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('password fields can have their obscuring character customized', (WidgetTester tester) async {
-    const String originalText = 'super-secret-password!!1';
+  testWidgets('password fields can have their obscuring character customized', (
+    WidgetTester tester,
+  ) async {
+    const originalText = 'super-secret-password!!1';
     controller.text = originalText;
 
-    const String obscuringCharacter = '#';
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        obscuringCharacter: obscuringCharacter,
-        obscureText: true,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
+    const obscuringCharacter = '#';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          obscuringCharacter: obscuringCharacter,
+          obscureText: true,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
       ),
-    ));
+    );
 
     final String expectedValue = obscuringCharacter * originalText.length;
     expect((findRenderEditable(tester).text! as TextSpan).text, expectedValue);
   });
 
-  testWidgets('password briefly shows last character when entered on mobile', (WidgetTester tester) async {
-    final bool debugDeterministicCursor = EditableText.debugDeterministicCursor;
-    EditableText.debugDeterministicCursor = false;
-    addTearDown(() {
-      EditableText.debugDeterministicCursor = debugDeterministicCursor;
-    });
+  testWidgets(
+    'password briefly shows last character when entered on mobile',
+    (WidgetTester tester) async {
+      final bool debugDeterministicCursor = EditableText.debugDeterministicCursor;
+      EditableText.debugDeterministicCursor = false;
+      addTearDown(() {
+        EditableText.debugDeterministicCursor = debugDeterministicCursor;
+      });
 
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        obscureText: true,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
-      ),
-    ));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            obscureText: true,
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+          ),
+        ),
+      );
 
-    await tester.enterText(find.byType(EditableText), 'AA');
-    await tester.pump();
-    await tester.enterText(find.byType(EditableText), 'AAA');
-    await tester.pump();
+      await tester.enterText(find.byType(EditableText), 'AA');
+      await tester.pump();
+      await tester.enterText(find.byType(EditableText), 'AAA');
+      await tester.pump();
 
-    expect((findRenderEditable(tester).text! as TextSpan).text, '••A');
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.pump(const Duration(milliseconds: 500));
-    expect((findRenderEditable(tester).text! as TextSpan).text, '•••');
-  });
+      expect((findRenderEditable(tester).text! as TextSpan).text, '••A');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect((findRenderEditable(tester).text! as TextSpan).text, '•••');
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.iOS,
+      TargetPlatform.android,
+      TargetPlatform.fuchsia,
+    }),
+  );
 
   group('a11y copy/cut/paste', () {
     Future<void> buildApp(MockTextSelectionControls controls, WidgetTester tester) {
-      return tester.pumpWidget(MaterialApp(
-        home: EditableText(
-          backgroundCursorColor: Colors.grey,
-          controller: controller,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: controls,
+      return tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+            selectionControls: controls,
+          ),
         ),
-      ));
+      );
     }
 
     late MockTextSelectionControls controls;
 
     setUp(() {
       controller.text = 'test';
-      controller.selection =
-          TextSelection.collapsed(offset:controller.text.length);
+      controller.selection = TextSelection.collapsed(offset: controller.text.length);
 
       controls = MockTextSelectionControls();
     });
 
     testWidgets('are exposed', (WidgetTester tester) async {
-      final SemanticsTester semantics = SemanticsTester(tester);
+      final semantics = SemanticsTester(tester);
 
       controls.testCanCopy = false;
       controls.testCanCut = false;
@@ -4877,7 +5792,7 @@ void main() {
     });
 
     testWidgets('can copy/cut/paste with a11y', (WidgetTester tester) async {
-      final SemanticsTester semantics = SemanticsTester(tester);
+      final semantics = SemanticsTester(tester);
 
       controls.testCanCopy = true;
       controls.testCanCut = true;
@@ -4887,7 +5802,7 @@ void main() {
       await tester.pump();
 
       final SemanticsOwner owner = tester.binding.pipelineOwner.semanticsOwner!;
-      const int expectedNodeId = 5;
+      const expectedNodeId = 4;
 
       expect(
         semantics,
@@ -4908,6 +5823,7 @@ void main() {
                             id: expectedNodeId,
                             flags: <SemanticsFlag>[
                               SemanticsFlag.isTextField,
+                              SemanticsFlag.isFocusable,
                               SemanticsFlag.isFocused,
                             ],
                             actions: <SemanticsAction>[
@@ -4920,6 +5836,7 @@ void main() {
                               SemanticsAction.paste,
                             ],
                             value: 'test',
+                            inputType: SemanticsInputType.text,
                             textSelection: TextSelection.collapsed(offset: controller.text.length),
                             textDirection: TextDirection.ltr,
                           ),
@@ -4951,24 +5868,28 @@ void main() {
     // Regression test for b/201218542.
     testWidgets('copying with a11y works even when toolbar is hidden', (WidgetTester tester) async {
       Future<void> testByControls(TextSelectionControls controls) async {
-        final SemanticsTester semantics = SemanticsTester(tester);
-        final TextEditingController controller = TextEditingController(text: 'ABCDEFG');
+        final semantics = SemanticsTester(tester);
+        final controller = TextEditingController(text: 'ABCDEFG');
+        addTearDown(controller.dispose);
 
-        await tester.pumpWidget(MaterialApp(
-          home: EditableText(
-            backgroundCursorColor: Colors.grey,
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            selectionControls: controls,
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              selectionControls: controls,
+            ),
           ),
-        ));
+        );
         await tester.tap(find.byType(EditableText));
         await tester.pump();
 
         final SemanticsOwner owner = tester.binding.pipelineOwner.semanticsOwner!;
-        const int expectedNodeId = 5;
+        final SemanticsNode node = find.semantics.byValue('ABCDEFG').evaluate().first;
+        final int expectedNodeId = node.id;
 
         expect(controller.value.selection.isCollapsed, isTrue);
 
@@ -4982,34 +5903,86 @@ void main() {
 
         owner.performAction(expectedNodeId, SemanticsAction.copy);
         expect(tester.takeException(), isNull);
-        expect(
-          (await Clipboard.getData(Clipboard.kTextPlain))!.text,
-          equals('ABCDEFG'),
-        );
+        expect((await Clipboard.getData(Clipboard.kTextPlain))!.text, equals('ABCDEFG'));
 
         semantics.dispose();
       }
+
       await testByControls(materialTextSelectionControls);
       await testByControls(cupertinoTextSelectionControls);
     });
   });
 
-  testWidgets('can set text with a11y', (WidgetTester tester) async {
-    final SemanticsTester semantics = SemanticsTester(tester);
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
+  testWidgets('reporting error when Clipboard.setData fails in copySelection', (
+    WidgetTester tester,
+  ) async {
+    final errors = <FlutterErrorDetails>[];
+    final FlutterExceptionHandler? originalOnError = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      errors.add(details);
+    };
+    addTearDown(() {
+      FlutterError.onError = originalOnError;
+    });
+
+    final controller = TextEditingController(text: 'test data');
+    addTearDown(controller.dispose);
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
       ),
-    ));
+    );
+
+    controller.selection = const TextSelection(baseOffset: 0, extentOffset: 4);
+    await tester.pump();
+
+    TestWidgetsFlutterBinding.ensureInitialized().defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall methodCall) async {
+        if (methodCall.method == 'Clipboard.setData') {
+          throw Exception('Clipboard error');
+        }
+        return null;
+      },
+    );
+
+    final EditableTextState state = tester.state(find.byType(EditableText));
+    state.copySelection(SelectionChangedCause.toolbar);
+
+    await tester.idle();
+
+    expect(errors, isNotEmpty);
+    expect(errors.first.exception.toString(), contains('Clipboard error'));
+    expect(errors.first.context.toString(), contains('while copying selection'));
+  });
+
+  testWidgets('can set text with a11y', (WidgetTester tester) async {
+    final semantics = SemanticsTester(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
+      ),
+    );
     await tester.tap(find.byType(EditableText));
     await tester.pump();
 
     final SemanticsOwner owner = tester.binding.pipelineOwner.semanticsOwner!;
-    const int expectedNodeId = 4;
+    const expectedNodeId = 4;
 
     expect(
       semantics,
@@ -5030,12 +6003,14 @@ void main() {
                           id: expectedNodeId,
                           flags: <SemanticsFlag>[
                             SemanticsFlag.isTextField,
+                            SemanticsFlag.isFocusable,
                             SemanticsFlag.isFocused,
                           ],
                           actions: <SemanticsAction>[
                             SemanticsAction.setSelection,
                             SemanticsAction.setText,
                           ],
+                          inputType: SemanticsInputType.text,
                           textSelection: TextSelection.collapsed(offset: controller.text.length),
                           textDirection: TextDirection.ltr,
                         ),
@@ -5062,14 +6037,16 @@ void main() {
   testWidgets('allows customizing text style in subclasses', (WidgetTester tester) async {
     controller.text = 'Hello World';
 
-    await tester.pumpWidget(MaterialApp(
-      home: CustomStyleEditableText(
-        controller: controller,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CustomStyleEditableText(
+          controller: controller,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+        ),
       ),
-    ));
+    );
 
     // Simulate selection change via tap to show handles.
     final RenderEditable render = tester.allRenderObjects.whereType<RenderEditable>().first;
@@ -5078,10 +6055,12 @@ void main() {
 
   testWidgets('onChanged callback only invoked on text changes', (WidgetTester tester) async {
     // Regression test for https://github.com/flutter/flutter/issues/111651 .
-    final TextEditingController controller = TextEditingController();
-    int onChangedCount = 0;
-    bool preventInput = false;
-    final TextInputFormatter formatter = TextInputFormatter.withFunction((TextEditingValue oldValue, TextEditingValue newValue) {
+    var onChangedCount = 0;
+    var preventInput = false;
+    final formatter = TextInputFormatter.withFunction((
+      TextEditingValue oldValue,
+      TextEditingValue newValue,
+    ) {
       return preventInput ? oldValue : newValue;
     });
 
@@ -5091,9 +6070,11 @@ void main() {
         controller: controller,
         backgroundCursorColor: Colors.red,
         cursorColor: Colors.red,
-        focusNode: FocusNode(),
+        focusNode: focusNode,
         style: textStyle,
-        onChanged: (String newString) { onChangedCount += 1; },
+        onChanged: (String newString) {
+          onChangedCount += 1;
+        },
         inputFormatters: <TextInputFormatter>[formatter],
         textDirection: TextDirection.ltr,
       ),
@@ -5103,79 +6084,67 @@ void main() {
     state.updateEditingValue(
       const TextEditingValue(text: 'a', composing: TextRange(start: 0, end: 1)),
     );
-    expect(onChangedCount , 1);
+    expect(onChangedCount, 1);
 
-    state.updateEditingValue(
-      const TextEditingValue(text: 'a'),
-    );
-    expect(onChangedCount , 1);
+    state.updateEditingValue(const TextEditingValue(text: 'a'));
+    expect(onChangedCount, 1);
 
-    state.updateEditingValue(
-      const TextEditingValue(text: 'ab'),
-    );
-    expect(onChangedCount , 2);
+    state.updateEditingValue(const TextEditingValue(text: 'ab'));
+    expect(onChangedCount, 2);
 
     preventInput = true;
-    state.updateEditingValue(
-      const TextEditingValue(text: 'abc'),
-    );
-    expect(onChangedCount , 2);
+    state.updateEditingValue(const TextEditingValue(text: 'abc'));
+    expect(onChangedCount, 2);
   });
 
   testWidgets('Formatters are skipped if text has not changed', (WidgetTester tester) async {
-    int called = 0;
-    final TextInputFormatter formatter = TextInputFormatter.withFunction((TextEditingValue oldValue, TextEditingValue newValue) {
+    var called = 0;
+    final formatter = TextInputFormatter.withFunction((
+      TextEditingValue oldValue,
+      TextEditingValue newValue,
+    ) {
       called += 1;
       return newValue;
     });
-    final TextEditingController controller = TextEditingController();
-    final MediaQuery mediaQuery = MediaQuery(
+    final mediaQuery = MediaQuery(
       data: const MediaQueryData(),
       child: EditableText(
         controller: controller,
         backgroundCursorColor: Colors.red,
         cursorColor: Colors.red,
-        focusNode: FocusNode(),
+        focusNode: focusNode,
         style: textStyle,
-        inputFormatters: <TextInputFormatter>[
-          formatter,
-        ],
+        inputFormatters: <TextInputFormatter>[formatter],
         textDirection: TextDirection.ltr,
       ),
     );
     await tester.pumpWidget(mediaQuery);
     final EditableTextState state = tester.firstState(find.byType(EditableText));
-    state.updateEditingValue(const TextEditingValue(
-      text: 'a',
-    ));
+    state.updateEditingValue(const TextEditingValue(text: 'a'));
     expect(called, 1);
     // same value.
-    state.updateEditingValue(const TextEditingValue(
-      text: 'a',
-    ));
+    state.updateEditingValue(const TextEditingValue(text: 'a'));
     expect(called, 1);
     // same value with different selection.
-    state.updateEditingValue(const TextEditingValue(
-      text: 'a',
-      selection: TextSelection.collapsed(offset: 1),
-    ));
+    state.updateEditingValue(
+      const TextEditingValue(text: 'a', selection: TextSelection.collapsed(offset: 1)),
+    );
     // different value.
-    state.updateEditingValue(const TextEditingValue(
-      text: 'b',
-    ));
+    state.updateEditingValue(const TextEditingValue(text: 'b'));
     expect(called, 2);
   });
 
   testWidgets('default keyboardAppearance is respected', (WidgetTester tester) async {
     // Regression test for https://github.com/flutter/flutter/issues/22212.
 
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
 
-    final TextEditingController controller = TextEditingController();
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -5183,7 +6152,7 @@ void main() {
           textDirection: TextDirection.ltr,
           child: EditableText(
             controller: controller,
-            focusNode: FocusNode(),
+            focusNode: focusNode,
             style: Typography.material2018().black.titleMedium!,
             cursorColor: Colors.blue,
             backgroundCursorColor: Colors.grey,
@@ -5195,17 +6164,22 @@ void main() {
     await tester.showKeyboard(find.byType(EditableText));
     final MethodCall setClient = log.first;
     expect(setClient.method, 'TextInput.setClient');
-    expect(((setClient.arguments as Iterable<dynamic>).last as Map<String, dynamic>)['keyboardAppearance'], 'Brightness.light');
+    expect(
+      ((setClient.arguments as Iterable<dynamic>).last
+          as Map<String, dynamic>)['keyboardAppearance'],
+      'Brightness.light',
+    );
   });
 
   testWidgets('location of widget is sent on show keyboard', (WidgetTester tester) async {
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
 
-    final TextEditingController controller = TextEditingController();
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -5213,7 +6187,7 @@ void main() {
           textDirection: TextDirection.ltr,
           child: EditableText(
             controller: controller,
-            focusNode: FocusNode(),
+            focusNode: focusNode,
             style: Typography.material2018().black.titleMedium!,
             cursorColor: Colors.blue,
             backgroundCursorColor: Colors.grey,
@@ -5223,26 +6197,41 @@ void main() {
     );
 
     await tester.showKeyboard(find.byType(EditableText));
-    final MethodCall methodCall = log.firstWhere((MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform');
+    final MethodCall methodCall = log.firstWhere(
+      (MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform',
+    );
     expect(
       methodCall,
-      isMethodCall('TextInput.setEditableSizeAndTransform', arguments: <String, dynamic>{
-        'width': 800,
-        'height': 600,
-        'transform': Matrix4.identity().storage.toList(),
-      }),
+      isMethodCall(
+        'TextInput.setEditableSizeAndTransform',
+        arguments: <String, dynamic>{
+          'width': 800,
+          'height': 600,
+          'transform': Matrix4.identity().storage.toList(),
+        },
+      ),
     );
   });
 
-  testWidgets('transform and size is reset when text connection opens', (WidgetTester tester) async {
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+  testWidgets('transform and size is reset when text connection opens', (
+    WidgetTester tester,
+  ) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
 
-    final TextEditingController controller1 = TextEditingController();
-    final TextEditingController controller2 = TextEditingController();
+    final controller1 = TextEditingController();
+    addTearDown(controller1.dispose);
+    final focusNode1 = FocusNode();
+    addTearDown(focusNode1.dispose);
+    final controller2 = TextEditingController();
+    addTearDown(controller2.dispose);
+    final focusNode2 = FocusNode();
+    addTearDown(focusNode2.dispose);
     controller1.text = 'Text1';
     controller2.text = 'Text2';
 
@@ -5253,11 +6242,11 @@ void main() {
           textDirection: TextDirection.ltr,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children:  <Widget>[
+            children: <Widget>[
               EditableText(
                 key: ValueKey<String>(controller1.text),
                 controller: controller1,
-                focusNode: FocusNode(),
+                focusNode: focusNode1,
                 style: Typography.material2018().black.titleMedium!,
                 cursorColor: Colors.blue,
                 backgroundCursorColor: Colors.grey,
@@ -5266,7 +6255,7 @@ void main() {
               EditableText(
                 key: ValueKey<String>(controller2.text),
                 controller: controller2,
-                focusNode: FocusNode(),
+                focusNode: focusNode2,
                 style: Typography.material2018().black.titleMedium!,
                 cursorColor: Colors.blue,
                 backgroundCursorColor: Colors.grey,
@@ -5281,70 +6270,106 @@ void main() {
     );
 
     await tester.showKeyboard(find.byKey(ValueKey<String>(controller1.text)));
-    final MethodCall methodCall = log.firstWhere((MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform');
+    final MethodCall methodCall = log.firstWhere(
+      (MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform',
+    );
     expect(
       methodCall,
-      isMethodCall('TextInput.setEditableSizeAndTransform', arguments: <String, dynamic>{
-        'width': 800,
-        'height': 14,
-        'transform': Matrix4.identity().storage.toList(),
-      }),
+      isMethodCall(
+        'TextInput.setEditableSizeAndTransform',
+        arguments: <String, dynamic>{
+          'width': 800,
+          'height': 14,
+          'transform': Matrix4.identity().storage.toList(),
+        },
+      ),
     );
 
     log.clear();
 
     // Move to the next editable text.
     await tester.showKeyboard(find.byKey(ValueKey<String>(controller2.text)));
-    final MethodCall methodCall2 = log.firstWhere((MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform');
+    final MethodCall methodCall2 = log.firstWhere(
+      (MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform',
+    );
     expect(
       methodCall2,
-      isMethodCall('TextInput.setEditableSizeAndTransform', arguments: <String, dynamic>{
-        'width': 800,
-        'height': 140.0,
-        'transform': <double>[1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 214.0, 0.0, 1.0],
-      }),
+      isMethodCall(
+        'TextInput.setEditableSizeAndTransform',
+        arguments: <String, dynamic>{
+          'width': 800,
+          'height': 140.0,
+          'transform': <double>[
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            214.0,
+            0.0,
+            1.0,
+          ],
+        },
+      ),
     );
 
     log.clear();
 
     // Move back to the first editable text.
     await tester.showKeyboard(find.byKey(ValueKey<String>(controller1.text)));
-    final MethodCall methodCall3 = log.firstWhere((MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform');
+    final MethodCall methodCall3 = log.firstWhere(
+      (MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform',
+    );
     expect(
       methodCall3,
-      isMethodCall('TextInput.setEditableSizeAndTransform', arguments: <String, dynamic>{
-        'width': 800,
-        'height': 14,
-        'transform': Matrix4.identity().storage.toList(),
-      }),
+      isMethodCall(
+        'TextInput.setEditableSizeAndTransform',
+        arguments: <String, dynamic>{
+          'width': 800,
+          'height': 14,
+          'transform': Matrix4.identity().storage.toList(),
+        },
+      ),
     );
   });
 
   testWidgets('size and transform are sent when they change', (WidgetTester tester) async {
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
 
-    const Offset offset = Offset(10.0, 20.0);
-    const Key transformButtonKey = Key('transformButton');
+    const offset = Offset(10.0, 20.0);
+    const transformButtonKey = Key('transformButton');
     await tester.pumpWidget(
-      const TransformedEditableText(
-        offset: offset,
-        transformButtonKey: transformButtonKey,
-      ),
+      const TransformedEditableText(offset: offset, transformButtonKey: transformButtonKey),
     );
 
     await tester.showKeyboard(find.byType(EditableText));
-    MethodCall methodCall = log.firstWhere((MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform');
+    MethodCall methodCall = log.firstWhere(
+      (MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform',
+    );
     expect(
       methodCall,
-      isMethodCall('TextInput.setEditableSizeAndTransform', arguments: <String, dynamic>{
-        'width': 800,
-        'height': 14,
-        'transform': Matrix4.identity().storage.toList(),
-      }),
+      isMethodCall(
+        'TextInput.setEditableSizeAndTransform',
+        arguments: <String, dynamic>{
+          'width': 800,
+          'height': 14,
+          'transform': Matrix4.identity().storage.toList(),
+        },
+      ),
     );
 
     log.clear();
@@ -5352,291 +6377,39 @@ void main() {
     await tester.pumpAndSettle();
 
     // There should be a new platform message updating the transform.
-    methodCall = log.firstWhere((MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform');
+    methodCall = log.firstWhere(
+      (MethodCall m) => m.method == 'TextInput.setEditableSizeAndTransform',
+    );
     expect(
       methodCall,
-      isMethodCall('TextInput.setEditableSizeAndTransform', arguments: <String, dynamic>{
-        'width': 800,
-        'height': 14,
-        'transform': Matrix4.translationValues(offset.dx, offset.dy, 0.0).storage.toList(),
-      }),
+      isMethodCall(
+        'TextInput.setEditableSizeAndTransform',
+        arguments: <String, dynamic>{
+          'width': 800,
+          'height': 14,
+          'transform': Matrix4.translationValues(offset.dx, offset.dy, 0.0).storage.toList(),
+        },
+      ),
     );
   });
 
-  testWidgets('selection rects are sent when they change', (WidgetTester tester) async {
-    addTearDown(tester.view.reset);
-    // Ensure selection rects are sent on iPhone (using SE 3rd gen size)
-    tester.view.physicalSize = const Size(750.0, 1334.0);
-
-    final List<List<SelectionRect>> log = <List<SelectionRect>>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) {
-      if (methodCall.method == 'TextInput.setSelectionRects') {
-        final List<dynamic> args = methodCall.arguments as List<dynamic>;
-        final List<SelectionRect> selectionRects = <SelectionRect>[];
-        for (final dynamic rect in args) {
-          selectionRects.add(SelectionRect(
-            position: (rect as List<dynamic>)[4] as int,
-            bounds: Rect.fromLTWH(rect[0] as double, rect[1] as double, rect[2] as double, rect[3] as double),
-          ));
-        }
-        log.add(selectionRects);
-      }
-      return null;
-    });
-
-    final TextEditingController controller = TextEditingController();
-    final ScrollController scrollController = ScrollController();
-    controller.text = 'Text1';
-
-    Future<void> pumpEditableText({ double? width, double? height, TextAlign textAlign = TextAlign.start }) async {
-      await tester.pumpWidget(
-        MediaQuery(
-          data: const MediaQueryData(),
-          child: Directionality(
-            textDirection: TextDirection.ltr,
-            child: Center(
-              child: SizedBox(
-                width: width,
-                height: height,
-                child: EditableText(
-                  controller: controller,
-                  textAlign: textAlign,
-                  scrollController: scrollController,
-                  maxLines: null,
-                  focusNode: focusNode,
-                  cursorWidth: 0,
-                  style: Typography.material2018().black.titleMedium!,
-                  cursorColor: Colors.blue,
-                  backgroundCursorColor: Colors.grey,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    await pumpEditableText();
-    expect(log, isEmpty);
-
-    await tester.showKeyboard(find.byType(EditableText));
-    // First update.
-    expect(log.single, const <SelectionRect>[
-      SelectionRect(position: 0, bounds: Rect.fromLTRB(0.0, 0.0, 14.0, 14.0)),
-      SelectionRect(position: 1, bounds: Rect.fromLTRB(14.0, 0.0, 28.0, 14.0)),
-      SelectionRect(position: 2, bounds: Rect.fromLTRB(28.0, 0.0, 42.0, 14.0)),
-      SelectionRect(position: 3, bounds: Rect.fromLTRB(42.0, 0.0, 56.0, 14.0)),
-      SelectionRect(position: 4, bounds: Rect.fromLTRB(56.0, 0.0, 70.0, 14.0))
-    ]);
-    log.clear();
-
-    await tester.pumpAndSettle();
-    expect(log, isEmpty);
-
-    await pumpEditableText();
-    expect(log, isEmpty);
-
-    // Change the width such that each character occupies a line.
-    await pumpEditableText(width: 20);
-    expect(log.single, const <SelectionRect>[
-      SelectionRect(position: 0, bounds: Rect.fromLTRB(0.0, 0.0, 14.0, 14.0)),
-      SelectionRect(position: 1, bounds: Rect.fromLTRB(0.0, 14.0, 14.0, 28.0)),
-      SelectionRect(position: 2, bounds: Rect.fromLTRB(0.0, 28.0, 14.0, 42.0)),
-      SelectionRect(position: 3, bounds: Rect.fromLTRB(0.0, 42.0, 14.0, 56.0)),
-      SelectionRect(position: 4, bounds: Rect.fromLTRB(0.0, 56.0, 14.0, 70.0))
-    ]);
-    log.clear();
-
-    await tester.enterText(find.byType(EditableText), 'Text1👨‍👩‍👦');
-    await tester.pump();
-    expect(log.single, const <SelectionRect>[
-      SelectionRect(position: 0, bounds: Rect.fromLTRB(0.0, 0.0, 14.0, 14.0)),
-      SelectionRect(position: 1, bounds: Rect.fromLTRB(0.0, 14.0, 14.0, 28.0)),
-      SelectionRect(position: 2, bounds: Rect.fromLTRB(0.0, 28.0, 14.0, 42.0)),
-      SelectionRect(position: 3, bounds: Rect.fromLTRB(0.0, 42.0, 14.0, 56.0)),
-      SelectionRect(position: 4, bounds: Rect.fromLTRB(0.0, 56.0, 14.0, 70.0)),
-      SelectionRect(position: 5, bounds: Rect.fromLTRB(0.0, 70.0, 42.0, 84.0)),
-    ]);
-    log.clear();
-
-    // The 4th line will be partially visible.
-    await pumpEditableText(width: 20, height: 45);
-    expect(log.single, const <SelectionRect>[
-      SelectionRect(position: 0, bounds: Rect.fromLTRB(0.0, 0.0, 14.0, 14.0)),
-      SelectionRect(position: 1, bounds: Rect.fromLTRB(0.0, 14.0, 14.0, 28.0)),
-      SelectionRect(position: 2, bounds: Rect.fromLTRB(0.0, 28.0, 14.0, 42.0)),
-      SelectionRect(position: 3, bounds: Rect.fromLTRB(0.0, 42.0, 14.0, 56.0)),
-    ]);
-    log.clear();
-
-    await pumpEditableText(width: 20, height: 45, textAlign: TextAlign.right);
-    // This is 1px off from being completely right-aligned. The 1px width is
-    // reserved for caret.
-    expect(log.single, const <SelectionRect>[
-      SelectionRect(position: 0, bounds: Rect.fromLTRB(5.0, 0.0, 19.0, 14.0)),
-      SelectionRect(position: 1, bounds: Rect.fromLTRB(5.0, 14.0, 19.0, 28.0)),
-      SelectionRect(position: 2, bounds: Rect.fromLTRB(5.0, 28.0, 19.0, 42.0)),
-      SelectionRect(position: 3, bounds: Rect.fromLTRB(5.0, 42.0, 19.0, 56.0)),
-      // These 2 lines will be out of bounds.
-      // SelectionRect(position: 4, bounds: Rect.fromLTRB(5.0, 56.0, 19.0, 70.0)),
-      // SelectionRect(position: 5, bounds: Rect.fromLTRB(-23.0, 70.0, 19.0, 84.0)),
-    ]);
-    log.clear();
-
-    expect(scrollController.offset, 0);
-
-    // Scrolling also triggers update.
-    scrollController.jumpTo(14);
-    await tester.pumpAndSettle();
-    expect(log.single, const <SelectionRect>[
-      SelectionRect(position: 0, bounds: Rect.fromLTRB(5.0, -14.0, 19.0, 0.0)),
-      SelectionRect(position: 1, bounds: Rect.fromLTRB(5.0, 0.0, 19.0, 14.0)),
-      SelectionRect(position: 2, bounds: Rect.fromLTRB(5.0, 14.0, 19.0, 28.0)),
-      SelectionRect(position: 3, bounds: Rect.fromLTRB(5.0, 28.0, 19.0, 42.0)),
-      SelectionRect(position: 4, bounds: Rect.fromLTRB(5.0, 42.0, 19.0, 56.0)),
-      // This line is skipped because it's below the bottom edge of the render
-      // object.
-      // SelectionRect(position: 5, bounds: Rect.fromLTRB(5.0, 56.0, 47.0, 70.0)),
-    ]);
-    log.clear();
-
-    // On web, we should rely on the browser's implementation of Scribble, so we will not send selection rects.
-  }, skip: kIsWeb, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS })); // [intended]
-
-  testWidgets('selection rects are not sent if scribbleEnabled is false', (WidgetTester tester) async {
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
-      log.add(methodCall);
-      return null;
-    });
-
-    final TextEditingController controller = TextEditingController();
-    controller.text = 'Text1';
-
-    await tester.pumpWidget(
-      MediaQuery(
-        data: const MediaQueryData(),
-        child: Directionality(
-          textDirection: TextDirection.ltr,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children:  <Widget>[
-              EditableText(
-                key: ValueKey<String>(controller.text),
-                controller: controller,
-                focusNode: FocusNode(),
-                style: Typography.material2018().black.titleMedium!,
-                cursorColor: Colors.blue,
-                backgroundCursorColor: Colors.grey,
-                scribbleEnabled: false,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    await tester.showKeyboard(find.byKey(ValueKey<String>(controller.text)));
-
-    // There should be a new platform message updating the selection rects.
-    expect(log.where((MethodCall m) => m.method == 'TextInput.setSelectionRects').length, 0);
-
-    // On web, we should rely on the browser's implementation of Scribble, so we will not send selection rects.
-  }, skip: kIsWeb, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS })); // [intended]
-
-  testWidgets('selection rects sent even when character corners are outside of paintBounds', (WidgetTester tester) async {
-    final List<List<SelectionRect>> log = <List<SelectionRect>>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) {
-      if (methodCall.method == 'TextInput.setSelectionRects') {
-        final List<dynamic> args = methodCall.arguments as List<dynamic>;
-        final List<SelectionRect> selectionRects = <SelectionRect>[];
-        for (final dynamic rect in args) {
-          selectionRects.add(SelectionRect(
-            position: (rect as List<dynamic>)[4] as int,
-            bounds: Rect.fromLTWH(rect[0] as double, rect[1] as double, rect[2] as double, rect[3] as double),
-          ));
-        }
-        log.add(selectionRects);
-      }
-      return null;
-    });
-
-    final TextEditingController controller = TextEditingController();
-    final ScrollController scrollController = ScrollController();
-    controller.text = 'Text1';
-
-    final GlobalKey<EditableTextState> editableTextKey = GlobalKey();
-
-    Future<void> pumpEditableText({ double? width, double? height, TextAlign textAlign = TextAlign.start }) async {
-      await tester.pumpWidget(
-        MediaQuery(
-          data: const MediaQueryData(),
-          child: Directionality(
-            textDirection: TextDirection.ltr,
-            child: Center(
-              child: SizedBox(
-                width: width,
-                height: height,
-                child: EditableText(
-                  controller: controller,
-                  textAlign: textAlign,
-                  scrollController: scrollController,
-                  maxLines: null,
-                  focusNode: focusNode,
-                  cursorWidth: 0,
-                  key: editableTextKey,
-                  style: Typography.material2018().black.titleMedium!,
-                  cursorColor: Colors.blue,
-                  backgroundCursorColor: Colors.grey,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Set height to 1 pixel less than full height.
-    await pumpEditableText(height: 13);
-    expect(log, isEmpty);
-
-    // Scroll so that the top of each character is above the top of the renderEditable
-    // and the bottom of each character is below the bottom of the renderEditable.
-    editableTextKey.currentState!.renderEditable.offset = ViewportOffset.fixed(0.5);
-
-    await tester.showKeyboard(find.byType(EditableText));
-    // We should get all the rects.
-    expect(log.single, const <SelectionRect>[
-      SelectionRect(position: 0, bounds: Rect.fromLTRB(0.0, -0.5, 14.0, 13.5)),
-      SelectionRect(position: 1, bounds: Rect.fromLTRB(14.0, -0.5, 28.0, 13.5)),
-      SelectionRect(position: 2, bounds: Rect.fromLTRB(28.0, -0.5, 42.0, 13.5)),
-      SelectionRect(position: 3, bounds: Rect.fromLTRB(42.0, -0.5, 56.0, 13.5)),
-      SelectionRect(position: 4, bounds: Rect.fromLTRB(56.0, -0.5, 70.0, 13.5))
-    ]);
-    log.clear();
-
-    // On web, we should rely on the browser's implementation of Scribble, so we will not send selection rects.
-  }, skip: kIsWeb, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS })); // [intended]
-
   testWidgets('text styling info is sent on show keyboard', (WidgetTester tester) async {
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
 
-    final TextEditingController controller = TextEditingController();
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
         child: EditableText(
           textDirection: TextDirection.rtl,
           controller: controller,
-          focusNode: FocusNode(),
-          style: const TextStyle(
-            fontSize: 20.0,
-            fontFamily: 'Roboto',
-            fontWeight: FontWeight.w600,
-          ),
+          focusNode: focusNode,
+          style: const TextStyle(fontSize: 20.0, fontFamily: 'Roboto', fontWeight: FontWeight.w600),
           cursorColor: Colors.blue,
           backgroundCursorColor: Colors.grey,
         ),
@@ -5647,36 +6420,41 @@ void main() {
     final MethodCall setStyle = log.firstWhere((MethodCall m) => m.method == 'TextInput.setStyle');
     expect(
       setStyle,
-      isMethodCall('TextInput.setStyle', arguments: <String, dynamic>{
-        'fontSize': 20.0,
-        'fontFamily': 'Roboto',
-        'fontWeightIndex': 5,
-        'textAlignIndex': 4,
-        'textDirectionIndex': 0,
-      }),
+      isMethodCall(
+        'TextInput.setStyle',
+        arguments: <String, dynamic>{
+          'fontSize': 20.0,
+          'fontFamily': 'Roboto',
+          'fontWeightIndex': 5,
+          'textAlignIndex': 4,
+          'textDirectionIndex': 0,
+          'letterSpacing': null,
+          'wordSpacing': null,
+          'lineHeight': 20.0,
+        },
+      ),
     );
   });
 
-  testWidgets('text styling info is sent on show keyboard (bold override)', (WidgetTester tester) async {
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+  testWidgets('text styling info is sent on show keyboard (bold override)', (
+    WidgetTester tester,
+  ) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
 
-    final TextEditingController controller = TextEditingController();
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(boldText: true),
         child: EditableText(
           textDirection: TextDirection.rtl,
           controller: controller,
-          focusNode: FocusNode(),
-          style: const TextStyle(
-            fontSize: 20.0,
-            fontFamily: 'Roboto',
-            fontWeight: FontWeight.w600,
-          ),
+          focusNode: focusNode,
+          style: const TextStyle(fontSize: 20.0, fontFamily: 'Roboto', fontWeight: FontWeight.w600),
           cursorColor: Colors.blue,
           backgroundCursorColor: Colors.grey,
         ),
@@ -5687,30 +6465,38 @@ void main() {
     final MethodCall setStyle = log.firstWhere((MethodCall m) => m.method == 'TextInput.setStyle');
     expect(
       setStyle,
-      isMethodCall('TextInput.setStyle', arguments: <String, dynamic>{
-        'fontSize': 20.0,
-        'fontFamily': 'Roboto',
-        'fontWeightIndex': FontWeight.bold.index,
-        'textAlignIndex': 4,
-        'textDirectionIndex': 0,
-      }),
+      isMethodCall(
+        'TextInput.setStyle',
+        arguments: <String, dynamic>{
+          'fontSize': 20.0,
+          'fontFamily': 'Roboto',
+          'fontWeightIndex': FontWeight.bold.index,
+          'textAlignIndex': 4,
+          'textDirectionIndex': 0,
+          'letterSpacing': null,
+          'wordSpacing': null,
+          'lineHeight': 20.0,
+        },
+      ),
     );
   });
 
   testWidgets('text styling info is sent on style update', (WidgetTester tester) async {
-    final GlobalKey<EditableTextState> editableTextKey = GlobalKey<EditableTextState>();
+    final editableTextKey = GlobalKey<EditableTextState>();
     late StateSetter setState;
-    const TextStyle textStyle1 = TextStyle(
+    const textStyle1 = TextStyle(
       fontSize: 20.0,
       fontFamily: 'RobotoMono',
       fontWeight: FontWeight.w600,
     );
-    const TextStyle textStyle2 = TextStyle(
+    const textStyle2 = TextStyle(
       fontSize: 20.0,
       fontFamily: 'Raleway',
       fontWeight: FontWeight.w700,
+      letterSpacing: 1.0,
+      wordSpacing: 2.0,
     );
-    TextStyle currentTextStyle = textStyle1;
+    var currentTextStyle = textStyle1;
 
     Widget builder() {
       return StatefulBuilder(
@@ -5727,7 +6513,7 @@ void main() {
                       backgroundCursorColor: Colors.grey,
                       key: editableTextKey,
                       controller: controller,
-                      focusNode: FocusNode(),
+                      focusNode: focusNode,
                       style: currentTextStyle,
                       cursorColor: Colors.blue,
                       selectionControls: materialTextSelectionControls,
@@ -5746,8 +6532,10 @@ void main() {
     await tester.pumpWidget(builder());
     await tester.showKeyboard(find.byType(EditableText));
 
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
@@ -5760,13 +6548,19 @@ void main() {
     final MethodCall setStyle = log.firstWhere((MethodCall m) => m.method == 'TextInput.setStyle');
     expect(
       setStyle,
-      isMethodCall('TextInput.setStyle', arguments: <String, dynamic>{
-        'fontSize': 20.0,
-        'fontFamily': 'Raleway',
-        'fontWeightIndex': 6,
-        'textAlignIndex': 4,
-        'textDirectionIndex': 1,
-      }),
+      isMethodCall(
+        'TextInput.setStyle',
+        arguments: <String, dynamic>{
+          'fontSize': 20.0,
+          'fontFamily': 'Raleway',
+          'fontWeightIndex': 6,
+          'textAlignIndex': 4,
+          'textDirectionIndex': 1,
+          'letterSpacing': 1.0,
+          'wordSpacing': 2.0,
+          'lineHeight': 20.0,
+        },
+      ),
     );
   });
 
@@ -5782,7 +6576,7 @@ void main() {
                 child: EditableText(
                   backgroundCursorColor: Colors.grey,
                   controller: controller,
-                  focusNode: FocusNode(),
+                  focusNode: focusNode,
                   style: textStyle,
                   cursorColor: Colors.blue,
                   selectionControls: materialTextSelectionControls,
@@ -5796,14 +6590,14 @@ void main() {
       );
     }
 
-    testWidgets(
-      'called with proper coordinates',
-      (WidgetTester tester) async {
-        controller.value = TextEditingValue(text: 'a' * 50);
-        await tester.pumpWidget(builder());
-        await tester.showKeyboard(find.byType(EditableText));
+    testWidgets('called with proper coordinates', (WidgetTester tester) async {
+      controller.value = TextEditingValue(text: 'a' * 50);
+      await tester.pumpWidget(builder());
+      await tester.showKeyboard(find.byType(EditableText));
 
-        expect(tester.testTextInput.log, contains(
+      expect(
+        tester.testTextInput.log,
+        contains(
           matchesMethodCall(
             'TextInput.setCaretRect',
             args: allOf(
@@ -5815,60 +6609,86 @@ void main() {
               containsPair('height', equals(14)),
             ),
           ),
-        ));
+        ),
+      );
 
-        tester.testTextInput.log.clear();
+      tester.testTextInput.log.clear();
 
-        controller.value = TextEditingValue(
-          text: 'a' * 50,
-          selection: const TextSelection(baseOffset: 0, extentOffset: 0),
-        );
-        await tester.pump();
+      controller.value = TextEditingValue(
+        text: 'a' * 50,
+        selection: const TextSelection(baseOffset: 0, extentOffset: 0),
+      );
+      await tester.pump();
 
-        expect(tester.testTextInput.log, contains(
+      expect(
+        tester.testTextInput.log,
+        contains(
           matchesMethodCall(
             'TextInput.setCaretRect',
             // Now the composing range is not empty.
-            args: allOf(
-              containsPair('x', equals(0)),
-              containsPair('y', equals(0)),
-            ),
+            args: allOf(containsPair('x', equals(0)), containsPair('y', equals(0))),
           ),
-        ));
-      },
-    );
+        ),
+      );
+    });
 
-    testWidgets(
-      'only send updates when necessary',
-      (WidgetTester tester) async {
-        controller.value = TextEditingValue(text: 'a' * 100);
-        await tester.pumpWidget(builder());
-        await tester.showKeyboard(find.byType(EditableText));
+    testWidgets('only send updates when necessary', (WidgetTester tester) async {
+      controller.value = TextEditingValue(text: 'a' * 100);
+      await tester.pumpWidget(builder());
+      await tester.showKeyboard(find.byType(EditableText));
 
-        expect(tester.testTextInput.log, contains(matchesMethodCall('TextInput.setCaretRect')));
+      expect(tester.testTextInput.log, contains(matchesMethodCall('TextInput.setCaretRect')));
 
-        tester.testTextInput.log.clear();
+      tester.testTextInput.log.clear();
 
-        // Should not send updates every frame.
-        await tester.pump();
+      // Should not send updates every frame.
+      await tester.pump();
 
-        expect(tester.testTextInput.log, isNot(contains(matchesMethodCall('TextInput.setCaretRect'))));
-      },
-    );
+      expect(
+        tester.testTextInput.log,
+        isNot(contains(matchesMethodCall('TextInput.setCaretRect'))),
+      );
+    });
 
-    testWidgets(
-      'not sent with selection',
-      (WidgetTester tester) async {
-        controller.value = TextEditingValue(
-          text: 'a' * 100,
-          selection: const TextSelection(baseOffset: 0, extentOffset: 10),
-        );
-        await tester.pumpWidget(builder());
-        await tester.showKeyboard(find.byType(EditableText));
+    testWidgets('set to selection start on forward selection', (WidgetTester tester) async {
+      controller.value = TextEditingValue(
+        text: 'a' * 100,
+        selection: const TextSelection(baseOffset: 10, extentOffset: 30),
+      );
+      await tester.pumpWidget(builder());
+      await tester.showKeyboard(find.byType(EditableText));
 
-        expect(tester.testTextInput.log, isNot(contains(matchesMethodCall('TextInput.setCaretRect'))));
-      },
-    );
+      expect(
+        tester.testTextInput.log,
+        contains(
+          matchesMethodCall(
+            'TextInput.setCaretRect',
+            // Now the composing range is not empty.
+            args: allOf(containsPair('x', equals(140)), containsPair('y', equals(0))),
+          ),
+        ),
+      );
+    });
+
+    testWidgets('set to selection start on reversed selection', (WidgetTester tester) async {
+      controller.value = TextEditingValue(
+        text: 'a' * 100,
+        selection: const TextSelection(baseOffset: 30, extentOffset: 10),
+      );
+      await tester.pumpWidget(builder());
+      await tester.showKeyboard(find.byType(EditableText));
+
+      expect(
+        tester.testTextInput.log,
+        contains(
+          matchesMethodCall(
+            'TextInput.setCaretRect',
+            // Now the composing range is not empty.
+            args: allOf(containsPair('x', equals(140)), containsPair('y', equals(0))),
+          ),
+        ),
+      );
+    });
   });
 
   group('setMarkedTextRect', () {
@@ -5883,7 +6703,7 @@ void main() {
                 child: EditableText(
                   backgroundCursorColor: Colors.grey,
                   controller: controller,
-                  focusNode: FocusNode(),
+                  focusNode: focusNode,
                   style: textStyle,
                   cursorColor: Colors.blue,
                   selectionControls: materialTextSelectionControls,
@@ -5897,14 +6717,14 @@ void main() {
       );
     }
 
-    testWidgets(
-      'called when the composing range changes',
-      (WidgetTester tester) async {
-        controller.value = TextEditingValue(text: 'a' * 100);
-        await tester.pumpWidget(builder());
-        await tester.showKeyboard(find.byType(EditableText));
+    testWidgets('called when the composing range changes', (WidgetTester tester) async {
+      controller.value = TextEditingValue(text: 'a' * 100);
+      await tester.pumpWidget(builder());
+      await tester.showKeyboard(find.byType(EditableText));
 
-        expect(tester.testTextInput.log, contains(
+      expect(
+        tester.testTextInput.log,
+        contains(
           matchesMethodCall(
             'TextInput.setMarkedTextRect',
             args: allOf(
@@ -5914,73 +6734,89 @@ void main() {
               containsPair('x', lessThanOrEqualTo(1)),
             ),
           ),
-        ));
+        ),
+      );
 
-        tester.testTextInput.log.clear();
+      tester.testTextInput.log.clear();
 
-        controller.value = collapsedAtEnd('a' * 100).copyWith(composing: const TextRange(start: 0, end: 10));
-        await tester.pump();
+      controller.value = collapsedAtEnd('a' * 100)
+          .copyWith(composing: const TextRange(start: 0, end: 10));
+      await tester.pump();
 
-        expect(tester.testTextInput.log, contains(
+      expect(
+        tester.testTextInput.log,
+        contains(
           matchesMethodCall(
             'TextInput.setMarkedTextRect',
             // Now the composing range is not empty.
             args: containsPair('width', greaterThanOrEqualTo(10)),
           ),
-        ));
-      },
-    );
+        ),
+      );
+    });
 
-    testWidgets(
-      'only send updates when necessary',
-      (WidgetTester tester) async {
-        controller.value = TextEditingValue(text: 'a' * 100, composing: const TextRange(start: 0, end: 10));
-        await tester.pumpWidget(builder());
-        await tester.showKeyboard(find.byType(EditableText));
+    testWidgets('only send updates when necessary', (WidgetTester tester) async {
+      controller.value = TextEditingValue(
+        text: 'a' * 100,
+        composing: const TextRange(start: 0, end: 10),
+      );
+      await tester.pumpWidget(builder());
+      await tester.showKeyboard(find.byType(EditableText));
 
-        expect(tester.testTextInput.log, contains(matchesMethodCall('TextInput.setMarkedTextRect')));
+      expect(tester.testTextInput.log, contains(matchesMethodCall('TextInput.setMarkedTextRect')));
 
-        tester.testTextInput.log.clear();
+      tester.testTextInput.log.clear();
 
-        // Should not send updates every frame.
-        await tester.pump();
+      // Should not send updates every frame.
+      await tester.pump();
 
-        expect(tester.testTextInput.log, isNot(contains(matchesMethodCall('TextInput.setMarkedTextRect'))));
-      },
-    );
+      expect(
+        tester.testTextInput.log,
+        isNot(contains(matchesMethodCall('TextInput.setMarkedTextRect'))),
+      );
+    });
 
-    testWidgets(
-      'zero matrix paint transform',
-      (WidgetTester tester) async {
-        controller.value = TextEditingValue(text: 'a' * 100, composing: const TextRange(start: 0, end: 10));
-        // Use a FittedBox with an zero-sized child to set the paint transform
-        // to the zero matrix.
-        await tester.pumpWidget(FittedBox(child: SizedBox.fromSize(size: Size.zero, child: builder())));
-        await tester.showKeyboard(find.byType(EditableText));
-        expect(tester.testTextInput.log, contains(matchesMethodCall(
-          'TextInput.setMarkedTextRect',
-          args: allOf(
-            containsPair('width', isNotNaN),
-            containsPair('height', isNotNaN),
-            containsPair('x', isNotNaN),
-            containsPair('y', isNotNaN),
+    testWidgets('zero matrix paint transform', (WidgetTester tester) async {
+      controller.value = TextEditingValue(
+        text: 'a' * 100,
+        composing: const TextRange(start: 0, end: 10),
+      );
+      // Use a FittedBox with an zero-sized child to set the paint transform
+      // to the zero matrix.
+      await tester.pumpWidget(
+        FittedBox(
+          child: SizedBox.fromSize(size: Size.zero, child: builder()),
+        ),
+      );
+      await tester.showKeyboard(find.byType(EditableText));
+      expect(
+        tester.testTextInput.log,
+        contains(
+          matchesMethodCall(
+            'TextInput.setMarkedTextRect',
+            args: allOf(
+              containsPair('width', isNotNaN),
+              containsPair('height', isNotNaN),
+              containsPair('x', isNotNaN),
+              containsPair('y', isNotNaN),
+            ),
           ),
-        )));
-      },
-    );
+        ),
+      );
+    });
   });
-
 
   testWidgets('custom keyboardAppearance is respected', (WidgetTester tester) async {
     // Regression test for https://github.com/flutter/flutter/issues/22212.
 
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
 
-    final TextEditingController controller = TextEditingController();
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -5988,7 +6824,7 @@ void main() {
           textDirection: TextDirection.ltr,
           child: EditableText(
             controller: controller,
-            focusNode: FocusNode(),
+            focusNode: focusNode,
             style: Typography.material2018().black.titleMedium!,
             cursorColor: Colors.blue,
             backgroundCursorColor: Colors.grey,
@@ -6001,34 +6837,40 @@ void main() {
     await tester.showKeyboard(find.byType(EditableText));
     final MethodCall setClient = log.first;
     expect(setClient.method, 'TextInput.setClient');
-    expect(((setClient.arguments as Iterable<dynamic>).last as Map<String, dynamic>)['keyboardAppearance'], 'Brightness.dark');
+    expect(
+      ((setClient.arguments as Iterable<dynamic>).last
+          as Map<String, dynamic>)['keyboardAppearance'],
+      'Brightness.dark',
+    );
   });
 
-  testWidgets('Composing text is underlined and underline is cleared when losing focus', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController.fromValue(
-      const TextEditingValue(
-        text: 'text composing text',
-        selection: TextSelection.collapsed(offset: 14),
-        composing: TextRange(start: 5, end: 14),
+  testWidgets('Composing text is underlined and underline is cleared when losing focus', (
+    WidgetTester tester,
+  ) async {
+    controller.value = const TextEditingValue(
+      text: 'text composing text',
+      selection: TextSelection.collapsed(offset: 14),
+      composing: TextRange(start: 5, end: 14),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        // So we can show overlays.
+        home: EditableText(
+          autofocus: true,
+          backgroundCursorColor: Colors.grey,
+          controller: controller,
+          focusNode: focusNode,
+          style: textStyle,
+          cursorColor: cursorColor,
+          selectionControls: materialTextSelectionControls,
+          keyboardType: TextInputType.text,
+          onEditingComplete: () {
+            // This prevents the default focus change behavior on submission.
+          },
+        ),
       ),
     );
-    final FocusNode focusNode = FocusNode(debugLabel: 'Test Focus Node');
-
-    await tester.pumpWidget(MaterialApp( // So we can show overlays.
-      home: EditableText(
-        autofocus: true,
-        backgroundCursorColor: Colors.grey,
-        controller: controller,
-        focusNode: focusNode,
-        style: textStyle,
-        cursorColor: cursorColor,
-        selectionControls: materialTextSelectionControls,
-        keyboardType: TextInputType.text,
-        onEditingComplete: () {
-          // This prevents the default focus change behavior on submission.
-        },
-      ),
-    ));
 
     assert(focusNode.hasFocus);
     // Autofocus has a one frame delay.
@@ -6037,7 +6879,7 @@ void main() {
     final RenderEditable renderEditable = findRenderEditable(tester);
     // The actual text span is split into 3 parts with the middle part underlined.
     expect((renderEditable.text! as TextSpan).children!.length, 3);
-    final TextSpan textSpan = (renderEditable.text! as TextSpan).children![1] as TextSpan;
+    final textSpan = (renderEditable.text! as TextSpan).children![1] as TextSpan;
     expect(textSpan.text, 'composing');
     expect(textSpan.style!.decoration, TextDecoration.underline);
 
@@ -6047,39 +6889,39 @@ void main() {
     await tester.pump();
 
     expect((renderEditable.text! as TextSpan).children, isNull);
-    // Everything's just formated the same way now.
+    // Everything's just formatted the same way now.
     expect((renderEditable.text! as TextSpan).text, 'text composing text');
     expect(renderEditable.text!.style!.decoration, isNull);
   });
 
   testWidgets('text selection toolbar visibility', (WidgetTester tester) async {
-    const String testText = 'hello \n world \n this \n is \n text';
-    final TextEditingController controller = TextEditingController(text: testText);
+    controller.text = 'hello \n world \n this \n is \n text';
 
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: Container(
-          height: 50,
-          color: Colors.white,
-          child: EditableText(
-            showSelectionHandles: true,
-            controller: controller,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            selectionColor: Colors.lightBlueAccent,
-            maxLines: 3,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: Container(
+            height: 50,
+            color: Colors.white,
+            child: EditableText(
+              showSelectionHandles: true,
+              controller: controller,
+              focusNode: focusNode,
+              style: Typography.material2018().black.titleMedium!,
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              selectionControls: materialTextSelectionControls,
+              keyboardType: TextInputType.text,
+              selectionColor: Colors.lightBlueAccent,
+              maxLines: 3,
+            ),
           ),
         ),
       ),
-    ));
+    );
 
-    final EditableTextState state =
-      tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     final RenderEditable renderEditable = state.renderEditable;
     final Scrollable scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
 
@@ -6090,10 +6932,17 @@ void main() {
     await tester.pumpAndSettle();
 
     // Find the toolbar fade transition while the toolbar is still visible.
-    final List<FadeTransition> transitionsBefore = find.descendant(
-      of: find.byWidgetPredicate((Widget w) => '${w.runtimeType}' == '_SelectionToolbarWrapper'),
-      matching: find.byType(FadeTransition),
-    ).evaluate().map((Element e) => e.widget).cast<FadeTransition>().toList();
+    final List<FadeTransition> transitionsBefore = find
+        .descendant(
+          of: find.byWidgetPredicate(
+            (Widget w) => '${w.runtimeType}' == '_SelectionToolbarWrapper',
+          ),
+          matching: find.byType(FadeTransition),
+        )
+        .evaluate()
+        .map((Element e) => e.widget)
+        .cast<FadeTransition>()
+        .toList();
 
     expect(transitionsBefore.length, 1);
 
@@ -6105,17 +6954,23 @@ void main() {
     scrollable.controller!.jumpTo(50.0);
     await tester.pumpAndSettle();
 
-    // Find the toolbar fade transition after the toolbar has been hidden.
-    final List<FadeTransition> transitionsAfter = find.descendant(
-      of: find.byWidgetPredicate((Widget w) => '${w.runtimeType}' == '_SelectionToolbarWrapper'),
-      matching: find.byType(FadeTransition),
-    ).evaluate().map((Element e) => e.widget).cast<FadeTransition>().toList();
-
-    expect(transitionsAfter.length, 1);
-
-    final FadeTransition toolbarAfter = transitionsAfter[0];
-
-    expect(toolbarAfter.opacity.value, 0.0);
+    // Try to find the toolbar fade transition after the toolbar has been hidden
+    // as a result of a scroll. This removes the toolbar overlay entry so no fade
+    // transition should be found.
+    final List<FadeTransition> transitionsAfter = find
+        .descendant(
+          of: find.byWidgetPredicate(
+            (Widget w) => '${w.runtimeType}' == '_SelectionToolbarWrapper',
+          ),
+          matching: find.byType(FadeTransition),
+        )
+        .evaluate()
+        .map((Element e) => e.widget)
+        .cast<FadeTransition>()
+        .toList();
+    expect(transitionsAfter.length, 0);
+    expect(state.selectionOverlay, isNotNull);
+    expect(state.selectionOverlay!.toolbarIsVisible, false);
 
     // On web, we don't show the Flutter toolbar and instead rely on the browser
     // toolbar. Until we change that, this test should remain skipped.
@@ -6123,35 +6978,35 @@ void main() {
 
   testWidgets('text selection handle visibility', (WidgetTester tester) async {
     // Text with two separate words to select.
-    const String testText = 'XXXXX          XXXXX';
-    final TextEditingController controller = TextEditingController(text: testText);
+    controller.text = 'XXXXX          XXXXX';
 
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 100,
-          child: EditableText(
-            showSelectionHandles: true,
-            controller: controller,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 100,
+            child: EditableText(
+              showSelectionHandles: true,
+              controller: controller,
+              focusNode: focusNode,
+              style: Typography.material2018().black.titleMedium!,
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              selectionControls: materialTextSelectionControls,
+              keyboardType: TextInputType.text,
+            ),
           ),
         ),
       ),
-    ));
+    );
 
-    final EditableTextState state =
-      tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     final RenderEditable renderEditable = state.renderEditable;
     final Scrollable scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
 
-    bool expectedLeftVisibleBefore = false;
-    bool expectedRightVisibleBefore = false;
+    var expectedLeftVisibleBefore = false;
+    var expectedRightVisibleBefore = false;
 
     Future<void> verifyVisibility(
       HandlePositionInViewport leftPosition,
@@ -6170,10 +7025,17 @@ void main() {
       // Check that the animations are functional and going in the right
       // direction.
 
-      final List<FadeTransition> transitions = find.descendant(
-        of: find.byWidgetPredicate((Widget w) => '${w.runtimeType}' == '_SelectionHandleOverlay'),
-        matching: find.byType(FadeTransition),
-      ).evaluate().map((Element e) => e.widget).cast<FadeTransition>().toList();
+      final List<FadeTransition> transitions = find
+          .descendant(
+            of: find.byWidgetPredicate(
+              (Widget w) => '${w.runtimeType}' == '_SelectionHandleOverlay',
+            ),
+            matching: find.byType(FadeTransition),
+          )
+          .evaluate()
+          .map((Element e) => e.widget)
+          .cast<FadeTransition>()
+          .toList();
       expect(transitions.length, 2);
       final FadeTransition left = transitions[0];
       final FadeTransition right = transitions[1];
@@ -6208,7 +7070,7 @@ void main() {
 
       // Check that the handles' positions are correct.
 
-      final List<RenderBox> handles = List<RenderBox>.from(
+      final handles = List<RenderBox>.of(
         tester.renderObjectList<RenderBox>(
           find.descendant(
             of: find.byType(CompositedTransformFollower),
@@ -6224,10 +7086,7 @@ void main() {
           case HandlePositionInViewport.leftEdge:
             expect(
               pos,
-              inExclusiveRange(
-                0 - kMinInteractiveDimension,
-                0 + kMinInteractiveDimension,
-              ),
+              inExclusiveRange(0 - kMinInteractiveDimension, 0 + kMinInteractiveDimension),
             );
           case HandlePositionInViewport.rightEdge:
             expect(
@@ -6247,6 +7106,7 @@ void main() {
             );
         }
       }
+
       expect(state.selectionOverlay!.handlesAreVisible, isTrue);
       testPosition(handles[0].localToGlobal(Offset.zero).dx, leftPosition);
       testPosition(handles[1].localToGlobal(Offset.zero).dx, rightPosition);
@@ -6256,18 +7116,33 @@ void main() {
     await tester.tapAt(const Offset(20, 10));
     renderEditable.selectWord(cause: SelectionChangedCause.longPress);
     await tester.pump();
-    await verifyVisibility(HandlePositionInViewport.leftEdge, true, HandlePositionInViewport.within, true);
+    await verifyVisibility(
+      HandlePositionInViewport.leftEdge,
+      true,
+      HandlePositionInViewport.within,
+      true,
+    );
 
     // Drag the text slightly so the first word is partially visible. Only the
     // right handle should be visible.
     scrollable.controller!.jumpTo(20.0);
-    await verifyVisibility(HandlePositionInViewport.leftEdge, false, HandlePositionInViewport.within, true);
+    await verifyVisibility(
+      HandlePositionInViewport.leftEdge,
+      false,
+      HandlePositionInViewport.within,
+      true,
+    );
 
     // Drag the text all the way to the left so the first word is not visible at
     // all (and the second word is fully visible). Both handles should be
     // invisible now.
     scrollable.controller!.jumpTo(200.0);
-    await verifyVisibility(HandlePositionInViewport.leftEdge, false, HandlePositionInViewport.leftEdge, false);
+    await verifyVisibility(
+      HandlePositionInViewport.leftEdge,
+      false,
+      HandlePositionInViewport.leftEdge,
+      false,
+    );
 
     // Tap to unselect.
     await tester.tap(find.byType(EditableText));
@@ -6277,17 +7152,32 @@ void main() {
     await tester.tapAt(const Offset(80, 10));
     renderEditable.selectWord(cause: SelectionChangedCause.longPress);
     await tester.pump();
-    await verifyVisibility(HandlePositionInViewport.within, true, HandlePositionInViewport.within, true);
+    await verifyVisibility(
+      HandlePositionInViewport.within,
+      true,
+      HandlePositionInViewport.within,
+      true,
+    );
 
     // Drag the text slightly to the right. Only the left handle should be
     // visible.
     scrollable.controller!.jumpTo(150);
-    await verifyVisibility(HandlePositionInViewport.within, true, HandlePositionInViewport.rightEdge, false);
+    await verifyVisibility(
+      HandlePositionInViewport.within,
+      true,
+      HandlePositionInViewport.rightEdge,
+      false,
+    );
 
     // Drag the text all the way to the right, so the second word is not visible
     // at all. Again, both handles should be invisible.
     scrollable.controller!.jumpTo(0);
-    await verifyVisibility(HandlePositionInViewport.rightEdge, false, HandlePositionInViewport.rightEdge, false);
+    await verifyVisibility(
+      HandlePositionInViewport.rightEdge,
+      false,
+      HandlePositionInViewport.rightEdge,
+      false,
+    );
 
     // On web, we don't show the Flutter toolbar and instead rely on the browser
     // toolbar. Until we change that, this test should remain skipped.
@@ -6295,37 +7185,37 @@ void main() {
 
   testWidgets('text selection handle visibility RTL', (WidgetTester tester) async {
     // Text with two separate words to select.
-    const String testText = 'XXXXX          XXXXX';
-    final TextEditingController controller = TextEditingController(text: testText);
+    controller.text = 'XXXXX          XXXXX';
 
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 100,
-          child: EditableText(
-            controller: controller,
-            showSelectionHandles: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 100,
+            child: EditableText(
+              controller: controller,
+              showSelectionHandles: true,
+              focusNode: focusNode,
+              style: Typography.material2018().black.titleMedium!,
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              selectionControls: materialTextSelectionControls,
+              keyboardType: TextInputType.text,
+              textAlign: TextAlign.right,
+            ),
           ),
         ),
       ),
-    ));
+    );
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     // Select the first word. Both handles should be visible.
     await tester.tapAt(const Offset(20, 10));
     state.renderEditable.selectWord(cause: SelectionChangedCause.longPress);
     await tester.pump();
-    final List<RenderBox> handles = List<RenderBox>.from(
+    final handles = List<RenderBox>.of(
       tester.renderObjectList<RenderBox>(
         find.descendant(
           of: find.byType(CompositedTransformFollower),
@@ -6335,17 +7225,11 @@ void main() {
     );
     expect(
       handles[0].localToGlobal(Offset.zero).dx,
-      inExclusiveRange(
-        -kMinInteractiveDimension,
-        kMinInteractiveDimension,
-      ),
+      inExclusiveRange(-kMinInteractiveDimension, kMinInteractiveDimension),
     );
     expect(
       handles[1].localToGlobal(Offset.zero).dx,
-      inExclusiveRange(
-        70.0 - kMinInteractiveDimension,
-        70.0 + kMinInteractiveDimension,
-      ),
+      inExclusiveRange(70.0 - kMinInteractiveDimension, 70.0 + kMinInteractiveDimension),
     );
     expect(state.selectionOverlay!.handlesAreVisible, isTrue);
     expect(controller.selection.base.offset, 0);
@@ -6355,15 +7239,21 @@ void main() {
     // toolbar. Until we change that, this test should remain skipped.
   }, skip: kIsWeb); // [intended]
 
-  const String testText = 'Now is the time for\n' // 20
-      'all good people\n'                         // 20 + 16 => 36
-      'to come to the aid\n'                      // 36 + 19 => 55
-      'of their country.';                        // 55 + 17 => 72
+  const testText =
+      'Now is the time for\n' // 20
+      'all good people\n' // 20 + 16 => 36
+      'to come to the aid\n' // 36 + 19 => 55
+      'of their country.'; // 55 + 17 => 72
 
-  Future<void> testTextEditing(WidgetTester tester, {required TargetPlatform targetPlatform}) async {
-    final String targetPlatformString = targetPlatform.toString();
-    final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
-    final TextEditingController controller = TextEditingController(text: testText);
+  Future<void> testTextEditing(
+    WidgetTester tester, {
+    required TargetPlatform targetPlatform,
+  }) async {
+    final targetPlatformString = targetPlatform.toString();
+    final String platform = targetPlatformString
+        .substring(targetPlatformString.indexOf('.') + 1)
+        .toLowerCase();
+    controller.text = testText;
     controller.selection = const TextSelection(
       baseOffset: 0,
       extentOffset: 0,
@@ -6371,31 +7261,33 @@ void main() {
     );
     late TextSelection selection;
     late SelectionChangedCause cause;
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-            onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
-              selection = newSelection;
-              cause = newCause!;
-            },
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 400,
+            child: EditableText(
+              maxLines: 10,
+              controller: controller,
+              showSelectionHandles: true,
+              autofocus: true,
+              focusNode: focusNode,
+              style: Typography.material2018().black.titleMedium!,
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              selectionControls: materialTextSelectionControls,
+              keyboardType: TextInputType.text,
+              textAlign: TextAlign.right,
+              onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
+                selection = newSelection;
+                cause = newCause!;
+              },
+            ),
           ),
         ),
       ),
-    ));
+    );
 
     await tester.pump(); // Wait for autofocus to take effect.
 
@@ -6414,13 +7306,7 @@ void main() {
     expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 3,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 0, extentOffset: 3, affinity: TextAffinity.upstream)),
       reason: 'on $platform',
     );
 
@@ -6438,43 +7324,28 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 0,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 0, extentOffset: 0)),
       reason: 'on $platform',
     );
 
     // Try to select before the first character, nothing should change.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
       shift: true,
       targetPlatform: defaultTargetPlatform,
     );
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 0,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 0, extentOffset: 0)),
       reason: 'on $platform',
     );
 
     // Select the first two words.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight, LogicalKeyboardKey.arrowRight],
       shift: true,
       wordModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -6482,21 +7353,14 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 6,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 0, extentOffset: 6)),
       reason: 'on $platform',
     );
 
     // Unselect the second word.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
       shift: true,
       wordModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -6504,75 +7368,45 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 4,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 0, extentOffset: 4, affinity: TextAffinity.upstream)),
       reason: 'on $platform',
     );
 
     // Select the next line.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowDown],
       shift: true,
       targetPlatform: defaultTargetPlatform,
     );
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 20,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 0, extentOffset: 20, affinity: TextAffinity.upstream)),
       reason: 'on $platform',
     );
 
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
+    await sendKeys(tester, <LogicalKeyboardKey>[
+      LogicalKeyboardKey.arrowRight,
+    ], targetPlatform: defaultTargetPlatform);
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 20,
-          extentOffset: 20,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 20, extentOffset: 20)),
       reason: 'on $platform',
     );
 
     // Select the next line.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowDown],
       shift: true,
       targetPlatform: defaultTargetPlatform,
     );
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 20,
-          extentOffset: 39,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 20, extentOffset: 39)),
       reason: 'on $platform',
     );
 
@@ -6591,42 +7425,28 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 20,
-          extentOffset: testText.length,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 20, extentOffset: testText.length)),
       reason: 'on $platform',
     );
 
     // Go back up one line to set selection up to part of the last line.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowUp,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowUp],
       shift: true,
       targetPlatform: defaultTargetPlatform,
     );
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 20,
-          extentOffset: 39,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 20, extentOffset: 39)),
       reason: 'on $platform',
     );
 
     // Select to the end of the selection.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
       lineModifier: true,
       shift: true,
       targetPlatform: defaultTargetPlatform,
@@ -6635,20 +7455,14 @@ void main() {
     expect(
       selection,
       equals(
-        const TextSelection(
-          baseOffset: 20,
-          extentOffset: 54,
-          affinity: TextAffinity.upstream,
-        ),
+        const TextSelection(baseOffset: 20, extentOffset: 54, affinity: TextAffinity.upstream),
       ),
       reason: 'on $platform',
     );
 
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
       lineModifier: true,
       shift: true,
       targetPlatform: defaultTargetPlatform,
@@ -6663,11 +7477,7 @@ void main() {
         expect(
           selection,
           equals(
-            const TextSelection(
-              baseOffset: 20,
-              extentOffset: 36,
-              affinity: TextAffinity.upstream,
-            ),
+            const TextSelection(baseOffset: 20, extentOffset: 36, affinity: TextAffinity.upstream),
           ),
           reason: 'on $platform',
         );
@@ -6678,11 +7488,7 @@ void main() {
         expect(
           selection,
           equals(
-            const TextSelection(
-              baseOffset: 20,
-              extentOffset: 54,
-              affinity: TextAffinity.upstream,
-            ),
+            const TextSelection(baseOffset: 20, extentOffset: 54, affinity: TextAffinity.upstream),
           ),
           reason: 'on $platform',
         );
@@ -6691,9 +7497,7 @@ void main() {
     // Select All
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.keyA,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.keyA],
       shortcutModifier: true,
       targetPlatform: defaultTargetPlatform,
     );
@@ -6711,42 +7515,27 @@ void main() {
     );
 
     // Jump to beginning of selection.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
+    await sendKeys(tester, <LogicalKeyboardKey>[
+      LogicalKeyboardKey.arrowLeft,
+    ], targetPlatform: defaultTargetPlatform);
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 0,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 0, extentOffset: 0)),
       reason: 'on $platform',
     );
 
     // Jump to end.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowDown],
       lineModifier: true,
       targetPlatform: defaultTargetPlatform,
     );
 
     expect(
       selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: testText.length,
-        ),
-      ),
+      equals(const TextSelection.collapsed(offset: testText.length)),
       reason: 'on $platform',
     );
     expect(controller.text, equals(testText), reason: 'on $platform');
@@ -6754,51 +7543,27 @@ void main() {
     // Jump to start.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowUp,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowUp],
       lineModifier: true,
       targetPlatform: defaultTargetPlatform,
     );
 
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 0,
-        ),
-      ),
-      reason: 'on $platform',
-    );
+    expect(selection, equals(const TextSelection.collapsed(offset: 0)), reason: 'on $platform');
     expect(controller.text, equals(testText), reason: 'on $platform');
 
     // Move forward a few letters
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
+    await sendKeys(tester, <LogicalKeyboardKey>[
+      LogicalKeyboardKey.arrowRight,
+      LogicalKeyboardKey.arrowRight,
+      LogicalKeyboardKey.arrowRight,
+    ], targetPlatform: defaultTargetPlatform);
 
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 3,
-        ),
-      ),
-      reason: 'on $platform',
-    );
+    expect(selection, equals(const TextSelection.collapsed(offset: 3)), reason: 'on $platform');
 
     // Select to end.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowDown],
       shift: true,
       lineModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -6806,21 +7571,14 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 3,
-          extentOffset: testText.length,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 3, extentOffset: testText.length)),
       reason: 'on $platform',
     );
 
     // Select to start, which extends the selection.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowUp,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowUp],
       shift: true,
       lineModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -6835,11 +7593,7 @@ void main() {
         expect(
           selection,
           equals(
-            const TextSelection(
-              baseOffset: 3,
-              extentOffset: 0,
-              affinity: TextAffinity.upstream,
-            ),
+            const TextSelection(baseOffset: 3, extentOffset: 0, affinity: TextAffinity.upstream),
           ),
           reason: 'on $platform',
         );
@@ -6848,116 +7602,64 @@ void main() {
       case TargetPlatform.macOS:
         expect(
           selection,
-          equals(
-            const TextSelection(
-              baseOffset: 72,
-              extentOffset: 0,
-            ),
-          ),
+          equals(const TextSelection(baseOffset: 72, extentOffset: 0)),
           reason: 'on $platform',
         );
     }
 
     // Move to start again.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowUp,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
+    await sendKeys(tester, <LogicalKeyboardKey>[
+      LogicalKeyboardKey.arrowUp,
+    ], targetPlatform: defaultTargetPlatform);
 
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 0,
-        ),
-      ),
-      reason: 'on $platform',
-    );
+    expect(selection, equals(const TextSelection.collapsed(offset: 0)), reason: 'on $platform');
 
     // Move down by page.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.pageDown,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
+    await sendKeys(tester, <LogicalKeyboardKey>[
+      LogicalKeyboardKey.pageDown,
+    ], targetPlatform: defaultTargetPlatform);
 
     // On macOS, pageDown/Up don't change selection.
     expect(
       selection,
       equals(
-        defaultTargetPlatform == TargetPlatform.macOS
-            || defaultTargetPlatform == TargetPlatform.iOS
-          ? const TextSelection.collapsed(offset: 0)
-          : const TextSelection.collapsed(offset: 55),
+        defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.iOS
+            ? const TextSelection.collapsed(offset: 0)
+            : const TextSelection.collapsed(offset: 55),
       ),
       reason: 'on $platform',
     );
 
     // Move up by page (to start).
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.pageUp,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
+    await sendKeys(tester, <LogicalKeyboardKey>[
+      LogicalKeyboardKey.pageUp,
+    ], targetPlatform: defaultTargetPlatform);
 
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 0,
-        ),
-      ),
-      reason: 'on $platform',
-    );
+    expect(selection, equals(const TextSelection.collapsed(offset: 0)), reason: 'on $platform');
 
     // Select towards end by page.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.pageDown,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.pageDown],
       shift: true,
       targetPlatform: defaultTargetPlatform,
     );
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 55,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 0, extentOffset: 55, affinity: TextAffinity.upstream)),
       reason: 'on $platform',
     );
 
     // Change selection extent towards start by page.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.pageUp,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.pageUp],
       shift: true,
       targetPlatform: defaultTargetPlatform,
     );
 
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 0,
-        ),
-      ),
-      reason: 'on $platform',
-    );
+    expect(selection, equals(const TextSelection.collapsed(offset: 0)), reason: 'on $platform');
 
     // Jump forward three words.
     await sendKeys(
@@ -6973,12 +7675,7 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 10,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 10, extentOffset: 10)),
       reason: 'on $platform',
     );
 
@@ -6996,22 +7693,14 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 7,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 10, extentOffset: 7, affinity: TextAffinity.upstream)),
       reason: 'on $platform',
     );
 
     // Select a word backward.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
       shift: true,
       wordModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -7019,13 +7708,7 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 4,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 10, extentOffset: 4, affinity: TextAffinity.upstream)),
       reason: 'on $platform',
     );
     expect(controller.text, equals(testText), reason: 'on $platform');
@@ -7033,21 +7716,14 @@ void main() {
     // Cut
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.keyX,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.keyX],
       shortcutModifier: true,
       targetPlatform: defaultTargetPlatform,
     );
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 4,
-          extentOffset: 4,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 4, extentOffset: 4)),
       reason: 'on $platform',
     );
     expect(
@@ -7069,32 +7745,25 @@ void main() {
     // Paste
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.keyV,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.keyV],
       shortcutModifier: true,
       targetPlatform: defaultTargetPlatform,
     );
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 10,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 10, extentOffset: 10)),
       reason: 'on $platform',
     );
     expect(controller.text, equals(testText), reason: 'on $platform');
 
-    final bool platformIsApple = defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS;
+    final bool platformIsApple =
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
     // Move down one paragraph.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowDown],
       shift: true,
       wordModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -7102,21 +7771,14 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 20,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 10, extentOffset: 20)),
       reason: 'on $platform',
     );
 
     // Move down another paragraph.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowDown],
       shift: true,
       wordModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -7124,21 +7786,14 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 36,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 10, extentOffset: 36)),
       reason: 'on $platform',
     );
 
     // Move down another paragraph.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowDown],
       shift: true,
       wordModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -7146,21 +7801,14 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 55,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 10, extentOffset: 55)),
       reason: 'on $platform',
     );
 
     // Move up a paragraph.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowUp,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowUp],
       shift: true,
       wordModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -7168,21 +7816,14 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 36,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 10, extentOffset: 36)),
       reason: 'on $platform',
     );
 
     // Move up a paragraph.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowUp,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowUp],
       shift: true,
       wordModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -7190,12 +7831,7 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 20,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 10, extentOffset: 20)),
       reason: 'on $platform',
     );
 
@@ -7203,9 +7839,7 @@ void main() {
     // extend to the previous paragraph boundary on other platforms.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowUp,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowUp],
       shift: true,
       wordModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -7213,12 +7847,7 @@ void main() {
 
     expect(
       selection,
-      equals(
-        TextSelection(
-          baseOffset: 10,
-          extentOffset: platformIsApple ? 10 : 0,
-        ),
-      ),
+      equals(TextSelection(baseOffset: 10, extentOffset: platformIsApple ? 10 : 0)),
       reason: 'on $platform',
     );
 
@@ -7227,9 +7856,7 @@ void main() {
     // set of keys sent.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowUp,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowUp],
       shift: true,
       wordModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -7237,12 +7864,7 @@ void main() {
 
     expect(
       selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 0,
-        ),
-      ),
+      equals(const TextSelection(baseOffset: 10, extentOffset: 0)),
       reason: 'on $platform',
     );
 
@@ -7250,9 +7872,7 @@ void main() {
     // On other platforms this moves the selection's extent to the next paragraph boundary.
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowDown],
       shift: true,
       wordModifier: true,
       targetPlatform: defaultTargetPlatform,
@@ -7273,10 +7893,7 @@ void main() {
     // Copy All
     await sendKeys(
       tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.keyA,
-        LogicalKeyboardKey.keyC,
-      ],
+      <LogicalKeyboardKey>[LogicalKeyboardKey.keyA, LogicalKeyboardKey.keyC],
       shortcutModifier: true,
       targetPlatform: defaultTargetPlatform,
     );
@@ -7297,21 +7914,12 @@ void main() {
 
     if (defaultTargetPlatform != TargetPlatform.iOS) {
       // Delete
-      await sendKeys(
-        tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.delete,
-        ],
-        targetPlatform: defaultTargetPlatform,
-      );
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.delete,
+      ], targetPlatform: defaultTargetPlatform);
       expect(
         selection,
-        equals(
-          const TextSelection(
-            baseOffset: 0,
-            extentOffset: 0,
-          ),
-        ),
+        equals(const TextSelection(baseOffset: 0, extentOffset: 0)),
         reason: 'on $platform',
       );
       expect(controller.text, isEmpty, reason: 'on $platform');
@@ -7320,21 +7928,12 @@ void main() {
       controller.selection = const TextSelection(baseOffset: 2, extentOffset: 2);
 
       // Backspace
-      await sendKeys(
-        tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.backspace,
-        ],
-        targetPlatform: defaultTargetPlatform,
-      );
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.backspace,
+      ], targetPlatform: defaultTargetPlatform);
       expect(
         selection,
-        equals(
-          const TextSelection(
-            baseOffset: 1,
-            extentOffset: 1,
-          ),
-        ),
+        equals(const TextSelection(baseOffset: 1, extentOffset: 1)),
         reason: 'on $platform',
       );
       expect(controller.text, 'ac', reason: 'on $platform');
@@ -7342,92 +7941,95 @@ void main() {
       // Shift-backspace (same as backspace)
       await sendKeys(
         tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.backspace,
-        ],
+        <LogicalKeyboardKey>[LogicalKeyboardKey.backspace],
         shift: true,
         targetPlatform: defaultTargetPlatform,
       );
       expect(
         selection,
-        equals(
-          const TextSelection(
-            baseOffset: 0,
-            extentOffset: 0,
-          ),
-        ),
+        equals(const TextSelection(baseOffset: 0, extentOffset: 0)),
         reason: 'on $platform',
       );
       expect(controller.text, 'c', reason: 'on $platform');
     }
   }
 
-  testWidgets('keyboard text selection works (RawKeyEvent)', (WidgetTester tester) async {
-    debugKeyEventSimulatorTransitModeOverride = KeyDataTransitMode.rawKeyData;
+  testWidgets(
+    'keyboard text selection works (RawKeyEvent)',
+    (WidgetTester tester) async {
+      debugKeyEventSimulatorTransitModeOverride = KeyDataTransitMode.rawKeyData;
 
-    await testTextEditing(tester, targetPlatform: defaultTargetPlatform);
+      await testTextEditing(tester, targetPlatform: defaultTargetPlatform);
 
-    debugKeyEventSimulatorTransitModeOverride = null;
+      debugKeyEventSimulatorTransitModeOverride = null;
 
-    // On web, using keyboard for selection is handled by the browser.
-  }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
+      // On web, using keyboard for selection is handled by the browser.
+    },
+    variant: TargetPlatformVariant.all(),
+    skip: kIsWeb, // [intended]
+  );
 
-  testWidgets('keyboard text selection works (ui.KeyData then RawKeyEvent)', (WidgetTester tester) async {
-    debugKeyEventSimulatorTransitModeOverride = KeyDataTransitMode.keyDataThenRawKeyData;
+  testWidgets(
+    'keyboard text selection works (ui.KeyData then RawKeyEvent)',
+    (WidgetTester tester) async {
+      debugKeyEventSimulatorTransitModeOverride = KeyDataTransitMode.keyDataThenRawKeyData;
 
-    await testTextEditing(tester, targetPlatform: defaultTargetPlatform);
+      await testTextEditing(tester, targetPlatform: defaultTargetPlatform);
 
-    debugKeyEventSimulatorTransitModeOverride = null;
+      debugKeyEventSimulatorTransitModeOverride = null;
 
-    // On web, using keyboard for selection is handled by the browser.
-  }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
+      // On web, using keyboard for selection is handled by the browser.
+    },
+    variant: TargetPlatformVariant.all(),
+    skip: kIsWeb, // [intended]
+  );
 
   testWidgets(
     'keyboard shortcuts respect read-only',
     (WidgetTester tester) async {
       final String platform = defaultTargetPlatform.name.toLowerCase();
-      final TextEditingController controller = TextEditingController(text: testText);
+      controller.text = testText;
       controller.selection = const TextSelection(
         baseOffset: 0,
-        extentOffset: testText.length ~/2,
+        extentOffset: testText.length ~/ 2,
         affinity: TextAffinity.upstream,
       );
       TextSelection? selection;
-      await tester.pumpWidget(MaterialApp(
-        home: Align(
-          alignment: Alignment.topLeft,
-          child: SizedBox(
-            width: 400,
-            child: EditableText(
-              readOnly: true,
-              controller: controller,
-              autofocus: true,
-              focusNode: FocusNode(),
-              style: Typography.material2018().black.titleMedium!,
-              cursorColor: Colors.blue,
-              backgroundCursorColor: Colors.grey,
-              selectionControls: materialTextSelectionControls,
-              keyboardType: TextInputType.text,
-              textAlign: TextAlign.right,
-              onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
-                selection = newSelection;
-              },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                readOnly: true,
+                controller: controller,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+                onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
+                  selection = newSelection;
+                },
+              ),
             ),
           ),
         ),
-      ));
+      );
 
       await tester.pump(); // Wait for autofocus to take effect.
 
-      const String clipboardContent = 'read-only';
+      const clipboardContent = 'read-only';
       await Clipboard.setData(const ClipboardData(text: clipboardContent));
 
       // Paste
       await sendKeys(
         tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.keyV,
-        ],
+        <LogicalKeyboardKey>[LogicalKeyboardKey.keyV],
         shortcutModifier: true,
         targetPlatform: defaultTargetPlatform,
       );
@@ -7438,9 +8040,7 @@ void main() {
       // Select All
       await sendKeys(
         tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.keyA,
-        ],
+        <LogicalKeyboardKey>[LogicalKeyboardKey.keyA],
         shortcutModifier: true,
         targetPlatform: defaultTargetPlatform,
       );
@@ -7461,9 +8061,7 @@ void main() {
       // Cut
       await sendKeys(
         tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.keyX,
-        ],
+        <LogicalKeyboardKey>[LogicalKeyboardKey.keyX],
         shortcutModifier: true,
         targetPlatform: defaultTargetPlatform,
       );
@@ -7489,9 +8087,7 @@ void main() {
       // Copy
       await sendKeys(
         tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.keyC,
-        ],
+        <LogicalKeyboardKey>[LogicalKeyboardKey.keyC],
         shortcutModifier: true,
         targetPlatform: defaultTargetPlatform,
       );
@@ -7515,13 +8111,9 @@ void main() {
       );
 
       // Delete
-      await sendKeys(
-        tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.delete,
-        ],
-        targetPlatform: defaultTargetPlatform,
-      );
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.delete,
+      ], targetPlatform: defaultTargetPlatform);
       expect(
         selection,
         equals(
@@ -7536,13 +8128,9 @@ void main() {
       expect(controller.text, equals(testText), reason: 'on $platform');
 
       // Backspace
-      await sendKeys(
-        tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.backspace,
-        ],
-        targetPlatform: defaultTargetPlatform,
-      );
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.backspace,
+      ], targetPlatform: defaultTargetPlatform);
       expect(
         selection,
         equals(
@@ -7561,1832 +8149,1683 @@ void main() {
     variant: TargetPlatformVariant.all(),
   );
 
-  testWidgets('home/end keys', (WidgetTester tester) async {
-    final String targetPlatformString = defaultTargetPlatform.toString();
-    final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    late TextSelection selection;
-    late SelectionChangedCause cause;
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-            onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
-              selection = newSelection;
-              cause = newCause!;
-            },
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-
-    // Move near the middle of the document.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 23,
-        ),
-      ),
-      reason: 'on $platform',
-    );
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    switch (defaultTargetPlatform) {
-      // These platforms don't move the selection with home/end at all.
-      case TargetPlatform.android:
-      case TargetPlatform.iOS:
-      case TargetPlatform.fuchsia:
-      case TargetPlatform.macOS:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 23,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // These platforms go to the line start/end.
-      case TargetPlatform.linux:
-      case TargetPlatform.windows:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 20,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-    }
-
-    expect(controller.text, equals(testText), reason: 'on $platform');
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    switch (defaultTargetPlatform) {
-      // These platforms don't move the selection with home/end at all.
-      case TargetPlatform.android:
-      case TargetPlatform.iOS:
-      case TargetPlatform.fuchsia:
-      case TargetPlatform.macOS:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 23,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // These platforms go to the line start/end.
-      case TargetPlatform.linux:
-      case TargetPlatform.windows:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 35,
-              affinity: TextAffinity.upstream,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-    }
-    expect(controller.text, equals(testText), reason: 'on $platform');
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: TargetPlatformVariant.all(),
-  );
-
-  testWidgets('home keys and wordwraps', (WidgetTester tester) async {
-    final String targetPlatformString = defaultTargetPlatform.toString();
-    final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
-    const String testText = 'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    late TextSelection selection;
-    late SelectionChangedCause cause;
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-            onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
-              selection = newSelection;
-              cause = newCause!;
-            },
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-
-    // Move near the middle of the document.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 32,
-        ),
-      ),
-      reason: 'on $platform',
-    );
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    switch (defaultTargetPlatform) {
-      // These platforms don't move the selection with home/end at all.
-      case TargetPlatform.android:
-      case TargetPlatform.iOS:
-      case TargetPlatform.fuchsia:
-      case TargetPlatform.macOS:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 32,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // These platforms go to the line start/end.
-      case TargetPlatform.linux:
-      case TargetPlatform.windows:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 29,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-    }
-
-    expect(controller.text, equals(testText), reason: 'on $platform');
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    switch (defaultTargetPlatform) {
-      // These platforms don't move the selection with home/end at all still.
-      case TargetPlatform.android:
-      case TargetPlatform.iOS:
-      case TargetPlatform.fuchsia:
-      case TargetPlatform.macOS:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 32,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Linux does nothing at a wordwrap with subsequent presses.
-      case TargetPlatform.linux:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 29,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Windows jumps to the previous wordwrapped line.
-      case TargetPlatform.windows:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 0,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-    }
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: TargetPlatformVariant.all(),
-  );
-
-  testWidgets('end keys and wordwraps', (WidgetTester tester) async {
-    final String targetPlatformString = defaultTargetPlatform.toString();
-    final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
-    const String testText = 'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    late TextSelection selection;
-    late SelectionChangedCause cause;
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-            onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
-              selection = newSelection;
-              cause = newCause!;
-            },
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-
-    // Move near the middle of the document.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 32,
-        ),
-      ),
-      reason: 'on $platform',
-    );
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    switch (defaultTargetPlatform) {
-      // These platforms don't move the selection with home/end at all.
-      case TargetPlatform.android:
-      case TargetPlatform.iOS:
-      case TargetPlatform.fuchsia:
-      case TargetPlatform.macOS:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 32,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // These platforms go to the line start/end.
-      case TargetPlatform.linux:
-      case TargetPlatform.windows:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 58,
-              affinity: TextAffinity.upstream,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-    }
-    expect(controller.text, equals(testText), reason: 'on $platform');
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    switch (defaultTargetPlatform) {
-      // These platforms don't move the selection with home/end at all still.
-      case TargetPlatform.android:
-      case TargetPlatform.iOS:
-      case TargetPlatform.fuchsia:
-      case TargetPlatform.macOS:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 32,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Linux does nothing at a wordwrap with subsequent presses.
-      case TargetPlatform.linux:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 58,
-              affinity: TextAffinity.upstream,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Windows jumps to the next wordwrapped line.
-      case TargetPlatform.windows:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 84,
-              affinity: TextAffinity.upstream,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-    }
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: TargetPlatformVariant.all(),
-  );
-
-  testWidgets('shift + home/end keys', (WidgetTester tester) async {
-    final String targetPlatformString = defaultTargetPlatform.toString();
-    final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    late TextSelection selection;
-    late SelectionChangedCause cause;
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-            onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
-              selection = newSelection;
-              cause = newCause!;
-            },
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump();
-
-    // Move near the middle of the document.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 23,
-        ),
-      ),
-      reason: 'on $platform',
-    );
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    expect(controller.text, equals(testText), reason: 'on $platform');
-    final TextSelection selectionAfterHome = selection;
-
-    // Move back to position 23.
-    controller.selection = const TextSelection.collapsed(
-      offset: 23,
-    );
-    await tester.pump();
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    expect(controller.text, equals(testText), reason: 'on $platform');
-    final TextSelection selectionAfterEnd = selection;
-
-    switch (defaultTargetPlatform) {
-      // These platforms don't handle shift + home/end at all.
-      case TargetPlatform.android:
-      case TargetPlatform.fuchsia:
-        expect(
-          selectionAfterHome,
-          equals(
-            const TextSelection(
-              baseOffset: 23,
-              extentOffset: 23,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-        expect(
-          selectionAfterEnd,
-          equals(
-            const TextSelection(
-              baseOffset: 23,
-              extentOffset: 23,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Linux extends to the line start/end.
-      case TargetPlatform.linux:
-        expect(
-          selectionAfterHome,
-          equals(
-            const TextSelection(
-              baseOffset: 23,
-              extentOffset: 20,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-        expect(
-          selectionAfterEnd,
-          equals(
-            const TextSelection(
-              baseOffset: 23,
-              extentOffset: 35,
-              affinity: TextAffinity.upstream,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Windows expands to the line start/end.
-      case TargetPlatform.windows:
-        expect(
-          selectionAfterHome,
-          equals(
-            const TextSelection(
-              baseOffset: 23,
-              extentOffset: 20,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-        expect(
-          selectionAfterEnd,
-          equals(
-            const TextSelection(
-              baseOffset: 23,
-              extentOffset: 35,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Mac and iOS go to the start/end of the document.
-      case TargetPlatform.iOS:
-      case TargetPlatform.macOS:
-        expect(
-          selectionAfterHome,
-          equals(
-            const TextSelection(
-              baseOffset: 23,
-              extentOffset: 0,
-              affinity: TextAffinity.upstream,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-        expect(
-          selectionAfterEnd,
-          equals(
-            const TextSelection(
-              baseOffset: 23,
-              extentOffset: 72,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-    }
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: TargetPlatformVariant.all(),
-  );
-
-  testWidgets('shift + home/end keys (Windows only)', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump();
-
-    // Move the selection away from the start so it can invert.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    expect(
-      controller.selection,
-      equals(const TextSelection.collapsed(
-        offset: 4,
-      )),
-    );
-
-    // Press shift + end and extend the selection to the end of the line.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    expect(
-      controller.selection,
-      equals(const TextSelection(
-        baseOffset: 4,
-        extentOffset: 19,
-        affinity: TextAffinity.upstream,
-      )),
-    );
-
-    // Press shift + home and the selection inverts and extends to the start, it
-    // does not collapse and stop at the inversion.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    expect(
-      controller.selection,
-      equals(const TextSelection(
-        baseOffset: 4,
-        extentOffset: 0,
-      )),
-    );
-
-    // Press shift + end again and the selection inverts and extends to the end,
-    // again it does not stop at the inversion.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    expect(
-      controller.selection,
-      equals(const TextSelection(
-        baseOffset: 4,
-        extentOffset: 19,
-      )),
-    );
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.windows })
-  );
-
-  testWidgets('home/end keys scrolling (Mac only)', (WidgetTester tester) async {
-    const String testText = 'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-
-    final Scrollable scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
-
-    expect(scrollable.controller!.offset, 0.0);
-
-    // Scroll to the end of the document with the end key.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    final double maxScrollExtent = scrollable.controller!.position.maxScrollExtent;
-    expect(scrollable.controller!.offset, maxScrollExtent);
-
-    // Scroll back to the beginning of the document with the home key.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(scrollable.controller!.offset, 0.0);
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.macOS })
-  );
-
-  testWidgets('shift + home keys and wordwraps', (WidgetTester tester) async {
-    final String targetPlatformString = defaultTargetPlatform.toString();
-    final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
-    const String testText = 'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    late TextSelection selection;
-    late SelectionChangedCause cause;
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-            onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
-              selection = newSelection;
-              cause = newCause!;
-            },
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-
-    // Move near the middle of the document.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 32,
-        ),
-      ),
-      reason: 'on $platform',
-    );
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    switch (defaultTargetPlatform) {
-      // These platforms don't move the selection with shift + home/end at all.
-      case TargetPlatform.android:
-      case TargetPlatform.fuchsia:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 32,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Mac and iOS select to the start of the document.
-      case TargetPlatform.iOS:
-      case TargetPlatform.macOS:
-        expect(
-          selection,
-          equals(
-            const TextSelection(
-              baseOffset: 32,
-              extentOffset: 0,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // These platforms select to the line start.
-      case TargetPlatform.linux:
-      case TargetPlatform.windows:
-        expect(
-          selection,
-          equals(
-            const TextSelection(
-              baseOffset: 32,
-              extentOffset: 29,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-    }
-
-    expect(controller.text, equals(testText), reason: 'on $platform');
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    switch (defaultTargetPlatform) {
-      // These platforms don't move the selection with home/end at all still.
-      case TargetPlatform.android:
-      case TargetPlatform.fuchsia:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 32,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Mac and iOS select to the start of the document.
-      case TargetPlatform.iOS:
-      case TargetPlatform.macOS:
-        expect(
-          selection,
-          equals(
-            const TextSelection(
-              baseOffset: 32,
-              extentOffset: 0,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Linux does nothing at a wordwrap with subsequent presses.
-      case TargetPlatform.linux:
-        expect(
-          selection,
-          equals(
-            const TextSelection(
-              baseOffset: 32,
-              extentOffset: 29,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Windows jumps to the previous wordwrapped line.
-      case TargetPlatform.windows:
-        expect(
-          selection,
-          equals(
-            const TextSelection(
-              baseOffset: 32,
-              extentOffset: 0,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-    }
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: TargetPlatformVariant.all(),
-  );
-
-  testWidgets('shift + end keys and wordwraps', (WidgetTester tester) async {
-    final String targetPlatformString = defaultTargetPlatform.toString();
-    final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
-    const String testText = 'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    late TextSelection selection;
-    late SelectionChangedCause cause;
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-            onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
-              selection = newSelection;
-              cause = newCause!;
-            },
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-
-    // Move near the middle of the document.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 32,
-        ),
-      ),
-      reason: 'on $platform',
-    );
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    switch (defaultTargetPlatform) {
-      // These platforms don't move the selection with home/end at all.
-      case TargetPlatform.android:
-      case TargetPlatform.fuchsia:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 32,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Mac and iOS select to the end of the document.
-      case TargetPlatform.iOS:
-      case TargetPlatform.macOS:
-        expect(
-          selection,
-          equals(
-            const TextSelection(
-              baseOffset: 32,
-              extentOffset: 145,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // These platforms select to the line end.
-      case TargetPlatform.linux:
-      case TargetPlatform.windows:
-        expect(
-          selection,
-          equals(
-            const TextSelection(
-              baseOffset: 32,
-              extentOffset: 58,
-              affinity: TextAffinity.upstream,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-    }
-    expect(controller.text, equals(testText), reason: 'on $platform');
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    switch (defaultTargetPlatform) {
-      // These platforms don't move the selection with home/end at all still.
-      case TargetPlatform.android:
-      case TargetPlatform.fuchsia:
-        expect(
-          selection,
-          equals(
-            const TextSelection.collapsed(
-              offset: 32,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Mac and iOS stay at the end of the document.
-      case TargetPlatform.iOS:
-      case TargetPlatform.macOS:
-        expect(
-          selection,
-          equals(
-            const TextSelection(
-              baseOffset: 32,
-              extentOffset: 145,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Linux does nothing at a wordwrap with subsequent presses.
-      case TargetPlatform.linux:
-        expect(
-          selection,
-          equals(
-            const TextSelection(
-              baseOffset: 32,
-              extentOffset: 58,
-              affinity: TextAffinity.upstream,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-
-      // Windows jumps to the previous wordwrapped line.
-      case TargetPlatform.windows:
-        expect(
-          selection,
-          equals(
-            const TextSelection(
-              baseOffset: 32,
-              extentOffset: 84,
-              affinity: TextAffinity.upstream,
-            ),
-          ),
-          reason: 'on $platform',
-        );
-    }
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: TargetPlatformVariant.all(),
-  );
-
-  testWidgets('shift + home/end keys to document boundary (Mac only)', (WidgetTester tester) async {
-    const String testText = 'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    late TextSelection selection;
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-            onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
-              selection = newSelection;
-            },
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-
-    final Scrollable scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
-    expect(scrollable.controller!.offset, 0.0);
-
-    // Move near the middle of the document.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowDown,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(
-      selection,
-      equals(
-        const TextSelection.collapsed(
-          offset: 32,
-        ),
-      ),
-    );
-
-    // Expand to the start of the document with the home key.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(scrollable.controller!.offset, 0.0);
-    expect(
-      selection,
-      equals(
-        const TextSelection(
-          baseOffset: 32,
-          extentOffset: 0,
-        ),
-      ),
-    );
-
-    // Expand to the end of the document with the end key.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    final double maxScrollExtent = scrollable.controller!.position.maxScrollExtent;
-    expect(scrollable.controller!.offset, maxScrollExtent);
-    expect(
-      selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 145,
-        ),
-      ),
-    );
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.macOS })
-  );
-
-  testWidgets('control + home/end keys (Windows only)', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump();
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      shortcutModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    expect(
-      controller.selection,
-      equals(const TextSelection.collapsed(
-        offset: testText.length,
-      )),
-    );
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      shortcutModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    expect(
-      controller.selection,
-      equals(const TextSelection.collapsed(offset: 0)),
-    );
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.windows })
-  );
-
-  testWidgets('control + shift + home/end keys (Windows only)', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump();
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      shortcutModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    expect(
-      controller.selection,
-      equals(const TextSelection(
+  testWidgets(
+    'home/end keys',
+    (WidgetTester tester) async {
+      final targetPlatformString = defaultTargetPlatform.toString();
+      final String platform = targetPlatformString
+          .substring(targetPlatformString.indexOf('.') + 1)
+          .toLowerCase();
+      controller.text = testText;
+      controller.selection = const TextSelection(
         baseOffset: 0,
-        extentOffset: testText.length,
-      )),
-    );
-
-    // Collapse the selection at the end.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    expect(
-      controller.selection,
-      equals(const TextSelection.collapsed(
-        offset: testText.length,
-      )),
-    );
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      shortcutModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    expect(
-      controller.selection,
-      equals(const TextSelection(
-        baseOffset: testText.length,
         extentOffset: 0,
-      )),
-    );
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.windows })
-  );
-
-  testWidgets('pageup/pagedown keys on Apple platforms', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    final ScrollController scrollController = ScrollController();
-    const int lines = 2;
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            minLines: lines,
-            maxLines: lines,
-            controller: controller,
-            scrollController: scrollController,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.subtitle1!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-
-    expect(controller.value.selection.isCollapsed, isTrue);
-    expect(controller.value.selection.baseOffset, 0);
-    expect(scrollController.position.pixels, 0.0);
-    final double lineHeight = findRenderEditable(tester).preferredLineHeight;
-    expect(scrollController.position.viewportDimension, lineHeight * lines);
-
-    // Page Up does nothing at the top.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.pageUp,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(scrollController.position.pixels, 0.0);
-
-    // Page Down scrolls proportionally to the height of the viewport.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.pageDown,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(scrollController.position.pixels, lineHeight * lines * 0.8);
-
-    // Another Page Down reaches the bottom.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.pageDown,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(scrollController.position.pixels, lineHeight * lines);
-
-    // Page Up now scrolls back up proportionally to the height of the viewport.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.pageUp,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(scrollController.position.pixels, lineHeight * lines - lineHeight * lines * 0.8);
-
-    // Another Page Up reaches the top.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.pageUp,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(scrollController.position.pixels, 0.0);
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS, TargetPlatform.macOS }),
-  );
-
-  testWidgets('pageup/pagedown keys in a one line field on Apple platforms', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: testText);
-    controller.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 0,
-      affinity: TextAffinity.upstream,
-    );
-    final ScrollController scrollController = ScrollController();
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            minLines: 1,
-            controller: controller,
-            scrollController: scrollController,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.subtitle1!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-
-    expect(controller.value.selection.isCollapsed, isTrue);
-    expect(controller.value.selection.baseOffset, 0);
-    expect(scrollController.position.pixels, 0.0);
-
-    // Page Up scrolls to the end.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.pageUp,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(scrollController.position.pixels, scrollController.position.maxScrollExtent);
-    expect(controller.value.selection.isCollapsed, isTrue);
-    expect(controller.value.selection.baseOffset, 0);
-
-    // Return scroll to the start.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(scrollController.position.pixels, 0.0);
-    expect(controller.value.selection.isCollapsed, isTrue);
-    expect(controller.value.selection.baseOffset, 0);
-
-    // Page Down also scrolls to the end.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.pageDown,
-      ],
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(scrollController.position.pixels, scrollController.position.maxScrollExtent);
-    expect(controller.value.selection.isCollapsed, isTrue);
-    expect(controller.value.selection.baseOffset, 0);
-  },
-    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-    variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS, TargetPlatform.macOS }),
-  );
-
-  // Regression test for https://github.com/flutter/flutter/issues/31287
-  testWidgets('text selection handle visibility', (WidgetTester tester) async {
-    // Text with two separate words to select.
-    const String testText = 'XXXXX          XXXXX';
-    final TextEditingController controller = TextEditingController(text: testText);
-
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 100,
-          child: EditableText(
-            showSelectionHandles: true,
-            controller: controller,
-            focusNode: FocusNode(),
-            style: Typography.material2018(platform: TargetPlatform.iOS).black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: cupertinoTextSelectionControls,
-            keyboardType: TextInputType.text,
-          ),
-        ),
-      ),
-    ));
-
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
-    final RenderEditable renderEditable = state.renderEditable;
-    final Scrollable scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
-
-    bool expectedLeftVisibleBefore = false;
-    bool expectedRightVisibleBefore = false;
-
-    Future<void> verifyVisibility(
-      HandlePositionInViewport leftPosition,
-      bool expectedLeftVisible,
-      HandlePositionInViewport rightPosition,
-      bool expectedRightVisible,
-    ) async {
-      await tester.pump();
-
-      // Check the signal from RenderEditable about whether they're within the
-      // viewport.
-
-      expect(renderEditable.selectionStartInViewport.value, equals(expectedLeftVisible));
-      expect(renderEditable.selectionEndInViewport.value, equals(expectedRightVisible));
-
-      // Check that the animations are functional and going in the right
-      // direction.
-
-      final List<FadeTransition> transitions =
-        find.byType(FadeTransition).evaluate().map((Element e) => e.widget).cast<FadeTransition>().toList();
-      final FadeTransition left = transitions[0];
-      final FadeTransition right = transitions[1];
-
-      if (expectedLeftVisibleBefore) {
-        expect(left.opacity.value, equals(1.0));
-      }
-      if (expectedRightVisibleBefore) {
-        expect(right.opacity.value, equals(1.0));
-      }
-
-      await tester.pump(SelectionOverlay.fadeDuration ~/ 2);
-
-      if (expectedLeftVisible != expectedLeftVisibleBefore) {
-        expect(left.opacity.value, equals(0.5));
-      }
-      if (expectedRightVisible != expectedRightVisibleBefore) {
-        expect(right.opacity.value, equals(0.5));
-      }
-
-      await tester.pump(SelectionOverlay.fadeDuration ~/ 2);
-
-      if (expectedLeftVisible) {
-        expect(left.opacity.value, equals(1.0));
-      }
-      if (expectedRightVisible) {
-        expect(right.opacity.value, equals(1.0));
-      }
-
-      expectedLeftVisibleBefore = expectedLeftVisible;
-      expectedRightVisibleBefore = expectedRightVisible;
-
-      // Check that the handles' positions are correct.
-
-      final List<RenderBox> handles = List<RenderBox>.from(
-        tester.renderObjectList<RenderBox>(
-          find.descendant(
-            of: find.byType(CompositedTransformFollower),
-            matching: find.byType(Padding),
+        affinity: TextAffinity.upstream,
+      );
+      late TextSelection selection;
+      late SelectionChangedCause cause;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+                onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
+                  selection = newSelection;
+                  cause = newCause!;
+                },
+              ),
+            ),
           ),
         ),
       );
 
-      final Size viewport = renderEditable.size;
+      await tester.pump(); // Wait for autofocus to take effect.
 
-      void testPosition(double pos, HandlePositionInViewport expected) {
-        switch (expected) {
-          case HandlePositionInViewport.leftEdge:
-            expect(
-              pos,
-              inExclusiveRange(
-                0 - kMinInteractiveDimension,
-                0 + kMinInteractiveDimension,
-              ),
-            );
-          case HandlePositionInViewport.rightEdge:
-            expect(
-              pos,
-              inExclusiveRange(
-                viewport.width - kMinInteractiveDimension,
-                viewport.width + kMinInteractiveDimension,
-              ),
-            );
-          case HandlePositionInViewport.within:
-            expect(
-              pos,
-              inExclusiveRange(
-                0 - kMinInteractiveDimension,
-                viewport.width + kMinInteractiveDimension,
-              ),
-            );
-        }
+      // Move near the middle of the document.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.arrowDown,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+      ], targetPlatform: defaultTargetPlatform);
+
+      expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
+      expect(selection, equals(const TextSelection.collapsed(offset: 23)), reason: 'on $platform');
+
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.home,
+      ], targetPlatform: defaultTargetPlatform);
+
+      switch (defaultTargetPlatform) {
+        // These platforms don't move the selection with home/end at all.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 23)),
+            reason: 'on $platform',
+          );
+
+        // These platforms go to the line start/end.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 20)),
+            reason: 'on $platform',
+          );
       }
-      expect(state.selectionOverlay!.handlesAreVisible, isTrue);
-      testPosition(handles[0].localToGlobal(Offset.zero).dx, leftPosition);
-      testPosition(handles[1].localToGlobal(Offset.zero).dx, rightPosition);
-    }
 
-    // Select the first word. Both handles should be visible.
-    await tester.tapAt(const Offset(20, 10));
-    renderEditable.selectWord(cause: SelectionChangedCause.longPress);
-    await tester.pump();
-    await verifyVisibility(HandlePositionInViewport.leftEdge, true, HandlePositionInViewport.within, true);
+      expect(controller.text, equals(testText), reason: 'on $platform');
 
-    // Drag the text slightly so the first word is partially visible. Only the
-    // right handle should be visible.
-    scrollable.controller!.jumpTo(20.0);
-    await verifyVisibility(HandlePositionInViewport.leftEdge, false, HandlePositionInViewport.within, true);
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.end,
+      ], targetPlatform: defaultTargetPlatform);
 
-    // Drag the text all the way to the left so the first word is not visible at
-    // all (and the second word is fully visible). Both handles should be
-    // invisible now.
-    scrollable.controller!.jumpTo(200.0);
-    await verifyVisibility(HandlePositionInViewport.leftEdge, false, HandlePositionInViewport.leftEdge, false);
+      switch (defaultTargetPlatform) {
+        // These platforms don't move the selection with home/end at all.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 23)),
+            reason: 'on $platform',
+          );
 
-    // Tap to unselect.
-    await tester.tap(find.byType(EditableText));
-    await tester.pump();
-
-    // Now that the second word has been dragged fully into view, select it.
-    await tester.tapAt(const Offset(80, 10));
-    renderEditable.selectWord(cause: SelectionChangedCause.longPress);
-    await tester.pump();
-    await verifyVisibility(HandlePositionInViewport.within, true, HandlePositionInViewport.within, true);
-
-    // Drag the text slightly to the right. Only the left handle should be
-    // visible.
-    scrollable.controller!.jumpTo(150);
-    await verifyVisibility(HandlePositionInViewport.within, true, HandlePositionInViewport.rightEdge, false);
-
-    // Drag the text all the way to the right, so the second word is not visible
-    // at all. Again, both handles should be invisible.
-    scrollable.controller!.jumpTo(0);
-    await verifyVisibility(HandlePositionInViewport.rightEdge, false, HandlePositionInViewport.rightEdge, false);
-
-  },
-      // On web, we don't show the Flutter toolbar and instead rely on the browser
-      // toolbar. Until we change that, this test should remain skipped.
-      skip: kIsWeb, // [intended]
-      variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS, TargetPlatform.macOS })
+        // These platforms go to the line start/end.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 35, affinity: TextAffinity.upstream)),
+            reason: 'on $platform',
+          );
+      }
+      expect(controller.text, equals(testText), reason: 'on $platform');
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: TargetPlatformVariant.all(),
   );
 
-  testWidgets("scrolling doesn't bounce", (WidgetTester tester) async {
-    // 3 lines of text, where the last line overflows and requires scrolling.
-    const String testText = 'XXXXX\nXXXXX\nXXXXX';
-    final TextEditingController controller = TextEditingController(text: testText);
+  testWidgets(
+    'home keys and wordwraps',
+    (WidgetTester tester) async {
+      final targetPlatformString = defaultTargetPlatform.toString();
+      final String platform = targetPlatformString
+          .substring(targetPlatformString.indexOf('.') + 1)
+          .toLowerCase();
+      const testText =
+          'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      late TextSelection selection;
+      late SelectionChangedCause cause;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+                onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
+                  selection = newSelection;
+                  cause = newCause!;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
 
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 100,
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      // Move near the middle of the document.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.arrowDown,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+      ], targetPlatform: defaultTargetPlatform);
+
+      expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
+      expect(selection, equals(const TextSelection.collapsed(offset: 32)), reason: 'on $platform');
+
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.home,
+      ], targetPlatform: defaultTargetPlatform);
+
+      switch (defaultTargetPlatform) {
+        // These platforms don't move the selection with home/end at all.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 32)),
+            reason: 'on $platform',
+          );
+
+        // These platforms go to the line start/end.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 29)),
+            reason: 'on $platform',
+          );
+      }
+
+      expect(controller.text, equals(testText), reason: 'on $platform');
+
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.home,
+      ], targetPlatform: defaultTargetPlatform);
+
+      switch (defaultTargetPlatform) {
+        // These platforms don't move the selection with home/end at all still.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 32)),
+            reason: 'on $platform',
+          );
+
+        // Linux does nothing at a wordwrap with subsequent presses.
+        case TargetPlatform.linux:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 29)),
+            reason: 'on $platform',
+          );
+
+        // Windows, Android, and Fuchsia jump to the previous wordwrapped line.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.windows:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 0)),
+            reason: 'on $platform',
+          );
+      }
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: TargetPlatformVariant.all(),
+  );
+
+  testWidgets(
+    'end keys and wordwraps',
+    (WidgetTester tester) async {
+      final targetPlatformString = defaultTargetPlatform.toString();
+      final String platform = targetPlatformString
+          .substring(targetPlatformString.indexOf('.') + 1)
+          .toLowerCase();
+      const testText =
+          'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      late TextSelection selection;
+      late SelectionChangedCause cause;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+                onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
+                  selection = newSelection;
+                  cause = newCause!;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      // Move near the middle of the document.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.arrowDown,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+      ], targetPlatform: defaultTargetPlatform);
+
+      expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
+      expect(selection, equals(const TextSelection.collapsed(offset: 32)), reason: 'on $platform');
+
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.end,
+      ], targetPlatform: defaultTargetPlatform);
+
+      switch (defaultTargetPlatform) {
+        // These platforms don't move the selection with home/end at all.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 32)),
+            reason: 'on $platform',
+          );
+
+        // These platforms go to the line start/end.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 58, affinity: TextAffinity.upstream)),
+            reason: 'on $platform',
+          );
+      }
+      expect(controller.text, equals(testText), reason: 'on $platform');
+
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.end,
+      ], targetPlatform: defaultTargetPlatform);
+
+      switch (defaultTargetPlatform) {
+        // These platforms don't move the selection with home/end at all still.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 32)),
+            reason: 'on $platform',
+          );
+
+        // Linux does nothing at a wordwrap with subsequent presses.
+        case TargetPlatform.linux:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 58, affinity: TextAffinity.upstream)),
+            reason: 'on $platform',
+          );
+
+        // Windows, Android, and Fuchsia jump to the next wordwrapped line.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.windows:
+          expect(
+            selection,
+            equals(const TextSelection.collapsed(offset: 84, affinity: TextAffinity.upstream)),
+            reason: 'on $platform',
+          );
+      }
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: TargetPlatformVariant.all(),
+  );
+
+  testWidgets(
+    'shift + home/end keys',
+    (WidgetTester tester) async {
+      final targetPlatformString = defaultTargetPlatform.toString();
+      final String platform = targetPlatformString
+          .substring(targetPlatformString.indexOf('.') + 1)
+          .toLowerCase();
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      late TextSelection selection;
+      late SelectionChangedCause cause;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+                onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
+                  selection = newSelection;
+                  cause = newCause!;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      // Move near the middle of the document.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.arrowDown,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+      ], targetPlatform: defaultTargetPlatform);
+
+      expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
+      expect(selection, equals(const TextSelection.collapsed(offset: 23)), reason: 'on $platform');
+
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.home],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+
+      expect(controller.text, equals(testText), reason: 'on $platform');
+      final selectionAfterHome = selection;
+
+      // Move back to position 23.
+      controller.selection = const TextSelection.collapsed(offset: 23);
+      await tester.pump();
+
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.end],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+
+      expect(controller.text, equals(testText), reason: 'on $platform');
+      final selectionAfterEnd = selection;
+
+      switch (defaultTargetPlatform) {
+        // Linux extends to the line start/end.
+        case TargetPlatform.linux:
+          expect(
+            selectionAfterHome,
+            equals(const TextSelection(baseOffset: 23, extentOffset: 20)),
+            reason: 'on $platform',
+          );
+          expect(
+            selectionAfterEnd,
+            equals(
+              const TextSelection(
+                baseOffset: 23,
+                extentOffset: 35,
+                affinity: TextAffinity.upstream,
+              ),
+            ),
+            reason: 'on $platform',
+          );
+
+        // Windows expands to the line start/end.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.windows:
+          expect(
+            selectionAfterHome,
+            equals(const TextSelection(baseOffset: 23, extentOffset: 20)),
+            reason: 'on $platform',
+          );
+          expect(
+            selectionAfterEnd,
+            equals(const TextSelection(baseOffset: 23, extentOffset: 35)),
+            reason: 'on $platform',
+          );
+
+        // Mac and iOS go to the start/end of the document.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            selectionAfterHome,
+            equals(
+              const TextSelection(baseOffset: 23, extentOffset: 0, affinity: TextAffinity.upstream),
+            ),
+            reason: 'on $platform',
+          );
+          expect(
+            selectionAfterEnd,
+            equals(const TextSelection(baseOffset: 23, extentOffset: 72)),
+            reason: 'on $platform',
+          );
+      }
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: TargetPlatformVariant.all(),
+  );
+
+  testWidgets(
+    'shift + home/end keys (Windows only)',
+    (WidgetTester tester) async {
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      // Move the selection away from the start so it can invert.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+      ], targetPlatform: defaultTargetPlatform);
+      await tester.pump();
+      expect(controller.selection, equals(const TextSelection.collapsed(offset: 4)));
+
+      // Press shift + end and extend the selection to the end of the line.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.end],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      await tester.pump();
+      expect(
+        controller.selection,
+        equals(
+          const TextSelection(baseOffset: 4, extentOffset: 19, affinity: TextAffinity.upstream),
+        ),
+      );
+
+      // Press shift + home and the selection inverts and extends to the start, it
+      // does not collapse and stop at the inversion.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.home],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      await tester.pump();
+      expect(controller.selection, equals(const TextSelection(baseOffset: 4, extentOffset: 0)));
+
+      // Press shift + end again and the selection inverts and extends to the end,
+      // again it does not stop at the inversion.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.end],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      await tester.pump();
+      expect(controller.selection, equals(const TextSelection(baseOffset: 4, extentOffset: 19)));
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.windows}),
+  );
+
+  testWidgets(
+    'home/end keys scrolling (Mac only)',
+    (WidgetTester tester) async {
+      const testText =
+          'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      final Scrollable scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
+
+      expect(scrollable.controller!.offset, 0.0);
+
+      // Scroll to the end of the document with the end key.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.end,
+      ], targetPlatform: defaultTargetPlatform);
+      final double maxScrollExtent = scrollable.controller!.position.maxScrollExtent;
+      expect(scrollable.controller!.offset, maxScrollExtent);
+
+      // Scroll back to the beginning of the document with the home key.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.home,
+      ], targetPlatform: defaultTargetPlatform);
+      expect(scrollable.controller!.offset, 0.0);
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.macOS}),
+  );
+
+  testWidgets(
+    'shift + home keys and wordwraps',
+    (WidgetTester tester) async {
+      final targetPlatformString = defaultTargetPlatform.toString();
+      final String platform = targetPlatformString
+          .substring(targetPlatformString.indexOf('.') + 1)
+          .toLowerCase();
+      const testText =
+          'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      late TextSelection selection;
+      late SelectionChangedCause cause;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+                onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
+                  selection = newSelection;
+                  cause = newCause!;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      // Move near the middle of the document.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.arrowDown,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+      ], targetPlatform: defaultTargetPlatform);
+
+      expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
+      expect(selection, equals(const TextSelection.collapsed(offset: 32)), reason: 'on $platform');
+
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.home],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+
+      switch (defaultTargetPlatform) {
+        // Mac and iOS select to the start of the document.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            selection,
+            equals(const TextSelection(baseOffset: 32, extentOffset: 0)),
+            reason: 'on $platform',
+          );
+
+        // These platforms select to the line start.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          expect(
+            selection,
+            equals(const TextSelection(baseOffset: 32, extentOffset: 29)),
+            reason: 'on $platform',
+          );
+      }
+
+      expect(controller.text, equals(testText), reason: 'on $platform');
+
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.home],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+
+      switch (defaultTargetPlatform) {
+        // Mac and iOS select to the start of the document.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            selection,
+            equals(const TextSelection(baseOffset: 32, extentOffset: 0)),
+            reason: 'on $platform',
+          );
+
+        // Linux does nothing at a wordwrap with subsequent presses.
+        case TargetPlatform.linux:
+          expect(
+            selection,
+            equals(const TextSelection(baseOffset: 32, extentOffset: 29)),
+            reason: 'on $platform',
+          );
+
+        // Windows jumps to the previous wordwrapped line.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.windows:
+          expect(
+            selection,
+            equals(const TextSelection(baseOffset: 32, extentOffset: 0)),
+            reason: 'on $platform',
+          );
+      }
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: TargetPlatformVariant.all(),
+  );
+
+  testWidgets(
+    'shift + end keys and wordwraps',
+    (WidgetTester tester) async {
+      final targetPlatformString = defaultTargetPlatform.toString();
+      final String platform = targetPlatformString
+          .substring(targetPlatformString.indexOf('.') + 1)
+          .toLowerCase();
+      const testText =
+          'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      late TextSelection selection;
+      late SelectionChangedCause cause;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+                onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
+                  selection = newSelection;
+                  cause = newCause!;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      // Move near the middle of the document.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.arrowDown,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+      ], targetPlatform: defaultTargetPlatform);
+
+      expect(cause, equals(SelectionChangedCause.keyboard), reason: 'on $platform');
+      expect(selection, equals(const TextSelection.collapsed(offset: 32)), reason: 'on $platform');
+
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.end],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+
+      switch (defaultTargetPlatform) {
+        // Mac and iOS select to the end of the document.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            selection,
+            equals(const TextSelection(baseOffset: 32, extentOffset: 145)),
+            reason: 'on $platform',
+          );
+
+        // These platforms select to the line end.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          expect(
+            selection,
+            equals(
+              const TextSelection(
+                baseOffset: 32,
+                extentOffset: 58,
+                affinity: TextAffinity.upstream,
+              ),
+            ),
+            reason: 'on $platform',
+          );
+      }
+      expect(controller.text, equals(testText), reason: 'on $platform');
+
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.end],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+
+      switch (defaultTargetPlatform) {
+        // Mac and iOS stay at the end of the document.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            selection,
+            equals(const TextSelection(baseOffset: 32, extentOffset: 145)),
+            reason: 'on $platform',
+          );
+
+        // Linux does nothing at a wordwrap with subsequent presses.
+        case TargetPlatform.linux:
+          expect(
+            selection,
+            equals(
+              const TextSelection(
+                baseOffset: 32,
+                extentOffset: 58,
+                affinity: TextAffinity.upstream,
+              ),
+            ),
+            reason: 'on $platform',
+          );
+
+        // Windows jumps to the previous wordwrapped line.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.windows:
+          expect(
+            selection,
+            equals(
+              const TextSelection(
+                baseOffset: 32,
+                extentOffset: 84,
+                affinity: TextAffinity.upstream,
+              ),
+            ),
+            reason: 'on $platform',
+          );
+      }
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: TargetPlatformVariant.all(),
+  );
+
+  testWidgets(
+    'shift + home/end keys to document boundary (Mac only)',
+    (WidgetTester tester) async {
+      const testText =
+          'Now is the time for all good people to come to the aid of their country. Now is the time for all good people to come to the aid of their country.';
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      late TextSelection selection;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+                onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
+                  selection = newSelection;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      final Scrollable scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
+      expect(scrollable.controller!.offset, 0.0);
+
+      // Move near the middle of the document.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.arrowDown,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowRight,
+      ], targetPlatform: defaultTargetPlatform);
+      expect(selection, equals(const TextSelection.collapsed(offset: 32)));
+
+      // Expand to the start of the document with the home key.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.home],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(scrollable.controller!.offset, 0.0);
+      expect(selection, equals(const TextSelection(baseOffset: 32, extentOffset: 0)));
+
+      // Expand to the end of the document with the end key.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.end],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      final double maxScrollExtent = scrollable.controller!.position.maxScrollExtent;
+      expect(scrollable.controller!.offset, maxScrollExtent);
+      expect(selection, equals(const TextSelection(baseOffset: 0, extentOffset: 145)));
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.macOS}),
+  );
+
+  testWidgets(
+    'control + home/end keys',
+    (WidgetTester tester) async {
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.end],
+        shortcutModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      await tester.pump();
+      switch (defaultTargetPlatform) {
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            controller.selection,
+            equals(const TextSelection.collapsed(offset: 0, affinity: TextAffinity.upstream)),
+          );
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          expect(
+            controller.selection,
+            equals(const TextSelection.collapsed(offset: testText.length)),
+          );
+      }
+
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.home],
+        shortcutModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      await tester.pump();
+      switch (defaultTargetPlatform) {
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            controller.selection,
+            equals(const TextSelection.collapsed(offset: 0, affinity: TextAffinity.upstream)),
+          );
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          expect(controller.selection, equals(const TextSelection.collapsed(offset: 0)));
+      }
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: TargetPlatformVariant.all(),
+  );
+
+  testWidgets(
+    'control + shift + home/end keys',
+    (WidgetTester tester) async {
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.end],
+        shortcutModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      await tester.pump();
+      switch (defaultTargetPlatform) {
+        // Apple platforms don't handle this shortcut and do nothing.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            controller.selection,
+            equals(const TextSelection.collapsed(offset: 0, affinity: TextAffinity.upstream)),
+          );
+
+        // These platforms select to the endof the text.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          expect(
+            controller.selection,
+            equals(const TextSelection(baseOffset: 0, extentOffset: testText.length)),
+          );
+      }
+
+      // Set the selection to collapsed at the end to test the home key.
+      controller.selection = const TextSelection.collapsed(offset: testText.length);
+      await tester.pump();
+
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.home],
+        shortcutModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      await tester.pump();
+      switch (defaultTargetPlatform) {
+        // Apple platforms don't handle this shortcut and do nothing.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(
+            controller.selection,
+            equals(const TextSelection.collapsed(offset: testText.length)),
+          );
+
+        // These platforms select to the beginning of the text.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          expect(
+            controller.selection,
+            equals(const TextSelection(baseOffset: testText.length, extentOffset: 0)),
+          );
+      }
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: TargetPlatformVariant.all(),
+  );
+
+  testWidgets(
+    'pageup/pagedown keys on Apple platforms',
+    (WidgetTester tester) async {
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      final scrollController = ScrollController();
+      addTearDown(scrollController.dispose);
+      const lines = 2;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                minLines: lines,
+                maxLines: lines,
+                controller: controller,
+                scrollController: scrollController,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      expect(controller.value.selection.isCollapsed, isTrue);
+      expect(controller.value.selection.baseOffset, 0);
+      expect(scrollController.position.pixels, 0.0);
+      final double lineHeight = findRenderEditable(tester).preferredLineHeight;
+      expect(scrollController.position.viewportDimension, lineHeight * lines);
+
+      // Page Up does nothing at the top.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.pageUp,
+      ], targetPlatform: defaultTargetPlatform);
+      expect(scrollController.position.pixels, 0.0);
+
+      // Page Down scrolls proportionally to the height of the viewport.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.pageDown,
+      ], targetPlatform: defaultTargetPlatform);
+      expect(scrollController.position.pixels, lineHeight * lines * 0.8);
+
+      // Another Page Down reaches the bottom.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.pageDown,
+      ], targetPlatform: defaultTargetPlatform);
+      expect(scrollController.position.pixels, lineHeight * lines);
+
+      // Page Up now scrolls back up proportionally to the height of the viewport.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.pageUp,
+      ], targetPlatform: defaultTargetPlatform);
+      expect(scrollController.position.pixels, lineHeight * lines - lineHeight * lines * 0.8);
+
+      // Another Page Up reaches the top.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.pageUp,
+      ], targetPlatform: defaultTargetPlatform);
+      expect(scrollController.position.pixels, 0.0);
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.iOS,
+      TargetPlatform.macOS,
+    }),
+  );
+
+  testWidgets(
+    'pageup/pagedown keys in a one line field on Apple platforms',
+    (WidgetTester tester) async {
+      controller.text = testText;
+      controller.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 0,
+        affinity: TextAffinity.upstream,
+      );
+      final scrollController = ScrollController();
+      addTearDown(scrollController.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                minLines: 1,
+                controller: controller,
+                scrollController: scrollController,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      expect(controller.value.selection.isCollapsed, isTrue);
+      expect(controller.value.selection.baseOffset, 0);
+      expect(scrollController.position.pixels, 0.0);
+
+      // Page Up scrolls to the end.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.pageUp,
+      ], targetPlatform: defaultTargetPlatform);
+      expect(scrollController.position.pixels, scrollController.position.maxScrollExtent);
+      expect(controller.value.selection.isCollapsed, isTrue);
+      expect(controller.value.selection.baseOffset, 0);
+
+      // Return scroll to the start.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.home,
+      ], targetPlatform: defaultTargetPlatform);
+      expect(scrollController.position.pixels, 0.0);
+      expect(controller.value.selection.isCollapsed, isTrue);
+      expect(controller.value.selection.baseOffset, 0);
+
+      // Page Down also scrolls to the end.
+      await sendKeys(tester, <LogicalKeyboardKey>[
+        LogicalKeyboardKey.pageDown,
+      ], targetPlatform: defaultTargetPlatform);
+      expect(scrollController.position.pixels, scrollController.position.maxScrollExtent);
+      expect(controller.value.selection.isCollapsed, isTrue);
+      expect(controller.value.selection.baseOffset, 0);
+    },
+    skip: kIsWeb, // [intended] on web these keys are handled by the browser.
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.iOS,
+      TargetPlatform.macOS,
+    }),
+  );
+
+  // Regression test for https://github.com/flutter/flutter/issues/31287
+  testWidgets(
+    'text selection handle visibility',
+    (WidgetTester tester) async {
+      // Text with two separate words to select.
+      controller.text = 'XXXXX          XXXXX';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 100,
+              child: EditableText(
+                showSelectionHandles: true,
+                controller: controller,
+                focusNode: focusNode,
+                style: Typography.material2018(platform: TargetPlatform.iOS).black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: cupertinoTextSelectionControls,
+                keyboardType: TextInputType.text,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      final RenderEditable renderEditable = state.renderEditable;
+      final Scrollable scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
+
+      var expectedLeftVisibleBefore = false;
+      var expectedRightVisibleBefore = false;
+
+      Future<void> verifyVisibility(
+        HandlePositionInViewport leftPosition,
+        bool expectedLeftVisible,
+        HandlePositionInViewport rightPosition,
+        bool expectedRightVisible,
+      ) async {
+        await tester.pump();
+
+        // Check the signal from RenderEditable about whether they're within the
+        // viewport.
+
+        expect(renderEditable.selectionStartInViewport.value, equals(expectedLeftVisible));
+        expect(renderEditable.selectionEndInViewport.value, equals(expectedRightVisible));
+
+        // Check that the animations are functional and going in the right
+        // direction.
+
+        final List<FadeTransition> transitions = find
+            .byType(FadeTransition)
+            .evaluate()
+            .map((Element e) => e.widget)
+            .cast<FadeTransition>()
+            .toList();
+        final FadeTransition left = transitions[0];
+        final FadeTransition right = transitions[1];
+
+        if (expectedLeftVisibleBefore) {
+          expect(left.opacity.value, equals(1.0));
+        }
+        if (expectedRightVisibleBefore) {
+          expect(right.opacity.value, equals(1.0));
+        }
+
+        await tester.pump(SelectionOverlay.fadeDuration ~/ 2);
+
+        if (expectedLeftVisible != expectedLeftVisibleBefore) {
+          expect(left.opacity.value, equals(0.5));
+        }
+        if (expectedRightVisible != expectedRightVisibleBefore) {
+          expect(right.opacity.value, equals(0.5));
+        }
+
+        await tester.pump(SelectionOverlay.fadeDuration ~/ 2);
+
+        if (expectedLeftVisible) {
+          expect(left.opacity.value, equals(1.0));
+        }
+        if (expectedRightVisible) {
+          expect(right.opacity.value, equals(1.0));
+        }
+
+        expectedLeftVisibleBefore = expectedLeftVisible;
+        expectedRightVisibleBefore = expectedRightVisible;
+
+        // Check that the handles' positions are correct.
+
+        final handles = List<RenderBox>.of(
+          tester.renderObjectList<RenderBox>(
+            find.descendant(
+              of: find.byType(CompositedTransformFollower),
+              matching: find.byType(Padding),
+            ),
+          ),
+        );
+
+        final Size viewport = renderEditable.size;
+
+        void testPosition(double pos, HandlePositionInViewport expected) {
+          switch (expected) {
+            case HandlePositionInViewport.leftEdge:
+              expect(
+                pos,
+                inExclusiveRange(0 - kMinInteractiveDimension, 0 + kMinInteractiveDimension),
+              );
+            case HandlePositionInViewport.rightEdge:
+              expect(
+                pos,
+                inExclusiveRange(
+                  viewport.width - kMinInteractiveDimension,
+                  viewport.width + kMinInteractiveDimension,
+                ),
+              );
+            case HandlePositionInViewport.within:
+              expect(
+                pos,
+                inExclusiveRange(
+                  0 - kMinInteractiveDimension,
+                  viewport.width + kMinInteractiveDimension,
+                ),
+              );
+          }
+        }
+
+        expect(state.selectionOverlay!.handlesAreVisible, isTrue);
+        testPosition(handles[0].localToGlobal(Offset.zero).dx, leftPosition);
+        testPosition(handles[1].localToGlobal(Offset.zero).dx, rightPosition);
+      }
+
+      // Select the first word. Both handles should be visible.
+      await tester.tapAt(const Offset(20, 10));
+      renderEditable.selectWord(cause: SelectionChangedCause.longPress);
+      await tester.pump();
+      await verifyVisibility(
+        HandlePositionInViewport.leftEdge,
+        true,
+        HandlePositionInViewport.within,
+        true,
+      );
+
+      // Drag the text slightly so the first word is partially visible. Only the
+      // right handle should be visible.
+      scrollable.controller!.jumpTo(20.0);
+      await verifyVisibility(
+        HandlePositionInViewport.leftEdge,
+        false,
+        HandlePositionInViewport.within,
+        true,
+      );
+
+      // Drag the text all the way to the left so the first word is not visible at
+      // all (and the second word is fully visible). Both handles should be
+      // invisible now.
+      scrollable.controller!.jumpTo(200.0);
+      await verifyVisibility(
+        HandlePositionInViewport.leftEdge,
+        false,
+        HandlePositionInViewport.leftEdge,
+        false,
+      );
+
+      // Tap to unselect.
+      await tester.tap(find.byType(EditableText));
+      await tester.pump();
+
+      // Now that the second word has been dragged fully into view, select it.
+      await tester.tapAt(const Offset(80, 10));
+      renderEditable.selectWord(cause: SelectionChangedCause.longPress);
+      await tester.pump();
+      await verifyVisibility(
+        HandlePositionInViewport.within,
+        true,
+        HandlePositionInViewport.within,
+        true,
+      );
+
+      // Drag the text slightly to the right. Only the left handle should be
+      // visible.
+      scrollable.controller!.jumpTo(150);
+      await verifyVisibility(
+        HandlePositionInViewport.within,
+        true,
+        HandlePositionInViewport.rightEdge,
+        false,
+      );
+
+      // Drag the text all the way to the right, so the second word is not visible
+      // at all. Again, both handles should be invisible.
+      scrollable.controller!.jumpTo(0);
+      await verifyVisibility(
+        HandlePositionInViewport.rightEdge,
+        false,
+        HandlePositionInViewport.rightEdge,
+        false,
+      );
+    },
+    // On web, we don't show the Flutter toolbar and instead rely on the browser
+    // toolbar. Until we change that, this test should remain skipped.
+    skip: kIsWeb, // [intended]
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.iOS,
+      TargetPlatform.macOS,
+    }),
+  );
+
+  testWidgets('single-line field cannot be scrolled with touch on iOS', (
+    WidgetTester tester,
+  ) async {
+    controller.text = 'This is a long string that should overflow the TextField.';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 100,
+            child: EditableText(
+              showSelectionHandles: true,
+              controller: controller,
+              focusNode: focusNode,
+              style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              selectionControls: materialTextSelectionControls,
+              keyboardType: TextInputType.text,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final Scrollable scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
+    final double initialScrollOffset = scrollable.controller!.position.pixels;
+
+    await tester.drag(find.byType(EditableText), const Offset(-100.0, 0.0));
+    await tester.pumpAndSettle();
+
+    expect(scrollable.controller!.position.pixels, initialScrollOffset);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+  testWidgets('default text selection height style', (WidgetTester tester) async {
+    controller.text = 'a b c d e f g';
+
+    final TextStyle style = Typography.material2018().black.titleMedium!.copyWith(
+      fontFamily: 'Roboto',
+      fontSize: 14.0, // default.
+      height: 3.0, // Slightly increase height from default so style is noticeable.
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
           child: EditableText(
             showSelectionHandles: true,
-            maxLines: 2,
             controller: controller,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+            focusNode: focusNode,
+            style: style,
             cursorColor: Colors.blue,
             backgroundCursorColor: Colors.grey,
             selectionControls: materialTextSelectionControls,
+            selectionColor: Colors.deepPurpleAccent.withOpacity(0.40),
             keyboardType: TextInputType.text,
           ),
         ),
       ),
-    ));
+    );
 
-    final EditableTextState state =
-      tester.state<EditableTextState>(find.byType(EditableText));
+    controller.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 13,
+    ); // select the entire text.
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('editable_text_golden.TextSelectionStyle.1.png'),
+    );
+  }, variant: TargetPlatformVariant.all());
+
+  testWidgets('multi-line field can scroll with touch on iOS', (WidgetTester tester) async {
+    // 3 lines of text, where the last line overflows and requires scrolling.
+    controller.text = 'XXXXX\nXXXXX\nXXXXX';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 100,
+            child: EditableText(
+              maxLines: 2,
+              showSelectionHandles: true,
+              controller: controller,
+              focusNode: focusNode,
+              style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              selectionControls: materialTextSelectionControls,
+              keyboardType: TextInputType.text,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final Scrollable scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
+    final double initialScrollOffset = scrollable.controller!.position.pixels;
+
+    await tester.drag(find.byType(EditableText), const Offset(0.0, -100.0));
+    await tester.pumpAndSettle();
+
+    expect(scrollable.controller!.position.pixels, isNot(initialScrollOffset));
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+  testWidgets("scrolling doesn't bounce", (WidgetTester tester) async {
+    // 3 lines of text, where the last line overflows and requires scrolling.
+    controller.text = 'XXXXX\nXXXXX\nXXXXX';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 100,
+            child: EditableText(
+              showSelectionHandles: true,
+              maxLines: 2,
+              controller: controller,
+              focusNode: focusNode,
+              style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              selectionControls: materialTextSelectionControls,
+              keyboardType: TextInputType.text,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     final RenderEditable renderEditable = state.renderEditable;
     final Scrollable scrollable = tester.widget<Scrollable>(find.byType(Scrollable));
 
@@ -9403,41 +9842,130 @@ void main() {
     await tester.pump();
     expect(scrollable.controller!.position.pixels, equals(0));
 
-
     state.bringIntoView(const TextPosition(offset: 13));
     await tester.pump();
     expect(scrollable.controller!.position.pixels, equals(14));
     expect(scrollable.controller!.position.pixels, equals(renderEditable.maxScrollExtent));
   });
 
-  testWidgets('bringIntoView brings the caret into view when in a viewport', (WidgetTester tester) async {
-    // Regression test for https://github.com/flutter/flutter/issues/55547.
-    final TextEditingController controller = TextEditingController(text: testText * 20);
-    final ScrollController editableScrollController = ScrollController();
-    final ScrollController outerController = ScrollController();
+  testWidgets(
+    'Deleting text with keyboard backspace does not trigger assertion on CupertinoPageRoute',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/153003.
+      controller.text = testText * 20;
+      final editableScrollController = ScrollController();
+      addTearDown(editableScrollController.dispose);
+      final navigatorKey = GlobalKey<NavigatorState>();
 
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 200,
-          height: 200,
-          child: SingleChildScrollView(
-            controller: outerController,
-            child: EditableText(
-              maxLines: null,
-              controller: controller,
-              scrollController: editableScrollController,
-              focusNode: FocusNode(),
-              style: textStyle,
-              cursorColor: Colors.blue,
-              backgroundCursorColor: Colors.grey,
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: Center(
+            child: TextButton(
+              onPressed: () async {
+                if (navigatorKey.currentState == null) {
+                  return;
+                }
+                await navigatorKey.currentState!.push(
+                  CupertinoPageRoute<void>(
+                    settings: const RouteSettings(name: '/TestCupertinoRoute'),
+                    builder: (BuildContext innerContext) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: SizedBox.square(
+                          dimension: 200.0,
+                          child: EditableText(
+                            maxLines: null,
+                            controller: controller,
+                            scrollController: editableScrollController,
+                            focusNode: focusNode,
+                            style: textStyle,
+                            cursorColor: Colors.blue,
+                            backgroundCursorColor: Colors.grey,
+                            showSelectionHandles: true,
+                            selectionControls: materialTextSelectionControls,
+                            selectionColor: Colors.lightBlueAccent,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+              child: const Text('Push Route'),
+            ),
+          ),
+        ),
+      );
+
+      // Push cupertino route.
+      await tester.tap(find.text('Push Route'));
+      await tester.pumpAndSettle();
+
+      expect(editableScrollController.offset, 0);
+
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      state.bringIntoView(TextPosition(offset: controller.text.length));
+
+      await tester.pumpAndSettle();
+      expect(editableScrollController.offset, editableScrollController.position.maxScrollExtent);
+
+      // Select a word near the end of the text. And show the toolbar.
+      await tester.tapAt(textOffsetToPosition(tester, controller.text.length - 10));
+      state.renderEditable.selectWord(cause: SelectionChangedCause.longPress);
+      expect(state.showToolbar(), true);
+      await tester.pumpAndSettle();
+      expect(controller.selection, const TextSelection(baseOffset: 1426, extentOffset: 1431));
+      expect(state.selectionOverlay, isNotNull);
+      expect(state.selectionOverlay!.toolbarIsVisible, true);
+
+      // Send backspace key event to delete the selected word. This will cause
+      // the EditableText to scroll the new position into view, but this
+      // should not cause an exception, and the toolbar should no longer be visible.
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pumpAndSettle();
+      expect(controller.selection, const TextSelection.collapsed(offset: 1426));
+      expect(tester.takeException(), isNull);
+      expect(state.selectionOverlay, isNotNull);
+      expect(state.selectionOverlay!.toolbarIsVisible, false);
+      // On web, we don't show the Flutter toolbar and instead rely on the browser
+      // toolbar. Until we change that, this test should remain skipped.
+    },
+    skip: kIsWeb, // [intended]
+  );
+
+  testWidgets('bringIntoView brings the caret into view when in a viewport', (
+    WidgetTester tester,
+  ) async {
+    // Regression test for https://github.com/flutter/flutter/issues/55547.
+    controller.text = testText * 20;
+    final editableScrollController = ScrollController();
+    addTearDown(editableScrollController.dispose);
+    final outerController = ScrollController();
+    addTearDown(outerController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox.square(
+            dimension: 200,
+            child: SingleChildScrollView(
+              controller: outerController,
+              child: EditableText(
+                maxLines: null,
+                controller: controller,
+                scrollController: editableScrollController,
+                focusNode: focusNode,
+                style: textStyle,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+              ),
             ),
           ),
         ),
       ),
-    ));
-
+    );
 
     expect(outerController.offset, 0);
     expect(editableScrollController.offset, 0);
@@ -9452,32 +9980,35 @@ void main() {
     expect(editableScrollController.offset, 0);
   });
 
-  testWidgets('bringIntoView does nothing if the physics prohibits implicit scrolling', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: testText * 20);
-    final ScrollController scrollController = ScrollController();
+  testWidgets('bringIntoView does nothing if the physics prohibits implicit scrolling', (
+    WidgetTester tester,
+  ) async {
+    controller.text = testText * 20;
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
 
-    Future<void> buildWithPhysics({ ScrollPhysics? physics }) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Align(
-          alignment: Alignment.topLeft,
-          child: SizedBox(
-            width: 200,
-            height: 200,
-            child: EditableText(
-              maxLines: null,
-              controller: controller,
-              scrollController: scrollController,
-              focusNode: FocusNode(),
-              style: textStyle,
-              cursorColor: Colors.blue,
-              backgroundCursorColor: Colors.grey,
-              scrollPhysics: physics,
+    Future<void> buildWithPhysics({ScrollPhysics? physics}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox.square(
+              dimension: 200,
+              child: EditableText(
+                maxLines: null,
+                controller: controller,
+                scrollController: scrollController,
+                focusNode: focusNode,
+                style: textStyle,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                scrollPhysics: physics,
+              ),
             ),
           ),
         ),
-      ));
+      );
     }
-
 
     await buildWithPhysics();
     expect(scrollController.offset, 0);
@@ -9500,14 +10031,17 @@ void main() {
   });
 
   testWidgets('can change scroll controller', (WidgetTester tester) async {
-    final _TestScrollController scrollController1 = _TestScrollController();
-    final _TestScrollController scrollController2 = _TestScrollController();
+    controller.text = 'A' * 1000;
+    final scrollController1 = _TestScrollController();
+    addTearDown(scrollController1.dispose);
+    final scrollController2 = _TestScrollController();
+    addTearDown(scrollController2.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
-          controller: TextEditingController(text: 'A' * 1000),
-          focusNode: FocusNode(),
+          controller: controller,
+          focusNode: focusNode,
           style: textStyle,
           cursorColor: Colors.blue,
           backgroundCursorColor: Colors.grey,
@@ -9516,15 +10050,15 @@ void main() {
       ),
     );
 
-    expect(scrollController1.attached, isTrue);
-    expect(scrollController2.attached, isFalse);
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+    expect(state.widget.scrollController, scrollController1);
 
     // Change scrollController to controller 2.
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
-          controller: TextEditingController(text: 'A' * 1000),
-          focusNode: FocusNode(),
+          controller: controller,
+          focusNode: focusNode,
           style: textStyle,
           cursorColor: Colors.blue,
           backgroundCursorColor: Colors.grey,
@@ -9533,15 +10067,14 @@ void main() {
       ),
     );
 
-    expect(scrollController1.attached, isFalse);
-    expect(scrollController2.attached, isTrue);
+    expect(state.widget.scrollController, scrollController2);
 
     // Changing scrollController to null.
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
-          controller: TextEditingController(text: 'A' * 1000),
-          focusNode: FocusNode(),
+          controller: controller,
+          focusNode: focusNode,
           style: textStyle,
           cursorColor: Colors.blue,
           backgroundCursorColor: Colors.grey,
@@ -9549,15 +10082,14 @@ void main() {
       ),
     );
 
-    expect(scrollController1.attached, isFalse);
-    expect(scrollController2.attached, isFalse);
+    expect(state.widget.scrollController, isNull);
 
     // Change scrollController to back controller 2.
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
-          controller: TextEditingController(text: 'A' * 1000),
-          focusNode: FocusNode(),
+          controller: controller,
+          focusNode: focusNode,
           style: textStyle,
           cursorColor: Colors.blue,
           backgroundCursorColor: Colors.grey,
@@ -9566,19 +10098,20 @@ void main() {
       ),
     );
 
-    expect(scrollController1.attached, isFalse);
-    expect(scrollController2.attached, isTrue);
+    expect(state.widget.scrollController, scrollController2);
   });
 
-  testWidgets('getLocalRectForCaret does not throw when it sees an infinite point', (WidgetTester tester) async {
+  testWidgets('getLocalRectForCaret does not throw when it sees an infinite point', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: SkipPainting(
           child: Transform(
             transform: Matrix4.zero(),
             child: EditableText(
-              controller: TextEditingController(),
-              focusNode: FocusNode(),
+              controller: controller,
+              focusNode: focusNode,
               style: textStyle,
               cursorColor: Colors.blue,
               backgroundCursorColor: Colors.grey,
@@ -9595,64 +10128,56 @@ void main() {
   });
 
   testWidgets('obscured multiline fields throw an exception', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController();
-    expect(
-      () {
-        EditableText(
-          backgroundCursorColor: cursorColor,
-          controller: controller,
-          cursorColor: cursorColor,
-          focusNode: focusNode,
-          obscureText: true,
-          style: textStyle,
-        );
-      },
-      returnsNormally,
-    );
-    expect(
-      () {
-        EditableText(
-          backgroundCursorColor: cursorColor,
-          controller: controller,
-          cursorColor: cursorColor,
-          focusNode: focusNode,
-          maxLines: 2,
-          obscureText: true,
-          style: textStyle,
-        );
-      },
-      throwsAssertionError,
-    );
+    expect(() {
+      EditableText(
+        backgroundCursorColor: cursorColor,
+        controller: controller,
+        cursorColor: cursorColor,
+        focusNode: focusNode,
+        obscureText: true,
+        style: textStyle,
+      );
+    }, returnsNormally);
+    expect(() {
+      EditableText(
+        backgroundCursorColor: cursorColor,
+        controller: controller,
+        cursorColor: cursorColor,
+        focusNode: focusNode,
+        maxLines: 2,
+        obscureText: true,
+        style: textStyle,
+      );
+    }, throwsAssertionError);
   });
 
   group('batch editing', () {
-    final TextEditingController controller = TextEditingController(text: testText);
-    final EditableText editableText = EditableText(
-      showSelectionHandles: true,
-      maxLines: 2,
-      controller: controller,
-      focusNode: FocusNode(),
-      cursorColor: Colors.red,
-      backgroundCursorColor: Colors.blue,
-      style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
-      keyboardType: TextInputType.text,
-    );
-
-    final Widget widget = MediaQuery(
-      data: const MediaQueryData(),
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: editableText,
-      ),
-    );
+    Widget buildWidget() {
+      return MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: EditableText(
+            showSelectionHandles: true,
+            maxLines: 2,
+            controller: controller,
+            focusNode: focusNode,
+            cursorColor: Colors.red,
+            backgroundCursorColor: Colors.blue,
+            style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+            keyboardType: TextInputType.text,
+          ),
+        ),
+      );
+    }
 
     testWidgets('batch editing works', (WidgetTester tester) async {
-      await tester.pumpWidget(widget);
+      await tester.pumpWidget(buildWidget());
 
       // Connect.
       await tester.showKeyboard(find.byType(EditableText));
 
-      final EditableTextState state = tester.state<EditableTextState>(find.byWidget(editableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
       state.updateEditingValue(const TextEditingValue(text: 'remote value'));
       tester.testTextInput.log.clear();
 
@@ -9681,17 +10206,22 @@ void main() {
       expect(tester.testTextInput.log, hasLength(1));
       expect(
         tester.testTextInput.log,
-        contains(matchesMethodCall('TextInput.setEditingState', args: containsPair('text', 'new change 3'))),
+        contains(
+          matchesMethodCall(
+            'TextInput.setEditingState',
+            args: containsPair('text', 'new change 3'),
+          ),
+        ),
       );
     });
 
     testWidgets('batch edits need to be nested properly', (WidgetTester tester) async {
-      await tester.pumpWidget(widget);
+      await tester.pumpWidget(buildWidget());
 
       // Connect.
       await tester.showKeyboard(find.byType(EditableText));
 
-      final EditableTextState state = tester.state<EditableTextState>(find.byWidget(editableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
       state.updateEditingValue(const TextEditingValue(text: 'remote value'));
       tester.testTextInput.log.clear();
 
@@ -9705,31 +10235,36 @@ void main() {
       expect(errorString, contains('Unbalanced call to endBatchEdit'));
     });
 
-     testWidgets('catch unfinished batch edits on disposal', (WidgetTester tester) async {
-      await tester.pumpWidget(widget);
+    testWidgets(
+      'catch unfinished batch edits on disposal',
+      experimentalLeakTesting: LeakTesting.settings
+          .withIgnoredAll(), // leaking by design because of exception
+      (WidgetTester tester) async {
+        await tester.pumpWidget(buildWidget());
 
-      // Connect.
-      await tester.showKeyboard(find.byType(EditableText));
+        // Connect.
+        await tester.showKeyboard(find.byType(EditableText));
 
-      final EditableTextState state = tester.state<EditableTextState>(find.byWidget(editableText));
-      state.updateEditingValue(const TextEditingValue(text: 'remote value'));
-      tester.testTextInput.log.clear();
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+        state.updateEditingValue(const TextEditingValue(text: 'remote value'));
+        tester.testTextInput.log.clear();
 
-      state.beginBatchEdit();
-      expect(tester.takeException(), isNull);
+        state.beginBatchEdit();
+        expect(tester.takeException(), isNull);
 
-      await tester.pumpWidget(Container());
-      expect(tester.takeException(), isAssertionError);
-    });
+        await tester.pumpWidget(Container());
+        expect(tester.takeException(), isAssertionError);
+      },
+    );
   });
 
   group('EditableText does not send editing values more than once', () {
-    Widget boilerplate(TextEditingController controller) {
-      final EditableText editableText = EditableText(
+    Widget boilerplate() {
+      final editableText = EditableText(
         showSelectionHandles: true,
         maxLines: 2,
         controller: controller,
-        focusNode: FocusNode(),
+        focusNode: focusNode,
         cursorColor: Colors.red,
         backgroundCursorColor: Colors.blue,
         style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
@@ -9748,16 +10283,13 @@ void main() {
 
       return MediaQuery(
         data: const MediaQueryData(),
-        child: Directionality(
-          textDirection: TextDirection.ltr,
-          child: editableText,
-        ),
+        child: Directionality(textDirection: TextDirection.ltr, child: editableText),
       );
     }
 
     testWidgets('input from text input plugin', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController(text: testText);
-      await tester.pumpWidget(boilerplate(controller));
+      controller.text = testText;
+      await tester.pumpWidget(boilerplate());
 
       // Connect.
       await tester.showKeyboard(find.byType(EditableText));
@@ -9767,12 +10299,14 @@ void main() {
       state.updateEditingValue(collapsedAtEnd('remoteremoteremote'));
 
       // Apply in order: length formatter -> listener -> onChanged -> listener.
-      const String expectedText = 'remote listener onChanged listener';
+      const expectedText = 'remote listener onChanged listener';
       expect(controller.text, expectedText);
       final List<TextEditingValue> updates = tester.testTextInput.log
-        .where((MethodCall call) => call.method == 'TextInput.setEditingState')
-        .map((MethodCall call) => TextEditingValue.fromJSON(call.arguments as Map<String, dynamic>))
-        .toList(growable: false);
+          .where((MethodCall call) => call.method == 'TextInput.setEditingState')
+          .map(
+            (MethodCall call) => TextEditingValue.fromJSON(call.arguments as Map<String, dynamic>),
+          )
+          .toList(growable: false);
 
       expect(updates, <TextEditingValue>[collapsedAtEnd(expectedText)]);
 
@@ -9786,8 +10320,8 @@ void main() {
     });
 
     testWidgets('input from text selection menu', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController(text: testText);
-      await tester.pumpWidget(boilerplate(controller));
+      controller.text = testText;
+      await tester.pumpWidget(boilerplate());
 
       // Connect.
       await tester.showKeyboard(find.byType(EditableText));
@@ -9800,19 +10334,21 @@ void main() {
       );
 
       final List<TextEditingValue> updates = tester.testTextInput.log
-        .where((MethodCall call) => call.method == 'TextInput.setEditingState')
-        .map((MethodCall call) => TextEditingValue.fromJSON(call.arguments as Map<String, dynamic>))
-        .toList(growable: false);
+          .where((MethodCall call) => call.method == 'TextInput.setEditingState')
+          .map(
+            (MethodCall call) => TextEditingValue.fromJSON(call.arguments as Map<String, dynamic>),
+          )
+          .toList(growable: false);
 
-      const String expectedText = 'remote listener onChanged listener';
+      const expectedText = 'remote listener onChanged listener';
       expect(updates, <TextEditingValue>[collapsedAtEnd(expectedText)]);
 
       tester.testTextInput.log.clear();
     });
 
     testWidgets('input from controller', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController(text: testText);
-      await tester.pumpWidget(boilerplate(controller));
+      controller.text = testText;
+      await tester.pumpWidget(boilerplate());
 
       // Connect.
       await tester.showKeyboard(find.byType(EditableText));
@@ -9820,16 +10356,17 @@ void main() {
 
       controller.text = 'remoteremoteremote';
       final List<TextEditingValue> updates = tester.testTextInput.log
-        .where((MethodCall call) => call.method == 'TextInput.setEditingState')
-        .map((MethodCall call) => TextEditingValue.fromJSON(call.arguments as Map<String, dynamic>))
-        .toList(growable: false);
+          .where((MethodCall call) => call.method == 'TextInput.setEditingState')
+          .map(
+            (MethodCall call) => TextEditingValue.fromJSON(call.arguments as Map<String, dynamic>),
+          )
+          .toList(growable: false);
 
       expect(updates, <TextEditingValue>[collapsedAtEnd('remoteremoteremote listener')]);
     });
 
     testWidgets('input from changing controller', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController(text: testText);
-      Widget build({ TextEditingController? textEditingController }) {
+      Widget build({TextEditingController? textEditingController}) {
         return MediaQuery(
           data: const MediaQueryData(),
           child: Directionality(
@@ -9838,7 +10375,7 @@ void main() {
               showSelectionHandles: true,
               maxLines: 2,
               controller: textEditingController ?? controller,
-              focusNode: FocusNode(),
+              focusNode: focusNode,
               cursorColor: Colors.red,
               backgroundCursorColor: Colors.blue,
               style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
@@ -9854,50 +10391,56 @@ void main() {
       // Connect.
       await tester.showKeyboard(find.byType(EditableText));
       tester.testTextInput.log.clear();
-      await tester.pumpWidget(build(textEditingController: TextEditingController(text: 'new text')));
+      final controller1 = TextEditingController(text: 'new text');
+      addTearDown(controller1.dispose);
+      await tester.pumpWidget(build(textEditingController: controller1));
 
       List<TextEditingValue> updates = tester.testTextInput.log
-        .where((MethodCall call) => call.method == 'TextInput.setEditingState')
-        .map((MethodCall call) => TextEditingValue.fromJSON(call.arguments as Map<String, dynamic>))
-        .toList(growable: false);
+          .where((MethodCall call) => call.method == 'TextInput.setEditingState')
+          .map(
+            (MethodCall call) => TextEditingValue.fromJSON(call.arguments as Map<String, dynamic>),
+          )
+          .toList(growable: false);
 
       expect(updates, const <TextEditingValue>[TextEditingValue(text: 'new text')]);
 
       tester.testTextInput.log.clear();
-      await tester.pumpWidget(build(textEditingController: TextEditingController(text: 'new new text')));
+      final controller2 = TextEditingController(text: 'new new text');
+      addTearDown(controller2.dispose);
+      await tester.pumpWidget(build(textEditingController: controller2));
 
       updates = tester.testTextInput.log
-        .where((MethodCall call) => call.method == 'TextInput.setEditingState')
-        .map((MethodCall call) => TextEditingValue.fromJSON(call.arguments as Map<String, dynamic>))
-        .toList(growable: false);
+          .where((MethodCall call) => call.method == 'TextInput.setEditingState')
+          .map(
+            (MethodCall call) => TextEditingValue.fromJSON(call.arguments as Map<String, dynamic>),
+          )
+          .toList(growable: false);
 
       expect(updates, const <TextEditingValue>[TextEditingValue(text: 'new new text')]);
     });
   });
 
   testWidgets('input imm channel calls are ordered correctly', (WidgetTester tester) async {
-    const String testText = 'flutter is the best!';
-    final TextEditingController controller = TextEditingController(text: testText);
-    final EditableText et = EditableText(
+    controller.text = 'flutter is the best!';
+    final et = EditableText(
       showSelectionHandles: true,
       maxLines: 2,
       controller: controller,
-      focusNode: FocusNode(),
+      focusNode: focusNode,
       cursorColor: Colors.red,
       backgroundCursorColor: Colors.blue,
       style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
       keyboardType: TextInputType.text,
     );
 
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 100,
-          child: et,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(width: 100, child: et),
         ),
       ),
-    ));
+    );
 
     await tester.showKeyboard(find.byType(EditableText));
     // TextInput.show should be after TextInput.setEditingState.
@@ -9905,7 +10448,7 @@ void main() {
     // the keyboard from showing if the show keyboard request comes before the
     // restart.
     // See: https://github.com/flutter/flutter/issues/68571.
-    final List<String> logOrder = <String>[
+    final logOrder = <String>[
       'TextInput.setClient',
       'TextInput.setEditableSizeAndTransform',
       'TextInput.setMarkedTextRect',
@@ -9917,153 +10460,153 @@ void main() {
       'TextInput.show',
       'TextInput.setCaretRect',
     ];
-    expect(
-      tester.testTextInput.log.map((MethodCall m) => m.method),
-      logOrder,
+    expect(tester.testTextInput.log.map((MethodCall m) => m.method), logOrder);
+  });
+
+  testWidgets('keyboard is requested after setEditingState after switching to a new text field', (
+    WidgetTester tester,
+  ) async {
+    // Regression test for https://github.com/flutter/flutter/issues/68571.
+    final controller1 = TextEditingController();
+    addTearDown(controller1.dispose);
+    final focusNode1 = FocusNode();
+    addTearDown(focusNode1.dispose);
+    final editableText1 = EditableText(
+      showSelectionHandles: true,
+      maxLines: 2,
+      controller: controller1,
+      focusNode: focusNode1,
+      cursorColor: Colors.red,
+      backgroundCursorColor: Colors.blue,
+      style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+      keyboardType: TextInputType.text,
     );
+
+    final controller2 = TextEditingController();
+    addTearDown(controller2.dispose);
+    final focusNode2 = FocusNode();
+    addTearDown(focusNode2.dispose);
+    final editableText2 = EditableText(
+      showSelectionHandles: true,
+      maxLines: 2,
+      controller: controller2,
+      focusNode: focusNode2,
+      cursorColor: Colors.red,
+      backgroundCursorColor: Colors.blue,
+      style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+      keyboardType: TextInputType.text,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(child: Column(children: <Widget>[editableText1, editableText2])),
+      ),
+    );
+
+    await tester.tap(find.byWidget(editableText1));
+    await tester.pumpAndSettle();
+
+    tester.testTextInput.log.clear();
+    await tester.tap(find.byWidget(editableText2));
+    await tester.pumpAndSettle();
+
+    // Send TextInput.show after TextInput.setEditingState. Otherwise
+    // some Android keyboards ignore the "show keyboard" request, as the
+    // Android text input plugin restarts the input method when setEditingState
+    // is sent by the framework.
+    final logOrder = <String>[
+      'TextInput.clearClient',
+      'TextInput.setClient',
+      'TextInput.setEditableSizeAndTransform',
+      'TextInput.setMarkedTextRect',
+      'TextInput.setStyle',
+      'TextInput.setEditingState',
+      'TextInput.show',
+      'TextInput.requestAutofill',
+      'TextInput.setCaretRect',
+    ];
+    expect(tester.testTextInput.log.map((MethodCall m) => m.method), logOrder);
   });
 
-  testWidgets(
-    'keyboard is requested after setEditingState after switching to a new text field',
-    (WidgetTester tester) async {
-      // Regression test for https://github.com/flutter/flutter/issues/68571.
-      final EditableText editableText1 = EditableText(
-        showSelectionHandles: true,
-        maxLines: 2,
-        controller: TextEditingController(),
-        focusNode: FocusNode(),
-        cursorColor: Colors.red,
-        backgroundCursorColor: Colors.blue,
-        style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
-        keyboardType: TextInputType.text,
-      );
+  testWidgets('Autofill does not request focus', (WidgetTester tester) async {
+    // Regression test for https://github.com/flutter/flutter/issues/91354 .
+    final controller1 = TextEditingController();
+    addTearDown(controller1.dispose);
+    final focusNode1 = FocusNode();
+    addTearDown(focusNode1.dispose);
+    final editableText1 = EditableText(
+      showSelectionHandles: true,
+      maxLines: 2,
+      controller: controller1,
+      focusNode: focusNode1,
+      cursorColor: Colors.red,
+      backgroundCursorColor: Colors.blue,
+      style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+      keyboardType: TextInputType.text,
+    );
 
-      final EditableText editableText2 = EditableText(
-        showSelectionHandles: true,
-        maxLines: 2,
-        controller: TextEditingController(),
-        focusNode: FocusNode(),
-        cursorColor: Colors.red,
-        backgroundCursorColor: Colors.blue,
-        style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
-        keyboardType: TextInputType.text,
-      );
+    final controller2 = TextEditingController();
+    addTearDown(controller2.dispose);
+    final focusNode2 = FocusNode();
+    addTearDown(focusNode2.dispose);
+    final editableText2 = EditableText(
+      showSelectionHandles: true,
+      maxLines: 2,
+      controller: controller2,
+      focusNode: focusNode2,
+      cursorColor: Colors.red,
+      backgroundCursorColor: Colors.blue,
+      style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+      keyboardType: TextInputType.text,
+    );
 
-      await tester.pumpWidget(MaterialApp(
-        home: Center(
-          child: Column(
-            children: <Widget>[editableText1, editableText2],
-          ),
-        ),
-      ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(child: Column(children: <Widget>[editableText1, editableText2])),
+      ),
+    );
 
-      await tester.tap(find.byWidget(editableText1));
-      await tester.pumpAndSettle();
+    // editableText1 has the focus.
+    await tester.tap(find.byWidget(editableText1));
+    await tester.pumpAndSettle();
 
-      tester.testTextInput.log.clear();
-      await tester.tap(find.byWidget(editableText2));
-      await tester.pumpAndSettle();
+    final EditableTextState state2 = tester.state<EditableTextState>(find.byWidget(editableText2));
+    // Update editableText2 when it's not focused. It should not request focus.
+    state2.updateEditingValue(
+      const TextEditingValue(text: 'password', selection: TextSelection.collapsed(offset: 8)),
+    );
+    await tester.pumpAndSettle();
 
-      // Send TextInput.show after TextInput.setEditingState. Otherwise
-      // some Android keyboards ignore the "show keyboard" request, as the
-      // Android text input plugin restarts the input method when setEditingState
-      // is sent by the framework.
-      final List<String> logOrder = <String>[
-        'TextInput.clearClient',
-        'TextInput.setClient',
-        'TextInput.setEditableSizeAndTransform',
-        'TextInput.setMarkedTextRect',
-        'TextInput.setStyle',
-        'TextInput.setEditingState',
-        'TextInput.show',
-        'TextInput.requestAutofill',
-        'TextInput.setCaretRect',
-      ];
-      expect(
-        tester.testTextInput.log.map((MethodCall m) => m.method),
-        logOrder,
-      );
-  });
-
-  testWidgets(
-    'Autofill does not request focus',
-    (WidgetTester tester) async {
-      // Regression test for https://github.com/flutter/flutter/issues/91354 .
-      final FocusNode focusNode1 = FocusNode();
-      final EditableText editableText1 = EditableText(
-        showSelectionHandles: true,
-        maxLines: 2,
-        controller: TextEditingController(),
-        focusNode: focusNode1,
-        cursorColor: Colors.red,
-        backgroundCursorColor: Colors.blue,
-        style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
-        keyboardType: TextInputType.text,
-      );
-
-      final FocusNode focusNode2 = FocusNode();
-      final EditableText editableText2 = EditableText(
-        showSelectionHandles: true,
-        maxLines: 2,
-        controller: TextEditingController(),
-        focusNode: focusNode2,
-        cursorColor: Colors.red,
-        backgroundCursorColor: Colors.blue,
-        style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
-        keyboardType: TextInputType.text,
-      );
-
-      await tester.pumpWidget(MaterialApp(
-        home: Center(
-          child: Column(
-            children: <Widget>[editableText1, editableText2],
-          ),
-        ),
-      ));
-
-      // editableText1 has the focus.
-      await tester.tap(find.byWidget(editableText1));
-      await tester.pumpAndSettle();
-
-      final EditableTextState state2 = tester.state<EditableTextState>(find.byWidget(editableText2));
-      // Update editableText2 when it's not focused. It should not request focus.
-      state2.updateEditingValue(
-        const TextEditingValue(text: 'password', selection: TextSelection.collapsed(offset: 8)),
-      );
-      await tester.pumpAndSettle();
-
-      expect(focusNode1.hasFocus, isTrue);
-      expect(focusNode2.hasFocus, isFalse);
+    expect(focusNode1.hasFocus, isTrue);
+    expect(focusNode2.hasFocus, isFalse);
   });
 
   testWidgets('setEditingState is not called when text changes', (WidgetTester tester) async {
     // We shouldn't get a message here because this change is owned by the platform side.
-    const String testText = 'flutter is the best!';
-    final TextEditingController controller = TextEditingController(text: testText);
-    final EditableText et = EditableText(
+    controller.text = 'flutter is the best!';
+    final et = EditableText(
       showSelectionHandles: true,
       maxLines: 2,
       controller: controller,
-      focusNode: FocusNode(),
+      focusNode: focusNode,
       cursorColor: Colors.red,
       backgroundCursorColor: Colors.blue,
       style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
       keyboardType: TextInputType.text,
     );
 
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 100,
-          child: et,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(width: 100, child: et),
         ),
       ),
-    ));
+    );
 
     await tester.enterText(find.byType(EditableText), '...');
 
-    final List<String> logOrder = <String>[
+    final logOrder = <String>[
       'TextInput.setClient',
       'TextInput.setEditableSizeAndTransform',
       'TextInput.setMarkedTextRect',
@@ -10074,47 +10617,41 @@ void main() {
       'TextInput.setEditingState',
       'TextInput.show',
       'TextInput.setCaretRect',
-      'TextInput.show',
     ];
-    expect(tester.testTextInput.log.length, logOrder.length);
-    int index = 0;
-    for (final MethodCall m in tester.testTextInput.log) {
-      expect(m.method, logOrder[index]);
-      index++;
-    }
+    expect(tester.testTextInput.log.map((MethodCall m) => m.method), logOrder);
     expect(tester.testTextInput.editingState!['text'], 'flutter is the best!');
   });
 
-  testWidgets('setEditingState is called when text changes on controller', (WidgetTester tester) async {
+  testWidgets('setEditingState is called when text changes on controller', (
+    WidgetTester tester,
+  ) async {
     // We should get a message here because this change is owned by the framework side.
-    const String testText = 'flutter is the best!';
-    final TextEditingController controller = TextEditingController(text: testText);
-    final EditableText et = EditableText(
+    controller.text = 'flutter is the best!';
+    final et = EditableText(
       showSelectionHandles: true,
       maxLines: 2,
       controller: controller,
-      focusNode: FocusNode(),
+      focusNode: focusNode,
       cursorColor: Colors.red,
       backgroundCursorColor: Colors.blue,
       style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
       keyboardType: TextInputType.text,
     );
 
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 100,
-          child: et,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(width: 100, child: et),
         ),
       ),
-    ));
+    );
 
     await tester.showKeyboard(find.byType(EditableText));
     controller.value = collapsedAtEnd('${controller.text}...');
     await tester.idle();
 
-    final List<String> logOrder = <String>[
+    final logOrder = <String>[
       'TextInput.setClient',
       'TextInput.setEditableSizeAndTransform',
       'TextInput.setMarkedTextRect',
@@ -10128,30 +10665,30 @@ void main() {
       'TextInput.setEditingState',
     ];
 
-    expect(
-      tester.testTextInput.log.map((MethodCall m) => m.method),
-      logOrder,
-    );
+    expect(tester.testTextInput.log.map((MethodCall m) => m.method), logOrder);
     expect(tester.testTextInput.editingState!['text'], 'flutter is the best!...');
   });
 
   testWidgets('Synchronous test of local and remote editing values', (WidgetTester tester) async {
     // Regression test for https://github.com/flutter/flutter/issues/65059
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
-    final TextInputFormatter formatter = TextInputFormatter.withFunction((TextEditingValue oldValue, TextEditingValue newValue) {
+    final formatter = TextInputFormatter.withFunction((
+      TextEditingValue oldValue,
+      TextEditingValue newValue,
+    ) {
       if (newValue.text == 'I will be modified by the formatter.') {
         newValue = collapsedAtEnd('Flutter is the best!');
       }
       return newValue;
     });
-    final TextEditingController controller = TextEditingController();
     late StateSetter setState;
 
-    final FocusNode focusNode = FocusNode(debugLabel: 'EditableText Focus Node');
     Widget builder() {
       return StatefulBuilder(
         builder: (BuildContext context, StateSetter setter) {
@@ -10170,10 +10707,8 @@ void main() {
                       cursorColor: Colors.red,
                       backgroundCursorColor: Colors.red,
                       keyboardType: TextInputType.multiline,
-                      inputFormatters: <TextInputFormatter>[
-                        formatter,
-                      ],
-                      onChanged: (String value) { },
+                      inputFormatters: <TextInputFormatter>[formatter],
+                      onChanged: (String value) {},
                     ),
                   ),
                 ),
@@ -10193,37 +10728,39 @@ void main() {
 
     final EditableTextState state = tester.firstState(find.byType(EditableText));
     // setEditingState is not called when only the remote changes
-    state.updateEditingValue(TextEditingValue(
-      text: 'a',
-      selection: controller.selection,
-    ));
+    state.updateEditingValue(TextEditingValue(text: 'a', selection: controller.selection));
 
     expect(log.length, 0);
 
     // setEditingState is called when remote value modified by the formatter.
-    state.updateEditingValue(TextEditingValue(
-      text: 'I will be modified by the formatter.',
-      selection: controller.selection,
-    ));
+    state.updateEditingValue(
+      TextEditingValue(
+        text: 'I will be modified by the formatter.',
+        selection: controller.selection,
+      ),
+    );
     expect(log.length, 1);
     MethodCall methodCall = log[0];
     expect(
       methodCall,
-      isMethodCall('TextInput.setEditingState', arguments: <String, dynamic>{
-        'text': 'Flutter is the best!',
-        'selectionBase': 20,
-        'selectionExtent': 20,
-        'selectionAffinity': 'TextAffinity.downstream',
-        'selectionIsDirectional': false,
-        'composingBase': -1,
-        'composingExtent': -1,
-      }),
+      isMethodCall(
+        'TextInput.setEditingState',
+        arguments: <String, dynamic>{
+          'text': 'Flutter is the best!',
+          'selectionBase': 20,
+          'selectionExtent': 20,
+          'selectionAffinity': 'TextAffinity.downstream',
+          'selectionIsDirectional': false,
+          'composingBase': -1,
+          'composingExtent': -1,
+        },
+      ),
     );
 
     log.clear();
 
     // setEditingState is called when the [controller.value] is modified by local.
-    String text = 'I love flutter!';
+    var text = 'I love flutter!';
     setState(() {
       controller.value = collapsedAtEnd(text);
     });
@@ -10231,15 +10768,18 @@ void main() {
     methodCall = log[0];
     expect(
       methodCall,
-      isMethodCall('TextInput.setEditingState', arguments: <String, dynamic>{
-        'text': 'I love flutter!',
-        'selectionBase': text.length,
-        'selectionExtent': text.length,
-        'selectionAffinity': 'TextAffinity.downstream',
-        'selectionIsDirectional': false,
-        'composingBase': -1,
-        'composingExtent': -1,
-      }),
+      isMethodCall(
+        'TextInput.setEditingState',
+        arguments: <String, dynamic>{
+          'text': 'I love flutter!',
+          'selectionBase': text.length,
+          'selectionExtent': text.length,
+          'selectionAffinity': 'TextAffinity.downstream',
+          'selectionIsDirectional': false,
+          'composingBase': -1,
+          'composingExtent': -1,
+        },
+      ),
     );
 
     log.clear();
@@ -10254,31 +10794,39 @@ void main() {
     methodCall = log[0];
     expect(
       methodCall,
-      isMethodCall('TextInput.setEditingState', arguments: <String, dynamic>{
-        'text': 'I will be modified by the formatter.',
-        'selectionBase': text.length,
-        'selectionExtent': text.length,
-        'selectionAffinity': 'TextAffinity.downstream',
-        'selectionIsDirectional': false,
-        'composingBase': -1,
-        'composingExtent': -1,
-      }),
+      isMethodCall(
+        'TextInput.setEditingState',
+        arguments: <String, dynamic>{
+          'text': 'I will be modified by the formatter.',
+          'selectionBase': text.length,
+          'selectionExtent': text.length,
+          'selectionAffinity': 'TextAffinity.downstream',
+          'selectionIsDirectional': false,
+          'composingBase': -1,
+          'composingExtent': -1,
+        },
+      ),
     );
   });
 
-  testWidgets('Send text input state to engine when the input formatter rejects user input', (WidgetTester tester) async {
+  testWidgets('Send text input state to engine when the input formatter rejects user input', (
+    WidgetTester tester,
+  ) async {
     // Regression test for https://github.com/flutter/flutter/issues/67828
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
-    final TextInputFormatter formatter = TextInputFormatter.withFunction((TextEditingValue oldValue, TextEditingValue newValue) {
+    final formatter = TextInputFormatter.withFunction((
+      TextEditingValue oldValue,
+      TextEditingValue newValue,
+    ) {
       return collapsedAtEnd('Flutter is the best!');
     });
-    final TextEditingController controller = TextEditingController();
 
-    final FocusNode focusNode = FocusNode(debugLabel: 'EditableText Focus Node');
     Widget builder() {
       return StatefulBuilder(
         builder: (BuildContext context, StateSetter setter) {
@@ -10296,10 +10844,8 @@ void main() {
                       cursorColor: Colors.red,
                       backgroundCursorColor: Colors.red,
                       keyboardType: TextInputType.multiline,
-                      inputFormatters: <TextInputFormatter>[
-                        formatter,
-                      ],
-                      onChanged: (String value) { },
+                      inputFormatters: <TextInputFormatter>[formatter],
+                      onChanged: (String value) {},
                     ),
                   ),
                 ),
@@ -10321,36 +10867,42 @@ void main() {
 
     // setEditingState is called when remote value modified by the formatter.
     state.updateEditingValue(collapsedAtEnd('I will be modified by the formatter.'));
-    expect(log.length, 2);
-    expect(log, contains(matchesMethodCall(
-      'TextInput.setEditingState',
-      args: allOf(
-        containsPair('text', 'Flutter is the best!'),
+    expect(
+      log,
+      contains(
+        matchesMethodCall(
+          'TextInput.setEditingState',
+          args: allOf(containsPair('text', 'Flutter is the best!')),
+        ),
       ),
-    )));
+    );
 
     log.clear();
 
     state.updateEditingValue(collapsedAtEnd('I will be modified by the formatter.'));
-    expect(log.length, 2);
-    expect(log, contains(matchesMethodCall(
-      'TextInput.setEditingState',
-      args: allOf(
-        containsPair('text', 'Flutter is the best!'),
+    expect(
+      log,
+      contains(
+        matchesMethodCall(
+          'TextInput.setEditingState',
+          args: allOf(containsPair('text', 'Flutter is the best!')),
+        ),
       ),
-    )));
+    );
   });
 
-  testWidgets('Repeatedly receiving [TextEditingValue] will not trigger a keyboard request', (WidgetTester tester) async {
+  testWidgets('Repeatedly receiving [TextEditingValue] will not trigger a keyboard request', (
+    WidgetTester tester,
+  ) async {
     // Regression test for https://github.com/flutter/flutter/issues/66036
-    final List<MethodCall> log = <MethodCall>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+    final log = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+      MethodCall methodCall,
+    ) async {
       log.add(methodCall);
       return null;
     });
-    final TextEditingController controller = TextEditingController();
 
-    final FocusNode focusNode = FocusNode(debugLabel: 'EditableText Focus Node');
     Widget builder() {
       return StatefulBuilder(
         builder: (BuildContext context, StateSetter setter) {
@@ -10368,7 +10920,7 @@ void main() {
                       cursorColor: Colors.red,
                       backgroundCursorColor: Colors.red,
                       keyboardType: TextInputType.multiline,
-                      onChanged: (String value) { },
+                      onChanged: (String value) {},
                     ),
                   ),
                 ),
@@ -10390,10 +10942,7 @@ void main() {
 
     final EditableTextState state = tester.firstState(find.byType(EditableText));
 
-    state.updateEditingValue(TextEditingValue(
-      text: 'a',
-      selection: controller.selection,
-    ));
+    state.updateEditingValue(TextEditingValue(text: 'a', selection: controller.selection));
     await tester.pump();
 
     // Nothing called when only the remote changes.
@@ -10415,10 +10964,7 @@ void main() {
     log.clear();
 
     // Send repeat value from the engine.
-    state.updateEditingValue(TextEditingValue(
-      text: 'a',
-      selection: controller.selection,
-    ));
+    state.updateEditingValue(TextEditingValue(text: 'a', selection: controller.selection));
     await tester.pump();
 
     // Nothing called when only the remote changes.
@@ -10428,8 +10974,9 @@ void main() {
   });
 
   group('TextEditingController', () {
-    testWidgets('TextEditingController.text set to empty string clears field', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
+    testWidgets('TextEditingController.text set to empty string clears field', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: MediaQuery(
@@ -10445,7 +10992,7 @@ void main() {
                     cursorColor: Colors.red,
                     backgroundCursorColor: Colors.red,
                     keyboardType: TextInputType.multiline,
-                    onChanged: (String value) { },
+                    onChanged: (String value) {},
                   ),
                 ),
               ),
@@ -10465,14 +11012,14 @@ void main() {
 
     testWidgets('TextEditingController.clear() behavior test', (WidgetTester tester) async {
       // Regression test for https://github.com/flutter/flutter/issues/66316
-      final List<MethodCall> log = <MethodCall>[];
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (MethodCall methodCall) async {
+      final log = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.textInput, (
+        MethodCall methodCall,
+      ) async {
         log.add(methodCall);
         return null;
       });
-      final TextEditingController controller = TextEditingController();
 
-      final FocusNode focusNode = FocusNode(debugLabel: 'EditableText Focus Node');
       Widget builder() {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setter) {
@@ -10490,7 +11037,7 @@ void main() {
                         cursorColor: Colors.red,
                         backgroundCursorColor: Colors.red,
                         keyboardType: TextInputType.multiline,
-                        onChanged: (String value) { },
+                        onChanged: (String value) {},
                       ),
                     ),
                   ),
@@ -10512,10 +11059,7 @@ void main() {
 
       final EditableTextState state = tester.firstState(find.byType(EditableText));
 
-      state.updateEditingValue(TextEditingValue(
-        text: 'a',
-        selection: controller.selection,
-      ));
+      state.updateEditingValue(TextEditingValue(text: 'a', selection: controller.selection));
       await tester.pump();
 
       // Nothing called when only the remote changes.
@@ -10526,68 +11070,81 @@ void main() {
       expect(log.length, 1);
       expect(
         log[0],
-        isMethodCall('TextInput.setEditingState', arguments: <String, dynamic>{
-          'text': '',
-          'selectionBase': 0,
-          'selectionExtent': 0,
-          'selectionAffinity': 'TextAffinity.downstream',
-          'selectionIsDirectional': false,
-          'composingBase': -1,
-          'composingExtent': -1,
-        }),
+        isMethodCall(
+          'TextInput.setEditingState',
+          arguments: <String, dynamic>{
+            'text': '',
+            'selectionBase': 0,
+            'selectionExtent': 0,
+            'selectionAffinity': 'TextAffinity.downstream',
+            'selectionIsDirectional': false,
+            'composingBase': -1,
+            'composingExtent': -1,
+          },
+        ),
       );
     });
 
-    testWidgets('TextEditingController.buildTextSpan receives build context', (WidgetTester tester) async {
-      final _AccentColorTextEditingController controller = _AccentColorTextEditingController('a');
-      const Color color = Color.fromARGB(255, 1, 2, 3);
-      final ThemeData lightTheme = ThemeData.light();
-      await tester.pumpWidget(MaterialApp(
-        theme: lightTheme.copyWith(
-          colorScheme: lightTheme.colorScheme.copyWith(secondary: color),
+    testWidgets('TextEditingController.buildTextSpan receives build context', (
+      WidgetTester tester,
+    ) async {
+      final controller = _AccentColorTextEditingController('a');
+      addTearDown(controller.dispose);
+      const color = Color.fromARGB(255, 1, 2, 3);
+      final lightTheme = ThemeData();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: lightTheme.copyWith(
+            colorScheme: lightTheme.colorScheme.copyWith(secondary: color),
+          ),
+          home: EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            style: Typography.material2018().black.titleMedium!,
+            cursorColor: Colors.blue,
+            backgroundCursorColor: Colors.grey,
+          ),
         ),
-        home: EditableText(
-          controller: controller,
-          focusNode: FocusNode(),
-          style: Typography.material2018().black.titleMedium!,
-          cursorColor: Colors.blue,
-          backgroundCursorColor: Colors.grey,
-        ),
-      ));
+      );
 
       final RenderEditable renderEditable = findRenderEditable(tester);
-      final TextSpan textSpan = renderEditable.text! as TextSpan;
+      final textSpan = renderEditable.text! as TextSpan;
       expect(textSpan.style!.color, color);
     });
 
     testWidgets('controller listener changes value', (WidgetTester tester) async {
-      const double maxValue = 5.5555;
-      final TextEditingController controller = TextEditingController();
+      const maxValue = 5.5555;
 
       controller.addListener(() {
         final double value = double.tryParse(controller.text.trim()) ?? .0;
         if (value > maxValue) {
           controller.text = maxValue.toString();
           controller.selection = TextSelection.fromPosition(
-              TextPosition(offset: maxValue.toString().length));
+            TextPosition(offset: maxValue.toString().length),
+          );
         }
       });
-      await tester.pumpWidget(MaterialApp(
-        home: EditableText(
-          controller: controller,
-          focusNode: focusNode,
-          style: textStyle,
-          cursorColor: Colors.blue,
-          backgroundCursorColor: Colors.grey,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: Colors.blue,
+            backgroundCursorColor: Colors.grey,
+          ),
         ),
-      ));
+      );
 
-      final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      state.updateEditingValue(const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)));
+      state.updateEditingValue(
+        const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+      );
       await tester.pump();
-      state.updateEditingValue(const TextEditingValue(text: '12', selection: TextSelection.collapsed(offset: 2)));
+      state.updateEditingValue(
+        const TextEditingValue(text: '12', selection: TextSelection.collapsed(offset: 2)),
+      );
       await tester.pump();
 
       expect(controller.text, '5.5555');
@@ -10597,29 +11154,30 @@ void main() {
   });
 
   testWidgets('autofocus:true on first frame does not throw', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: testText);
+    controller.text = testText;
     controller.selection = const TextSelection(
       baseOffset: 0,
       extentOffset: 0,
       affinity: TextAffinity.upstream,
     );
 
-    await tester.pumpWidget(MaterialApp(
-      home: EditableText(
-        maxLines: 10,
-        controller: controller,
-        showSelectionHandles: true,
-        autofocus: true,
-        focusNode: FocusNode(),
-        style: Typography.material2018().black.titleMedium!,
-        cursorColor: Colors.blue,
-        backgroundCursorColor: Colors.grey,
-        selectionControls: materialTextSelectionControls,
-        keyboardType: TextInputType.text,
-        textAlign: TextAlign.right,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditableText(
+          maxLines: 10,
+          controller: controller,
+          showSelectionHandles: true,
+          autofocus: true,
+          focusNode: focusNode,
+          style: Typography.material2018().black.titleMedium!,
+          cursorColor: Colors.blue,
+          backgroundCursorColor: Colors.grey,
+          selectionControls: materialTextSelectionControls,
+          keyboardType: TextInputType.text,
+          textAlign: TextAlign.right,
+        ),
       ),
-    ));
-
+    );
 
     await tester.pumpAndSettle(); // Wait for autofocus to take effect.
 
@@ -10627,8 +11185,10 @@ void main() {
     expect(exception, isNull);
   });
 
-  testWidgets('updateEditingValue filters multiple calls from formatter', (WidgetTester tester) async {
-    final MockTextFormatter formatter = MockTextFormatter();
+  testWidgets('updateEditingValue filters multiple calls from formatter', (
+    WidgetTester tester,
+  ) async {
+    final formatter = MockTextFormatter();
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -10655,8 +11215,7 @@ void main() {
     controller.text = '';
     await tester.idle();
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     expect(tester.testTextInput.editingState!['text'], equals(''));
     expect(state.wantKeepAlive, true);
 
@@ -10673,7 +11232,7 @@ void main() {
     state.updateEditingValue(const TextEditingValue(text: 'aaaaaaaaa'));
     state.updateEditingValue(const TextEditingValue(text: 'aaaaaaaaa')); // Skipped
 
-    const List<String> referenceLog = <String>[
+    const referenceLog = <String>[
       '[1]: , a',
       '[1]: normal aa',
       '[2]: a, aa',
@@ -10700,7 +11259,7 @@ void main() {
   });
 
   testWidgets('formatter logic handles repeat filtering', (WidgetTester tester) async {
-    final MockTextFormatter formatter = MockTextFormatter();
+    final formatter = MockTextFormatter();
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -10727,8 +11286,7 @@ void main() {
     controller.text = '';
     await tester.idle();
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     expect(tester.testTextInput.editingState!['text'], equals(''));
     expect(state.wantKeepAlive, true);
 
@@ -10743,29 +11301,50 @@ void main() {
     expect(formatter.formatCallCount, 2);
     state.updateEditingValue(const TextEditingValue(text: '0123')); // Text change causes reformat
     expect(formatter.formatCallCount, 3);
-    state.updateEditingValue(const TextEditingValue(text: '0123')); // No text change, does not format
+    state.updateEditingValue(
+      const TextEditingValue(text: '0123'),
+    ); // No text change, does not format
     expect(formatter.formatCallCount, 3);
-    state.updateEditingValue(const TextEditingValue(text: '0123')); // No text change, does not format
+    state.updateEditingValue(
+      const TextEditingValue(text: '0123'),
+    ); // No text change, does not format
     expect(formatter.formatCallCount, 3);
-    state.updateEditingValue(const TextEditingValue(text: '0123', selection: TextSelection.collapsed(offset: 2))); // Selection change does not reformat
+    state.updateEditingValue(
+      const TextEditingValue(text: '0123', selection: TextSelection.collapsed(offset: 2)),
+    ); // Selection change does not reformat
     expect(formatter.formatCallCount, 3);
-    state.updateEditingValue(const TextEditingValue(text: '0123', selection: TextSelection.collapsed(offset: 2))); // No text change, does not format
+    state.updateEditingValue(
+      const TextEditingValue(text: '0123', selection: TextSelection.collapsed(offset: 2)),
+    ); // No text change, does not format
     expect(formatter.formatCallCount, 3);
-    state.updateEditingValue(const TextEditingValue(text: '0123', selection: TextSelection.collapsed(offset: 2))); // No text change, does not format
+    state.updateEditingValue(
+      const TextEditingValue(text: '0123', selection: TextSelection.collapsed(offset: 2)),
+    ); // No text change, does not format
     expect(formatter.formatCallCount, 3);
 
     // Composing changes should not trigger reformat, as it could cause infinite loops on some IMEs.
-    state.updateEditingValue(const TextEditingValue(text: '0123', selection: TextSelection.collapsed(offset: 2), composing: TextRange(start: 1, end: 2)));
+    state.updateEditingValue(
+      const TextEditingValue(
+        text: '0123',
+        selection: TextSelection.collapsed(offset: 2),
+        composing: TextRange(start: 1, end: 2),
+      ),
+    );
     expect(formatter.formatCallCount, 3);
     expect(formatter.lastOldValue.composing, TextRange.empty);
-    expect(formatter.lastNewValue.composing, TextRange.empty); // The new composing was registered in formatter.
+    expect(
+      formatter.lastNewValue.composing,
+      TextRange.empty,
+    ); // The new composing was registered in formatter.
     // Clearing composing region should trigger reformat.
-    state.updateEditingValue(const TextEditingValue(text: '01234', selection: TextSelection.collapsed(offset: 2))); // Formats, with oldValue containing composing region.
+    state.updateEditingValue(
+      const TextEditingValue(text: '01234', selection: TextSelection.collapsed(offset: 2)),
+    ); // Formats, with oldValue containing composing region.
     expect(formatter.formatCallCount, 4);
     expect(formatter.lastOldValue.composing, const TextRange(start: 1, end: 2));
     expect(formatter.lastNewValue.composing, TextRange.empty);
 
-    const List<String> referenceLog = <String>[
+    const referenceLog = <String>[
       '[1]: , 01',
       '[1]: normal aa',
       '[2]: 01, 012',
@@ -10781,7 +11360,7 @@ void main() {
 
   // Regression test for https://github.com/flutter/flutter/issues/53612
   testWidgets('formatter logic handles initial repeat edge case', (WidgetTester tester) async {
-    final MockTextFormatter formatter = MockTextFormatter();
+    final formatter = MockTextFormatter();
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -10808,14 +11387,15 @@ void main() {
     controller.text = 'test';
     await tester.idle();
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     expect(tester.testTextInput.editingState!['text'], equals('test'));
     expect(state.wantKeepAlive, true);
 
     expect(formatter.formatCallCount, 0);
     state.updateEditingValue(collapsedAtEnd('test'));
-    state.updateEditingValue(collapsedAtEnd('test').copyWith(composing: const TextRange(start: 1, end: 2)));
+    state.updateEditingValue(
+      collapsedAtEnd('test').copyWith(composing: const TextRange(start: 1, end: 2)),
+    );
     // Pass to formatter once to check the values.
     state.updateEditingValue(collapsedAtEnd('test'));
     expect(formatter.lastOldValue.composing, const TextRange(start: 1, end: 2));
@@ -10846,12 +11426,18 @@ void main() {
       ),
     );
 
-    final TestGesture gesture = await tester.createGesture(kind: PointerDeviceKind.mouse, pointer: 1);
+    final TestGesture gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      pointer: 1,
+    );
     await gesture.addPointer(location: tester.getCenter(find.byType(EditableText)));
 
     await tester.pump();
 
-    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.click);
+    expect(
+      RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+      SystemMouseCursors.click,
+    );
 
     // Test default cursor
     await tester.pumpWidget(
@@ -10876,7 +11462,10 @@ void main() {
       ),
     );
 
-    expect(RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1), SystemMouseCursors.text);
+    expect(
+      RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+      SystemMouseCursors.text,
+    );
   });
 
   testWidgets('Can access characters on editing string', (WidgetTester tester) async {
@@ -10884,8 +11473,8 @@ void main() {
     final Widget widget = MaterialApp(
       home: EditableText(
         backgroundCursorColor: Colors.grey,
-        controller: TextEditingController(),
-        focusNode: FocusNode(),
+        controller: controller,
+        focusNode: focusNode,
         style: Typography.material2018().black.titleMedium!,
         cursorColor: Colors.blue,
         selectionControls: materialTextSelectionControls,
@@ -10906,104 +11495,110 @@ void main() {
   });
 
   testWidgets('EditableText can set and update clipBehavior', (WidgetTester tester) async {
-    await tester.pumpWidget(MediaQuery(
-      data: const MediaQueryData(),
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: FocusScope(
-          node: focusScopeNode,
-          autofocus: true,
-          child: EditableText(
-            backgroundCursorColor: Colors.grey,
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: FocusScope(
+            node: focusScopeNode,
+            autofocus: true,
+            child: EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+            ),
           ),
         ),
       ),
-    ));
+    );
     final RenderEditable renderObject = tester.allRenderObjects.whereType<RenderEditable>().first;
     expect(renderObject.clipBehavior, equals(Clip.hardEdge));
 
-    await tester.pumpWidget(MediaQuery(
-      data: const MediaQueryData(),
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: FocusScope(
-          node: focusScopeNode,
-          autofocus: true,
-          child: EditableText(
-            backgroundCursorColor: Colors.grey,
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            clipBehavior: Clip.antiAlias,
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: FocusScope(
+            node: focusScopeNode,
+            autofocus: true,
+            child: EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              clipBehavior: Clip.antiAlias,
+            ),
           ),
         ),
       ),
-    ));
+    );
     expect(renderObject.clipBehavior, equals(Clip.antiAlias));
   });
 
   testWidgets('EditableText inherits DefaultTextHeightBehavior', (WidgetTester tester) async {
-    const TextHeightBehavior customTextHeightBehavior = TextHeightBehavior(
-      applyHeightToFirstAscent: false,
-    );
-    await tester.pumpWidget(MediaQuery(
-      data: const MediaQueryData(),
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: FocusScope(
-          node: focusScopeNode,
-          autofocus: true,
-          child: DefaultTextHeightBehavior(
-            textHeightBehavior: customTextHeightBehavior,
-            child: EditableText(
-              backgroundCursorColor: Colors.grey,
-              controller: controller,
-              focusNode: focusNode,
-              style: textStyle,
-              cursorColor: cursorColor,
+    const customTextHeightBehavior = TextHeightBehavior(applyHeightToFirstAscent: false);
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: FocusScope(
+            node: focusScopeNode,
+            autofocus: true,
+            child: DefaultTextHeightBehavior(
+              textHeightBehavior: customTextHeightBehavior,
+              child: EditableText(
+                backgroundCursorColor: Colors.grey,
+                controller: controller,
+                focusNode: focusNode,
+                style: textStyle,
+                cursorColor: cursorColor,
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     final RenderEditable renderObject = tester.allRenderObjects.whereType<RenderEditable>().first;
     expect(renderObject.textHeightBehavior, equals(customTextHeightBehavior));
   });
 
-  testWidgets('EditableText defaultTextHeightBehavior is used over inherited widget', (WidgetTester tester) async {
-    const TextHeightBehavior inheritedTextHeightBehavior = TextHeightBehavior(
-      applyHeightToFirstAscent: false,
-    );
-    const TextHeightBehavior customTextHeightBehavior = TextHeightBehavior(
+  testWidgets('EditableText defaultTextHeightBehavior is used over inherited widget', (
+    WidgetTester tester,
+  ) async {
+    const inheritedTextHeightBehavior = TextHeightBehavior(applyHeightToFirstAscent: false);
+    const customTextHeightBehavior = TextHeightBehavior(
       applyHeightToLastDescent: false,
       applyHeightToFirstAscent: false,
     );
-    await tester.pumpWidget(MediaQuery(
-      data: const MediaQueryData(),
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: FocusScope(
-          node: focusScopeNode,
-          autofocus: true,
-          child: DefaultTextHeightBehavior(
-            textHeightBehavior: inheritedTextHeightBehavior,
-            child: EditableText(
-              backgroundCursorColor: Colors.grey,
-              controller: controller,
-              focusNode: focusNode,
-              style: textStyle,
-              cursorColor: cursorColor,
-              textHeightBehavior: customTextHeightBehavior,
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: FocusScope(
+            node: focusScopeNode,
+            autofocus: true,
+            child: DefaultTextHeightBehavior(
+              textHeightBehavior: inheritedTextHeightBehavior,
+              child: EditableText(
+                backgroundCursorColor: Colors.grey,
+                controller: controller,
+                focusNode: focusNode,
+                style: textStyle,
+                cursorColor: cursorColor,
+                textHeightBehavior: customTextHeightBehavior,
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     final RenderEditable renderObject = tester.allRenderObjects.whereType<RenderEditable>().first;
     expect(renderObject.textHeightBehavior, isNot(equals(inheritedTextHeightBehavior)));
     expect(renderObject.textHeightBehavior, equals(customTextHeightBehavior));
@@ -11013,7 +11608,9 @@ void main() {
     void expectToAssert(TextEditingValue value, bool shouldAssert) {
       dynamic initException;
       dynamic updateException;
-      controller = TextEditingController();
+
+      var controller = TextEditingController();
+      addTearDown(controller.dispose);
       try {
         controller = TextEditingController.fromValue(value);
       } catch (e) {
@@ -11021,23 +11618,35 @@ void main() {
       }
 
       controller = TextEditingController();
+      addTearDown(controller.dispose);
       try {
         controller.value = value;
       } catch (e) {
         updateException = e;
       }
 
-      expect(initException?.toString(), shouldAssert ? contains('composing range'): isNull);
-      expect(updateException?.toString(), shouldAssert ? contains('composing range'): isNull);
+      expect(initException?.toString(), shouldAssert ? contains('composing range') : isNull);
+      expect(updateException?.toString(), shouldAssert ? contains('composing range') : isNull);
     }
 
     expectToAssert(TextEditingValue.empty, false);
-    expectToAssert(const TextEditingValue(text: 'test', composing: TextRange(start: 1, end: 0)), true);
-    expectToAssert(const TextEditingValue(text: 'test', composing: TextRange(start: 1, end: 9)), true);
-    expectToAssert(const TextEditingValue(text: 'test', composing: TextRange(start: -1, end: 9)), false);
+    expectToAssert(
+      const TextEditingValue(text: 'test', composing: TextRange(start: 1, end: 0)),
+      true,
+    );
+    expectToAssert(
+      const TextEditingValue(text: 'test', composing: TextRange(start: 1, end: 9)),
+      true,
+    );
+    expectToAssert(
+      const TextEditingValue(text: 'test', composing: TextRange(start: -1, end: 9)),
+      false,
+    );
   });
 
-  testWidgets('Preserves composing range if cursor moves within that range', (WidgetTester tester) async {
+  testWidgets('Preserves composing range if cursor moves within that range', (
+    WidgetTester tester,
+  ) async {
     final Widget widget = MaterialApp(
       home: EditableText(
         backgroundCursorColor: Colors.grey,
@@ -11051,15 +11660,16 @@ void main() {
     await tester.pumpWidget(widget);
 
     final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
-    state.updateEditingValue(const TextEditingValue(
-      text: 'foo composing bar',
-      composing: TextRange(start: 4, end: 12),
-    ));
+    state.updateEditingValue(
+      const TextEditingValue(text: 'foo composing bar', composing: TextRange(start: 4, end: 12)),
+    );
     controller.selection = const TextSelection.collapsed(offset: 5);
     expect(state.currentTextEditingValue.composing, const TextRange(start: 4, end: 12));
   });
 
-  testWidgets('Clears composing range if cursor moves outside that range', (WidgetTester tester) async {
+  testWidgets('Clears composing range if cursor moves outside that range', (
+    WidgetTester tester,
+  ) async {
     final Widget widget = MaterialApp(
       home: EditableText(
         backgroundCursorColor: Colors.grey,
@@ -11074,33 +11684,41 @@ void main() {
 
     // Positioning cursor before the composing range should clear the composing range.
     final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
-    state.updateEditingValue(const TextEditingValue(
-      text: 'foo composing bar',
-      selection: TextSelection.collapsed(offset: 4),
-      composing: TextRange(start: 4, end: 12),
-    ));
+    state.updateEditingValue(
+      const TextEditingValue(
+        text: 'foo composing bar',
+        selection: TextSelection.collapsed(offset: 4),
+        composing: TextRange(start: 4, end: 12),
+      ),
+    );
     controller.selection = const TextSelection.collapsed(offset: 2);
     expect(state.currentTextEditingValue.composing, TextRange.empty);
 
     // Reset the composing range.
-    state.updateEditingValue(const TextEditingValue(
-      text: 'foo composing bar',
-      selection: TextSelection.collapsed(offset: 4),
-      composing: TextRange(start: 4, end: 12),
-    ));
+    state.updateEditingValue(
+      const TextEditingValue(
+        text: 'foo composing bar',
+        selection: TextSelection.collapsed(offset: 4),
+        composing: TextRange(start: 4, end: 12),
+      ),
+    );
     expect(state.currentTextEditingValue.composing, const TextRange(start: 4, end: 12));
 
     // Positioning cursor after the composing range should clear the composing range.
-    state.updateEditingValue(const TextEditingValue(
-      text: 'foo composing bar',
-      selection: TextSelection.collapsed(offset: 4),
-      composing: TextRange(start: 4, end: 12),
-    ));
+    state.updateEditingValue(
+      const TextEditingValue(
+        text: 'foo composing bar',
+        selection: TextSelection.collapsed(offset: 4),
+        composing: TextRange(start: 4, end: 12),
+      ),
+    );
     controller.selection = const TextSelection.collapsed(offset: 14);
     expect(state.currentTextEditingValue.composing, TextRange.empty);
   });
 
-  testWidgets('Clears composing range if cursor moves outside that range - case two', (WidgetTester tester) async {
+  testWidgets('Clears composing range if cursor moves outside that range - case two', (
+    WidgetTester tester,
+  ) async {
     final Widget widget = MaterialApp(
       home: EditableText(
         backgroundCursorColor: Colors.grey,
@@ -11115,51 +11733,65 @@ void main() {
 
     // Setting a selection before the composing range clears the composing range.
     final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
-    state.updateEditingValue(const TextEditingValue(
-      text: 'foo composing bar',
-      selection: TextSelection.collapsed(offset: 4),
-      composing: TextRange(start: 4, end: 12),
-    ));
+    state.updateEditingValue(
+      const TextEditingValue(
+        text: 'foo composing bar',
+        selection: TextSelection.collapsed(offset: 4),
+        composing: TextRange(start: 4, end: 12),
+      ),
+    );
     controller.selection = const TextSelection(baseOffset: 1, extentOffset: 2);
     expect(state.currentTextEditingValue.composing, TextRange.empty);
 
     // Reset the composing range.
-    state.updateEditingValue(const TextEditingValue(
-      text: 'foo composing bar',
-      selection: TextSelection.collapsed(offset: 4),
-      composing: TextRange(start: 4, end: 12),
-    ));
+    state.updateEditingValue(
+      const TextEditingValue(
+        text: 'foo composing bar',
+        selection: TextSelection.collapsed(offset: 4),
+        composing: TextRange(start: 4, end: 12),
+      ),
+    );
     expect(state.currentTextEditingValue.composing, const TextRange(start: 4, end: 12));
 
-    // Setting a selection within the composing range clears the composing range.
-    state.updateEditingValue(const TextEditingValue(
-      text: 'foo composing bar',
-      selection: TextSelection.collapsed(offset: 4),
-      composing: TextRange(start: 4, end: 12),
-    ));
+    // Setting a selection within the composing range doesn't clear the composing range.
+    state.updateEditingValue(
+      const TextEditingValue(
+        text: 'foo composing bar',
+        selection: TextSelection.collapsed(offset: 4),
+        composing: TextRange(start: 4, end: 12),
+      ),
+    );
     controller.selection = const TextSelection(baseOffset: 5, extentOffset: 7);
-    expect(state.currentTextEditingValue.composing, TextRange.empty);
+    expect(state.currentTextEditingValue.composing, const TextRange(start: 4, end: 12));
+    expect(
+      state.currentTextEditingValue.selection,
+      const TextSelection(baseOffset: 5, extentOffset: 7),
+    );
 
     // Reset the composing range.
-    state.updateEditingValue(const TextEditingValue(
-      text: 'foo composing bar',
-      selection: TextSelection.collapsed(offset: 4),
-      composing: TextRange(start: 4, end: 12),
-    ));
+    state.updateEditingValue(
+      const TextEditingValue(
+        text: 'foo composing bar',
+        selection: TextSelection.collapsed(offset: 4),
+        composing: TextRange(start: 4, end: 12),
+      ),
+    );
     expect(state.currentTextEditingValue.composing, const TextRange(start: 4, end: 12));
 
     // Setting a selection after the composing range clears the composing range.
-    state.updateEditingValue(const TextEditingValue(
-      text: 'foo composing bar',
-      selection: TextSelection.collapsed(offset: 4),
-      composing: TextRange(start: 4, end: 12),
-    ));
+    state.updateEditingValue(
+      const TextEditingValue(
+        text: 'foo composing bar',
+        selection: TextSelection.collapsed(offset: 4),
+        composing: TextRange(start: 4, end: 12),
+      ),
+    );
     controller.selection = const TextSelection(baseOffset: 13, extentOffset: 15);
     expect(state.currentTextEditingValue.composing, TextRange.empty);
   });
 
   group('Length formatter', () {
-    const int maxLength = 5;
+    const maxLength = 5;
 
     Future<void> setupWidget(
       WidgetTester tester,
@@ -11182,7 +11814,9 @@ void main() {
     }
 
     // Regression test for https://github.com/flutter/flutter/issues/65374.
-    testWidgets('will not cause crash while the TextEditingValue is composing', (WidgetTester tester) async {
+    testWidgets('will not cause crash while the TextEditingValue is composing', (
+      WidgetTester tester,
+    ) async {
       await setupWidget(
         tester,
         LengthLimitingTextInputFormatter(
@@ -11194,11 +11828,15 @@ void main() {
       final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
       state.updateEditingValue(const TextEditingValue(text: 'abcde'));
       expect(state.currentTextEditingValue.composing, TextRange.empty);
-      state.updateEditingValue(const TextEditingValue(text: 'abcde', composing: TextRange(start: 2, end: 4)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abcde', composing: TextRange(start: 2, end: 4)),
+      );
       expect(state.currentTextEditingValue.composing, const TextRange(start: 2, end: 4));
 
       // Formatter will not update format while the editing value is composing.
-      state.updateEditingValue(const TextEditingValue(text: 'abcdef', composing: TextRange(start: 2, end: 5)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abcdef', composing: TextRange(start: 2, end: 5)),
+      );
       expect(state.currentTextEditingValue.text, 'abcdef');
       expect(state.currentTextEditingValue.composing, const TextRange(start: 2, end: 5));
 
@@ -11220,21 +11858,25 @@ void main() {
       final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
       // Initially we're at maxLength with no composing text.
-      controller.text = 'abcde' ;
+      controller.text = 'abcde';
       assert(state.currentTextEditingValue == const TextEditingValue(text: 'abcde'));
 
       // Should be able to change the editing value if the new value is still shorter
       // than maxLength.
-      state.updateEditingValue(const TextEditingValue(text: 'abcde', composing: TextRange(start: 2, end: 4)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abcde', composing: TextRange(start: 2, end: 4)),
+      );
       expect(state.currentTextEditingValue.composing, const TextRange(start: 2, end: 4));
 
       // Reset.
-      controller.text = 'abcde' ;
+      controller.text = 'abcde';
       assert(state.currentTextEditingValue == const TextEditingValue(text: 'abcde'));
 
       // The text should not change when trying to insert when the text is already
       // at maxLength.
-      state.updateEditingValue(const TextEditingValue(text: 'abcdef', composing: TextRange(start: 5, end: 6)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abcdef', composing: TextRange(start: 5, end: 6)),
+      );
       expect(state.currentTextEditingValue.text, 'abcde');
       expect(state.currentTextEditingValue.composing, TextRange.empty);
     });
@@ -11256,11 +11898,15 @@ void main() {
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
       // When it's not longer than `maxLength`, it can still start composing.
-      state.updateEditingValue(const TextEditingValue(text: 'abcde', composing: TextRange(start: 3, end: 5)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abcde', composing: TextRange(start: 3, end: 5)),
+      );
       expect(state.currentTextEditingValue.composing, const TextRange(start: 3, end: 5));
 
       // `newValue` will be truncated if `composingMaxLengthEnforced`.
-      state.updateEditingValue(const TextEditingValue(text: 'abcdef', composing: TextRange(start: 3, end: 6)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abcdef', composing: TextRange(start: 3, end: 6)),
+      );
       expect(state.currentTextEditingValue.text, 'abcde');
       expect(state.currentTextEditingValue.composing, const TextRange(start: 3, end: 5));
 
@@ -11273,7 +11919,9 @@ void main() {
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
       // Start composing with a longer value, it should be the same state.
-      state.updateEditingValue(const TextEditingValue(text: '你好啊朋友们', composing: TextRange(start: 3, end: 6)));
+      state.updateEditingValue(
+        const TextEditingValue(text: '你好啊朋友们', composing: TextRange(start: 3, end: 6)),
+      );
       expect(state.currentTextEditingValue.composing, TextRange.empty);
     });
 
@@ -11288,16 +11936,19 @@ void main() {
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
       // When it's not longer than `maxLength`, it can still start composing.
-      state.updateEditingValue(const TextEditingValue(text: '你好啊朋友', composing: TextRange(start: 3, end: 5)));
+      state.updateEditingValue(
+        const TextEditingValue(text: '你好啊朋友', composing: TextRange(start: 3, end: 5)),
+      );
       expect(state.currentTextEditingValue.composing, const TextRange(start: 3, end: 5));
 
-      state.updateEditingValue(const TextEditingValue(text: '你好啊朋友们', composing: TextRange(start: 3, end: 6)));
+      state.updateEditingValue(
+        const TextEditingValue(text: '你好啊朋友们', composing: TextRange(start: 3, end: 6)),
+      );
       if (kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux ||
-        defaultTargetPlatform == TargetPlatform.fuchsia
-      ) {
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.fuchsia) {
         // `newValue` will not be truncated on couple platforms.
         expect(state.currentTextEditingValue.text, '你好啊朋友们');
         expect(state.currentTextEditingValue.composing, const TextRange(start: 3, end: 6));
@@ -11312,13 +11963,17 @@ void main() {
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
       // Start composing with a longer value, it should be the same state.
-      state.updateEditingValue(const TextEditingValue(text: '你好啊朋友们', composing: TextRange(start: 3, end: 6)));
+      state.updateEditingValue(
+        const TextEditingValue(text: '你好啊朋友们', composing: TextRange(start: 3, end: 6)),
+      );
       expect(state.currentTextEditingValue.text, '你好啊朋友');
       expect(state.currentTextEditingValue.composing, TextRange.empty);
     });
 
     // Regression test for https://github.com/flutter/flutter/issues/68086.
-    testWidgets("composing range removed if it's overflowed the truncated value's length", (WidgetTester tester) async {
+    testWidgets("composing range removed if it's overflowed the truncated value's length", (
+      WidgetTester tester,
+    ) async {
       await setupWidget(
         tester,
         LengthLimitingTextInputFormatter(
@@ -11334,7 +11989,9 @@ void main() {
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
       // Start composing.
-      state.updateEditingValue(const TextEditingValue(text: 'abcde', composing: TextRange(start: 3, end: 5)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abcde', composing: TextRange(start: 3, end: 5)),
+      );
       expect(state.currentTextEditingValue.composing, const TextRange(start: 3, end: 5));
 
       // Reset the value.
@@ -11342,7 +11999,9 @@ void main() {
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
       // Start composing with a range already overflowed the truncated length.
-      state.updateEditingValue(const TextEditingValue(text: 'abcdefgh', composing: TextRange(start: 5, end: 7)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abcdefgh', composing: TextRange(start: 5, end: 7)),
+      );
       expect(state.currentTextEditingValue.composing, TextRange.empty);
     });
 
@@ -11357,7 +12016,9 @@ void main() {
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
       // Start composing.
-      state.updateEditingValue(const TextEditingValue(text: 'abcde', composing: TextRange(start: 3, end: 5)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abcde', composing: TextRange(start: 3, end: 5)),
+      );
       expect(state.currentTextEditingValue.composing, const TextRange(start: 3, end: 5));
 
       // Reset the value.
@@ -11365,21 +12026,24 @@ void main() {
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
       // Start composing with a range already overflowed the truncated length.
-      state.updateEditingValue(const TextEditingValue(text: 'abcdefgh', composing: TextRange(start: 5, end: 7)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abcdefgh', composing: TextRange(start: 5, end: 7)),
+      );
       if (kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux ||
-        defaultTargetPlatform == TargetPlatform.fuchsia
-      ) {
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.fuchsia) {
         expect(state.currentTextEditingValue.composing, const TextRange(start: 5, end: 7));
       } else {
         expect(state.currentTextEditingValue.composing, TextRange.empty);
       }
     });
 
-    testWidgets("composing range handled correctly when it's overflowed", (WidgetTester tester) async {
-      const String string = '👨‍👩‍👦0123456';
+    testWidgets("composing range handled correctly when it's overflowed", (
+      WidgetTester tester,
+    ) async {
+      const string = '👨‍👩‍👦0123456';
 
       await setupWidget(tester, LengthLimitingTextInputFormatter(maxLength));
 
@@ -11390,11 +12054,15 @@ void main() {
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
       // Clearing composing range if collapsed.
-      state.updateEditingValue(const TextEditingValue(text: string, composing: TextRange(start: 10, end: 10)));
+      state.updateEditingValue(
+        const TextEditingValue(text: string, composing: TextRange(start: 10, end: 10)),
+      );
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
       // Clearing composing range if overflowed.
-      state.updateEditingValue(const TextEditingValue(text: string, composing: TextRange(start: 10, end: 11)));
+      state.updateEditingValue(
+        const TextEditingValue(text: string, composing: TextRange(start: 10, end: 11)),
+      );
       expect(state.currentTextEditingValue.composing, TextRange.empty);
     });
 
@@ -11409,18 +12077,21 @@ void main() {
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
       // Start typing in the middle.
-      state.updateEditingValue(const TextEditingValue(text: 'abDEc', composing: TextRange(start: 3, end: 4)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abDEc', composing: TextRange(start: 3, end: 4)),
+      );
       expect(state.currentTextEditingValue.text, 'abDEc');
       expect(state.currentTextEditingValue.composing, const TextRange(start: 3, end: 4));
 
       // Keep typing when the value has exceed the limitation.
-      state.updateEditingValue(const TextEditingValue(text: 'abDEFc', composing: TextRange(start: 3, end: 5)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abDEFc', composing: TextRange(start: 3, end: 5)),
+      );
       if (kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux ||
-        defaultTargetPlatform == TargetPlatform.fuchsia
-      ) {
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.fuchsia) {
         expect(state.currentTextEditingValue.text, 'abDEFc');
         expect(state.currentTextEditingValue.composing, const TextRange(start: 3, end: 5));
       } else {
@@ -11433,33 +12104,37 @@ void main() {
       expect(state.currentTextEditingValue.text, 'abDEc');
       expect(state.currentTextEditingValue.composing, TextRange.empty);
 
-      state.updateEditingValue(const TextEditingValue(text: 'abDEFc', composing: TextRange(start: 4, end: 5)));
+      state.updateEditingValue(
+        const TextEditingValue(text: 'abDEFc', composing: TextRange(start: 4, end: 5)),
+      );
       expect(state.currentTextEditingValue.composing, TextRange.empty);
     });
   });
 
   group('callback errors', () {
-    const String errorText = 'Test EditableText callback error';
+    const errorText = 'Test EditableText callback error';
 
     testWidgets('onSelectionChanged can throw errors', (WidgetTester tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: EditableText(
-          showSelectionHandles: true,
-          maxLines: 2,
-          controller: TextEditingController(
-            text: 'flutter is the best!',
+      controller.text = 'flutter is the best!';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            showSelectionHandles: true,
+            maxLines: 2,
+            controller: controller,
+            focusNode: focusNode,
+            cursorColor: Colors.red,
+            backgroundCursorColor: Colors.blue,
+            style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+            keyboardType: TextInputType.text,
+            selectionControls: materialTextSelectionControls,
+            onSelectionChanged: (TextSelection selection, SelectionChangedCause? cause) {
+              throw FlutterError(errorText);
+            },
           ),
-          focusNode: FocusNode(),
-          cursorColor: Colors.red,
-          backgroundCursorColor: Colors.blue,
-          style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
-          keyboardType: TextInputType.text,
-          selectionControls: materialTextSelectionControls,
-          onSelectionChanged: (TextSelection selection, SelectionChangedCause? cause) {
-            throw FlutterError(errorText);
-          },
         ),
-      ));
+      );
 
       // Interact with the field to establish the input connection.
       await tester.tap(find.byType(EditableText));
@@ -11469,23 +12144,25 @@ void main() {
     });
 
     testWidgets('onChanged can throw errors', (WidgetTester tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: EditableText(
-          showSelectionHandles: true,
-          maxLines: 2,
-          controller: TextEditingController(
-            text: 'flutter is the best!',
+      controller.text = 'flutter is the best!';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            showSelectionHandles: true,
+            maxLines: 2,
+            controller: controller,
+            focusNode: focusNode,
+            cursorColor: Colors.red,
+            backgroundCursorColor: Colors.blue,
+            style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+            keyboardType: TextInputType.text,
+            onChanged: (String text) {
+              throw FlutterError(errorText);
+            },
           ),
-          focusNode: FocusNode(),
-          cursorColor: Colors.red,
-          backgroundCursorColor: Colors.blue,
-          style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
-          keyboardType: TextInputType.text,
-          onChanged: (String text) {
-            throw FlutterError(errorText);
-          },
         ),
-      ));
+      );
 
       // Modify the text and expect an error from onChanged.
       await tester.enterText(find.byType(EditableText), '...');
@@ -11495,23 +12172,25 @@ void main() {
     });
 
     testWidgets('onEditingComplete can throw errors', (WidgetTester tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: EditableText(
-          showSelectionHandles: true,
-          maxLines: 2,
-          controller: TextEditingController(
-            text: 'flutter is the best!',
+      controller.text = 'flutter is the best!';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            showSelectionHandles: true,
+            maxLines: 2,
+            controller: controller,
+            focusNode: focusNode,
+            cursorColor: Colors.red,
+            backgroundCursorColor: Colors.blue,
+            style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+            keyboardType: TextInputType.text,
+            onEditingComplete: () {
+              throw FlutterError(errorText);
+            },
           ),
-          focusNode: FocusNode(),
-          cursorColor: Colors.red,
-          backgroundCursorColor: Colors.blue,
-          style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
-          keyboardType: TextInputType.text,
-          onEditingComplete: () {
-            throw FlutterError(errorText);
-          },
         ),
-      ));
+      );
 
       // Interact with the field to establish the input connection.
       final Offset topLeft = tester.getTopLeft(find.byType(EditableText));
@@ -11526,23 +12205,25 @@ void main() {
     });
 
     testWidgets('onSubmitted can throw errors', (WidgetTester tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: EditableText(
-          showSelectionHandles: true,
-          maxLines: 2,
-          controller: TextEditingController(
-            text: 'flutter is the best!',
+      controller.text = 'flutter is the best!';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            showSelectionHandles: true,
+            maxLines: 2,
+            controller: controller,
+            focusNode: focusNode,
+            cursorColor: Colors.red,
+            backgroundCursorColor: Colors.blue,
+            style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+            keyboardType: TextInputType.text,
+            onSubmitted: (String text) {
+              throw FlutterError(errorText);
+            },
           ),
-          focusNode: FocusNode(),
-          cursorColor: Colors.red,
-          backgroundCursorColor: Colors.blue,
-          style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
-          keyboardType: TextInputType.text,
-          onSubmitted: (String text) {
-            throw FlutterError(errorText);
-          },
         ),
-      ));
+      );
 
       // Interact with the field to establish the input connection.
       final Offset topLeft = tester.getTopLeft(find.byType(EditableText));
@@ -11557,25 +12238,26 @@ void main() {
     });
 
     testWidgets('input formatters can throw errors', (WidgetTester tester) async {
-      final TextInputFormatter badFormatter = TextInputFormatter.withFunction(
+      final badFormatter = TextInputFormatter.withFunction(
         (TextEditingValue oldValue, TextEditingValue newValue) => throw FlutterError(errorText),
       );
-      final TextEditingController controller = TextEditingController(
-        text: 'flutter is the best!',
-      );
-      await tester.pumpWidget(MaterialApp(
-        home: EditableText(
-          showSelectionHandles: true,
-          maxLines: 2,
-          controller: controller,
-          inputFormatters: <TextInputFormatter>[badFormatter],
-          focusNode: FocusNode(),
-          cursorColor: Colors.red,
-          backgroundCursorColor: Colors.blue,
-          style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
-          keyboardType: TextInputType.text,
+      controller.text = 'flutter is the best!';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            showSelectionHandles: true,
+            maxLines: 2,
+            controller: controller,
+            inputFormatters: <TextInputFormatter>[badFormatter],
+            focusNode: focusNode,
+            cursorColor: Colors.red,
+            backgroundCursorColor: Colors.blue,
+            style: Typography.material2018().black.titleMedium!.copyWith(fontFamily: 'Roboto'),
+            keyboardType: TextInputType.text,
+          ),
         ),
-      ));
+      );
 
       // Interact with the field to establish the input connection.
       await tester.tap(find.byType(EditableText));
@@ -11592,7 +12274,9 @@ void main() {
 
   // Regression test for https://github.com/flutter/flutter/issues/72400.
   testWidgets("delete doesn't cause crash when selection is -1,-1", (WidgetTester tester) async {
-    final UnsettableController unsettableController = UnsettableController();
+    final unsettableController = UnsettableController();
+    addTearDown(unsettableController.dispose);
+
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(),
@@ -11613,55 +12297,70 @@ void main() {
     await tester.pump(); // Wait for the autofocus to take effect.
 
     // Delete
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.delete,
-      ],
-      targetPlatform: TargetPlatform.android,
-    );
+    await sendKeys(tester, <LogicalKeyboardKey>[
+      LogicalKeyboardKey.delete,
+    ], targetPlatform: TargetPlatform.android);
 
     expect(tester.takeException(), null);
   });
 
-  testWidgets('can change behavior by overriding text editing shortcuts', (WidgetTester tester) async {
-    const  Map<SingleActivator, Intent> testShortcuts = <SingleActivator, Intent>{
-      SingleActivator(LogicalKeyboardKey.arrowLeft): ExtendSelectionByCharacterIntent(forward: true, collapseSelection: true),
-      SingleActivator(LogicalKeyboardKey.keyX, control: true): ExtendSelectionByCharacterIntent(forward: true, collapseSelection: true),
-      SingleActivator(LogicalKeyboardKey.keyC, control: true): ExtendSelectionByCharacterIntent(forward: true, collapseSelection: true),
-      SingleActivator(LogicalKeyboardKey.keyV, control: true): ExtendSelectionByCharacterIntent(forward: true, collapseSelection: true),
-      SingleActivator(LogicalKeyboardKey.keyA, control: true): ExtendSelectionByCharacterIntent(forward: true, collapseSelection: true),
+  testWidgets('can change behavior by overriding text editing shortcuts', (
+    WidgetTester tester,
+  ) async {
+    const testShortcuts = <SingleActivator, Intent>{
+      SingleActivator(LogicalKeyboardKey.arrowLeft): ExtendSelectionByCharacterIntent(
+        forward: true,
+        collapseSelection: true,
+      ),
+      SingleActivator(LogicalKeyboardKey.keyX, control: true): ExtendSelectionByCharacterIntent(
+        forward: true,
+        collapseSelection: true,
+      ),
+      SingleActivator(LogicalKeyboardKey.keyC, control: true): ExtendSelectionByCharacterIntent(
+        forward: true,
+        collapseSelection: true,
+      ),
+      SingleActivator(LogicalKeyboardKey.keyV, control: true): ExtendSelectionByCharacterIntent(
+        forward: true,
+        collapseSelection: true,
+      ),
+      SingleActivator(LogicalKeyboardKey.keyA, control: true): ExtendSelectionByCharacterIntent(
+        forward: true,
+        collapseSelection: true,
+      ),
     };
-    final TextEditingController controller = TextEditingController(text: testText);
+    controller.text = testText;
     controller.selection = const TextSelection(
       baseOffset: 0,
       extentOffset: 0,
       affinity: TextAffinity.upstream,
     );
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: Shortcuts(
-            shortcuts: testShortcuts,
-            child: EditableText(
-              maxLines: 10,
-              controller: controller,
-              showSelectionHandles: true,
-              autofocus: true,
-              focusNode: focusNode,
-              style: Typography.material2018().black.titleMedium!,
-              cursorColor: Colors.blue,
-              backgroundCursorColor: Colors.grey,
-              selectionControls: materialTextSelectionControls,
-              keyboardType: TextInputType.text,
-              textAlign: TextAlign.right,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 400,
+            child: Shortcuts(
+              shortcuts: testShortcuts,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
 
     await tester.pump(); // Wait for autofocus to take effect.
 
@@ -11689,125 +12388,41 @@ void main() {
     // On web, using keyboard for selection is handled by the browser.
   }, skip: kIsWeb); // [intended]
 
-  testWidgets('navigating by word', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: 'word word word');
-    // word wo|rd| word
-    controller.selection = const TextSelection(
-      baseOffset: 7,
-      extentOffset: 9,
-      affinity: TextAffinity.upstream,
-    );
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            autofocus: true,
-            focusNode: focusNode,
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            keyboardType: TextInputType.text,
+  testWidgets(
+    'navigating by word',
+    (WidgetTester tester) async {
+      controller.text = 'word word word';
+      // word wo|rd| word
+      controller.selection = const TextSelection(
+        baseOffset: 7,
+        extentOffset: 9,
+        affinity: TextAffinity.upstream,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                keyboardType: TextInputType.text,
+              ),
+            ),
           ),
         ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 7);
-    expect(controller.selection.extentOffset, 9);
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
-      shift: true,
-      wordModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    // word wo|rd word|
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 7);
-    expect(controller.selection.extentOffset, 14);
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
-      shift: true,
-      wordModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    // word wo|rd |word
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 7);
-    expect(controller.selection.extentOffset, 10);
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
-      shift: true,
-      wordModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    if (defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.iOS) {
-      // word wo|rd word
-      expect(controller.selection.isCollapsed, true);
-      expect(controller.selection.baseOffset, 7);
-      expect(controller.selection.extentOffset, 7);
-
-      await sendKeys(
-        tester,
-        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
-        shift: true,
-        wordModifier: true,
-        targetPlatform: defaultTargetPlatform,
       );
-    }
 
-    // word |wo|rd word
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 7);
-    expect(controller.selection.extentOffset, 5);
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
-      shift: true,
-      wordModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    // |word wo|rd word
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 7);
-    expect(controller.selection.extentOffset, 0);
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
-      shift: true,
-      wordModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    // word| wo|rd word
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 7);
-    expect(controller.selection.extentOffset, 4);
-
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
-      shift: true,
-      wordModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    if (defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.iOS) {
-      // word wo|rd word
-      expect(controller.selection.isCollapsed, true);
+      await tester.pump(); // Wait for autofocus to take effect.
+      expect(controller.selection.isCollapsed, false);
       expect(controller.selection.baseOffset, 7);
-      expect(controller.selection.extentOffset, 7);
+      expect(controller.selection.extentOffset, 9);
 
       await sendKeys(
         tester,
@@ -11816,633 +12431,667 @@ void main() {
         wordModifier: true,
         targetPlatform: defaultTargetPlatform,
       );
-    }
+      await tester.pump();
+      // word wo|rd word|
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 7);
+      expect(controller.selection.extentOffset, 14);
 
-    // word wo|rd| word
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 7);
-    expect(controller.selection.extentOffset, 9);
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+        shift: true,
+        wordModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      // word wo|rd |word
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 7);
+      expect(controller.selection.extentOffset, 10);
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+        shift: true,
+        wordModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      if (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.iOS) {
+        // word wo|rd word
+        expect(controller.selection.isCollapsed, true);
+        expect(controller.selection.baseOffset, 7);
+        expect(controller.selection.extentOffset, 7);
 
-    // On web, using keyboard for selection is handled by the browser.
-  }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
+        await sendKeys(
+          tester,
+          <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+          shift: true,
+          wordModifier: true,
+          targetPlatform: defaultTargetPlatform,
+        );
+      }
 
-  testWidgets('navigating multiline text', (WidgetTester tester) async {
-    const String multilineText = 'word word word\nword word\nword'; // 15 + 10 + 4;
-    final TextEditingController controller = TextEditingController(text: multilineText);
-    // wo|rd wo|rd
-    controller.selection = const TextSelection(
-      baseOffset: 17,
-      extentOffset: 22,
-      affinity: TextAffinity.upstream,
-    );
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            autofocus: true,
-            focusNode: focusNode,
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            keyboardType: TextInputType.text,
-          ),
-        ),
-      ),
-    ));
+      // word |wo|rd word
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 7);
+      expect(controller.selection.extentOffset, 5);
 
-    await tester.pump(); // Wait for autofocus to take effect.
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 17);
-    expect(controller.selection.extentOffset, 22);
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+        shift: true,
+        wordModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      // |word wo|rd word
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 7);
+      expect(controller.selection.extentOffset, 0);
 
-    // Multiple expandRightByLine shortcuts only move to the end of the line and
-    // not to the next line.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
-      shift: true,
-      lineModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 17);
-    expect(controller.selection.extentOffset, 24);
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+        shift: true,
+        wordModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      // word| wo|rd word
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 7);
+      expect(controller.selection.extentOffset, 4);
 
-    // Multiple expandLeftByLine shortcuts only move to the start of the line
-    // and not to the previous line.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-        LogicalKeyboardKey.arrowLeft,
-        LogicalKeyboardKey.arrowLeft,
-      ],
-      shift: true,
-      lineModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(controller.selection.isCollapsed, false);
-    switch (defaultTargetPlatform) {
-      // These platforms extend by line.
-      case TargetPlatform.android:
-      case TargetPlatform.fuchsia:
-      case TargetPlatform.linux:
-      case TargetPlatform.windows:
-        expect(controller.selection.baseOffset, 17);
-        expect(controller.selection.extentOffset, 15);
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+        shift: true,
+        wordModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      if (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.iOS) {
+        // word wo|rd word
+        expect(controller.selection.isCollapsed, true);
+        expect(controller.selection.baseOffset, 7);
+        expect(controller.selection.extentOffset, 7);
 
-      // Mac and iOS expand by line.
-      case TargetPlatform.iOS:
-      case TargetPlatform.macOS:
-        expect(controller.selection.baseOffset, 15);
-        expect(controller.selection.extentOffset, 24);
-    }
+        await sendKeys(
+          tester,
+          <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+          shift: true,
+          wordModifier: true,
+          targetPlatform: defaultTargetPlatform,
+        );
+      }
 
-    // Set the caret to the end of a line.
-    controller.selection = const TextSelection(
-      baseOffset: 24,
-      extentOffset: 24,
-      affinity: TextAffinity.upstream,
-    );
-    await tester.pump();
-    expect(controller.selection.isCollapsed, true);
-    expect(controller.selection.baseOffset, 24);
-    expect(controller.selection.extentOffset, 24);
+      // word wo|rd| word
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 7);
+      expect(controller.selection.extentOffset, 9);
 
-    // Can't expand right by line any further.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-      ],
-      shift: true,
-      lineModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(controller.selection.isCollapsed, true);
-    expect(controller.selection.baseOffset, 24);
-    expect(controller.selection.extentOffset, 24);
-
-    // Can select the entire line from the end.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
-      shift: true,
-      lineModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 24);
-    expect(controller.selection.extentOffset, 15);
-
-    // Set the caret to the start of a line.
-    controller.selection = const TextSelection(
-      baseOffset: 15,
-      extentOffset: 15,
-    );
-    await tester.pump();
-    expect(controller.selection.isCollapsed, true);
-    expect(controller.selection.baseOffset, 15);
-    expect(controller.selection.extentOffset, 15);
-
-    // Can't expand let any further.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
-      shift: true,
-      lineModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(controller.selection.isCollapsed, true);
-    expect(controller.selection.baseOffset, 15);
-    expect(controller.selection.extentOffset, 15);
-
-    // Can select the entire line from the start.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-      ],
-      shift: true,
-      lineModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 15);
-    expect(controller.selection.extentOffset, 24);
-    // On web, using keyboard for selection is handled by the browser.
-  }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
-
-  testWidgets("Mac's expand by line behavior on multiple lines", (WidgetTester tester) async {
-    const String multilineText = 'word word word\nword word\nword'; // 15 + 10 + 4;
-    final TextEditingController controller = TextEditingController(text: multilineText);
-    // word word word
-    // wo|rd word
-    // w|ord
-    controller.selection = const TextSelection(
-      baseOffset: 17,
-      extentOffset: 26,
-      affinity: TextAffinity.upstream,
-    );
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            autofocus: true,
-            focusNode: focusNode,
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            keyboardType: TextInputType.text,
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 17);
-    expect(controller.selection.extentOffset, 26);
-
-    // Expanding right to the end of the line moves the extent on the second
-    // selected line.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-      ],
-      shift: true,
-      lineModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 17);
-    expect(controller.selection.extentOffset, 29);
-
-    // Expanding right again does nothing.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-        LogicalKeyboardKey.arrowRight,
-      ],
-      shift: true,
-      lineModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 17);
-    expect(controller.selection.extentOffset, 29);
-
-    // Expanding left by line moves the base on the first selected line to the
-    // beginning of that line.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
-      shift: true,
-      lineModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 15);
-    expect(controller.selection.extentOffset, 29);
-
-    // Expanding left again does nothing.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-        LogicalKeyboardKey.arrowLeft,
-        LogicalKeyboardKey.arrowLeft,
-      ],
-      shift: true,
-      lineModifier: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 15);
-    expect(controller.selection.extentOffset, 29);
-  },
-    // On web, using keyboard for selection is handled by the browser.
-    skip: kIsWeb, // [intended]
-    variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.macOS })
-  );
-
-  testWidgets("Mac's expand extent position", (WidgetTester tester) async {
-    const String testText = 'Now is the time for all good people to come to the aid of their country';
-    final TextEditingController controller = TextEditingController(text: testText);
-    // Start the selection in the middle somewhere.
-    controller.selection = const TextSelection.collapsed(offset: 10);
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            autofocus: true,
-            focusNode: focusNode,
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            keyboardType: TextInputType.text,
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-    expect(controller.selection.isCollapsed, true);
-    expect(controller.selection.baseOffset, 10);
-
-    // With cursor in the middle of the line, cmd + left. Left end is the extent.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
-      lineModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(
-      controller.selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 0,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
-    );
-
-    // With cursor in the middle of the line, cmd + right. Right end is the extent.
-    controller.selection = const TextSelection.collapsed(offset: 10);
-    await tester.pump();
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-      ],
-      lineModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(
-      controller.selection,
-      equals(
-        const TextSelection(
-          baseOffset: 10,
-          extentOffset: 29,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
-    );
-
-    // With cursor in the middle of the line, cmd + left then cmd + right. Left end is the extent.
-    controller.selection = const TextSelection.collapsed(offset: 10);
-    await tester.pump();
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
-      lineModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-      ],
-      lineModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(
-      controller.selection,
-      equals(
-        const TextSelection(
-          baseOffset: 29,
-          extentOffset: 0,
-        ),
-      ),
-    );
-
-    // With cursor in the middle of the line, cmd + right then cmd + left. Right end is the extent.
-    controller.selection = const TextSelection.collapsed(offset: 10);
-    await tester.pump();
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-      ],
-      lineModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    await tester.pump();
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
-      lineModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(
-      controller.selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 29,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
-    );
-
-    // With an RTL selection in the middle of the line, cmd + left. Left end is the extent.
-    controller.selection = const TextSelection(baseOffset: 12, extentOffset: 8);
-    await tester.pump();
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
-      lineModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(
-      controller.selection,
-      equals(
-        const TextSelection(
-          baseOffset: 12,
-          extentOffset: 0,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
-    );
-
-    // With an RTL selection in the middle of the line, cmd + right. Left end is the extent.
-    controller.selection = const TextSelection(baseOffset: 12, extentOffset: 8);
-    await tester.pump();
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-      ],
-      lineModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(
-      controller.selection,
-      equals(
-        const TextSelection(
-          baseOffset: 29,
-          extentOffset: 8,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
-    );
-
-    // With an LTR selection in the middle of the line, cmd + right. Right end is the extent.
-    controller.selection = const TextSelection(baseOffset: 8, extentOffset: 12);
-    await tester.pump();
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowRight,
-      ],
-      lineModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(
-      controller.selection,
-      equals(
-        const TextSelection(
-          baseOffset: 8,
-          extentOffset: 29,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
-    );
-
-    // With an LTR selection in the middle of the line, cmd + left. Right end is the extent.
-    controller.selection = const TextSelection(baseOffset: 8, extentOffset: 12);
-    await tester.pump();
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.arrowLeft,
-      ],
-      lineModifier: true,
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-    expect(
-      controller.selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 12,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
-    );
-  },
-    // On web, using keyboard for selection is handled by the browser.
-    skip: kIsWeb, // [intended]
-    variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.macOS })
-  );
-
-  testWidgets('expanding selection to start/end single line', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: 'word word word');
-    // word wo|rd| word
-    controller.selection = const TextSelection(
-      baseOffset: 7,
-      extentOffset: 9,
-      affinity: TextAffinity.upstream,
-    );
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            autofocus: true,
-            focusNode: focusNode,
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            keyboardType: TextInputType.text,
-          ),
-        ),
-      ),
-    ));
-
-    await tester.pump(); // Wait for autofocus to take effect.
-    expect(controller.selection.isCollapsed, false);
-    expect(controller.selection.baseOffset, 7);
-    expect(controller.selection.extentOffset, 9);
-
-    final String targetPlatform = defaultTargetPlatform.toString();
-    final String platform = targetPlatform.substring(targetPlatform.indexOf('.') + 1).toLowerCase();
-
-    // Select to the start.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.home,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    // |word word| word
-    expect(
-      controller.selection,
-      equals(
-        const TextSelection(
-          baseOffset: 9,
-          extentOffset: 0,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
-      reason: 'on $platform',
-    );
-
-    // Select to the end.
-    await sendKeys(
-      tester,
-      <LogicalKeyboardKey>[
-        LogicalKeyboardKey.end,
-      ],
-      shift: true,
-      targetPlatform: defaultTargetPlatform,
-    );
-
-    // |word word word|
-    expect(
-      controller.selection,
-      equals(
-        const TextSelection(
-          baseOffset: 0,
-          extentOffset: 14,
-          affinity: TextAffinity.upstream,
-        ),
-      ),
-      reason: 'on $platform',
-    );
-
-  },
       // On web, using keyboard for selection is handled by the browser.
-      skip: kIsWeb, // [intended]
-      variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.macOS })
+    },
+    variant: TargetPlatformVariant.all(),
+    skip: kIsWeb, // [intended]
   );
 
-  testWidgets('can change text editing behavior by overriding actions', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: testText);
+  testWidgets(
+    'navigating multiline text',
+    (WidgetTester tester) async {
+      controller.text = 'word word word\nword word\nword'; // 15 + 10 + 4;
+      // wo|rd wo|rd
+      controller.selection = const TextSelection(
+        baseOffset: 17,
+        extentOffset: 22,
+        affinity: TextAffinity.upstream,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                keyboardType: TextInputType.text,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 17);
+      expect(controller.selection.extentOffset, 22);
+
+      // Multiple expandRightByLine shortcuts only move to the end of the line and
+      // not to the next line.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[
+          LogicalKeyboardKey.arrowRight,
+          LogicalKeyboardKey.arrowRight,
+          LogicalKeyboardKey.arrowRight,
+        ],
+        shift: true,
+        lineModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 17);
+      expect(controller.selection.extentOffset, 24);
+
+      // Multiple expandLeftByLine shortcuts only move to the start of the line
+      // and not to the previous line.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[
+          LogicalKeyboardKey.arrowLeft,
+          LogicalKeyboardKey.arrowLeft,
+          LogicalKeyboardKey.arrowLeft,
+        ],
+        shift: true,
+        lineModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(controller.selection.isCollapsed, false);
+      switch (defaultTargetPlatform) {
+        // These platforms extend by line.
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          expect(controller.selection.baseOffset, 17);
+          expect(controller.selection.extentOffset, 15);
+
+        // Mac and iOS expand by line.
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          expect(controller.selection.baseOffset, 15);
+          expect(controller.selection.extentOffset, 24);
+      }
+
+      // Set the caret to the end of a line.
+      controller.selection = const TextSelection(
+        baseOffset: 24,
+        extentOffset: 24,
+        affinity: TextAffinity.upstream,
+      );
+      await tester.pump();
+      expect(controller.selection.isCollapsed, true);
+      expect(controller.selection.baseOffset, 24);
+      expect(controller.selection.extentOffset, 24);
+
+      // Can't expand right by line any further.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+        shift: true,
+        lineModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(controller.selection.isCollapsed, true);
+      expect(controller.selection.baseOffset, 24);
+      expect(controller.selection.extentOffset, 24);
+
+      // Can select the entire line from the end.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+        shift: true,
+        lineModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 24);
+      expect(controller.selection.extentOffset, 15);
+
+      // Set the caret to the start of a line.
+      controller.selection = const TextSelection(baseOffset: 15, extentOffset: 15);
+      await tester.pump();
+      expect(controller.selection.isCollapsed, true);
+      expect(controller.selection.baseOffset, 15);
+      expect(controller.selection.extentOffset, 15);
+
+      // Can't expand let any further.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+        shift: true,
+        lineModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(controller.selection.isCollapsed, true);
+      expect(controller.selection.baseOffset, 15);
+      expect(controller.selection.extentOffset, 15);
+
+      // Can select the entire line from the start.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+        shift: true,
+        lineModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 15);
+      expect(controller.selection.extentOffset, 24);
+      // On web, using keyboard for selection is handled by the browser.
+    },
+    variant: TargetPlatformVariant.all(),
+    skip: kIsWeb, // [intended]
+  );
+
+  testWidgets(
+    "Mac's expand by line behavior on multiple lines",
+    (WidgetTester tester) async {
+      controller.text = 'word word word\nword word\nword'; // 15 + 10 + 4;
+      // word word word
+      // wo|rd word
+      // w|ord
+      controller.selection = const TextSelection(
+        baseOffset: 17,
+        extentOffset: 26,
+        affinity: TextAffinity.upstream,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                keyboardType: TextInputType.text,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 17);
+      expect(controller.selection.extentOffset, 26);
+
+      // Expanding right to the end of the line moves the extent on the second
+      // selected line.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+        shift: true,
+        lineModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 17);
+      expect(controller.selection.extentOffset, 29);
+
+      // Expanding right again does nothing.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[
+          LogicalKeyboardKey.arrowRight,
+          LogicalKeyboardKey.arrowRight,
+          LogicalKeyboardKey.arrowRight,
+        ],
+        shift: true,
+        lineModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 17);
+      expect(controller.selection.extentOffset, 29);
+
+      // Expanding left by line moves the base on the first selected line to the
+      // beginning of that line.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+        shift: true,
+        lineModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 15);
+      expect(controller.selection.extentOffset, 29);
+
+      // Expanding left again does nothing.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[
+          LogicalKeyboardKey.arrowLeft,
+          LogicalKeyboardKey.arrowLeft,
+          LogicalKeyboardKey.arrowLeft,
+        ],
+        shift: true,
+        lineModifier: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 15);
+      expect(controller.selection.extentOffset, 29);
+    },
+    // On web, using keyboard for selection is handled by the browser.
+    skip: kIsWeb, // [intended]
+    variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.macOS}),
+  );
+
+  testWidgets(
+    "Mac's expand extent position",
+    (WidgetTester tester) async {
+      controller.text = 'Now is the time for all good people to come to the aid of their country';
+      // Start the selection in the middle somewhere.
+      controller.selection = const TextSelection.collapsed(offset: 10);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                keyboardType: TextInputType.text,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+      expect(controller.selection.isCollapsed, true);
+      expect(controller.selection.baseOffset, 10);
+
+      // With cursor in the middle of the line, cmd + left. Left end is the extent.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+        lineModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(
+        controller.selection,
+        equals(
+          const TextSelection(baseOffset: 10, extentOffset: 0, affinity: TextAffinity.upstream),
+        ),
+      );
+
+      // With cursor in the middle of the line, cmd + right. Right end is the extent.
+      controller.selection = const TextSelection.collapsed(offset: 10);
+      await tester.pump();
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+        lineModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(
+        controller.selection,
+        equals(
+          const TextSelection(baseOffset: 10, extentOffset: 29, affinity: TextAffinity.upstream),
+        ),
+      );
+
+      // With cursor in the middle of the line, cmd + left then cmd + right. Left end is the extent.
+      controller.selection = const TextSelection.collapsed(offset: 10);
+      await tester.pump();
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+        lineModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      await tester.pump();
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+        lineModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(controller.selection, equals(const TextSelection(baseOffset: 29, extentOffset: 0)));
+
+      // With cursor in the middle of the line, cmd + right then cmd + left. Right end is the extent.
+      controller.selection = const TextSelection.collapsed(offset: 10);
+      await tester.pump();
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+        lineModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      await tester.pump();
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+        lineModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(
+        controller.selection,
+        equals(
+          const TextSelection(baseOffset: 0, extentOffset: 29, affinity: TextAffinity.upstream),
+        ),
+      );
+
+      // With an RTL selection in the middle of the line, cmd + left. Left end is the extent.
+      controller.selection = const TextSelection(baseOffset: 12, extentOffset: 8);
+      await tester.pump();
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+        lineModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(
+        controller.selection,
+        equals(
+          const TextSelection(baseOffset: 12, extentOffset: 0, affinity: TextAffinity.upstream),
+        ),
+      );
+
+      // With an RTL selection in the middle of the line, cmd + right. Left end is the extent.
+      controller.selection = const TextSelection(baseOffset: 12, extentOffset: 8);
+      await tester.pump();
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+        lineModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(
+        controller.selection,
+        equals(
+          const TextSelection(baseOffset: 29, extentOffset: 8, affinity: TextAffinity.upstream),
+        ),
+      );
+
+      // With an LTR selection in the middle of the line, cmd + right. Right end is the extent.
+      controller.selection = const TextSelection(baseOffset: 8, extentOffset: 12);
+      await tester.pump();
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+        lineModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(
+        controller.selection,
+        equals(
+          const TextSelection(baseOffset: 8, extentOffset: 29, affinity: TextAffinity.upstream),
+        ),
+      );
+
+      // With an LTR selection in the middle of the line, cmd + left. Right end is the extent.
+      controller.selection = const TextSelection(baseOffset: 8, extentOffset: 12);
+      await tester.pump();
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.arrowLeft],
+        lineModifier: true,
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+      expect(
+        controller.selection,
+        equals(
+          const TextSelection(baseOffset: 0, extentOffset: 12, affinity: TextAffinity.upstream),
+        ),
+      );
+    },
+    // On web, using keyboard for selection is handled by the browser.
+    skip: kIsWeb, // [intended]
+    variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.macOS}),
+  );
+
+  testWidgets(
+    'expanding selection to start/end single line',
+    (WidgetTester tester) async {
+      controller.text = 'word word word';
+      // word wo|rd| word
+      controller.selection = const TextSelection(
+        baseOffset: 7,
+        extentOffset: 9,
+        affinity: TextAffinity.upstream,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                keyboardType: TextInputType.text,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+      expect(controller.selection.isCollapsed, false);
+      expect(controller.selection.baseOffset, 7);
+      expect(controller.selection.extentOffset, 9);
+
+      final targetPlatform = defaultTargetPlatform.toString();
+      final String platform = targetPlatform
+          .substring(targetPlatform.indexOf('.') + 1)
+          .toLowerCase();
+
+      // Select to the start.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.home],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+
+      // |word word| word
+      expect(
+        controller.selection,
+        equals(
+          const TextSelection(baseOffset: 9, extentOffset: 0, affinity: TextAffinity.upstream),
+        ),
+        reason: 'on $platform',
+      );
+
+      // Select to the end.
+      await sendKeys(
+        tester,
+        <LogicalKeyboardKey>[LogicalKeyboardKey.end],
+        shift: true,
+        targetPlatform: defaultTargetPlatform,
+      );
+
+      // |word word word|
+      expect(
+        controller.selection,
+        equals(
+          const TextSelection(baseOffset: 0, extentOffset: 14, affinity: TextAffinity.upstream),
+        ),
+        reason: 'on $platform',
+      );
+    },
+    // On web, using keyboard for selection is handled by the browser.
+    skip: kIsWeb, // [intended]
+    variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.macOS}),
+  );
+
+  testWidgets('can change text editing behavior by overriding actions', (
+    WidgetTester tester,
+  ) async {
+    controller.text = testText;
     controller.selection = const TextSelection(
       baseOffset: 0,
       extentOffset: 0,
       affinity: TextAffinity.upstream,
     );
-    bool myIntentWasCalled = false;
-    final CallbackAction<ExtendSelectionByCharacterIntent> overrideAction = CallbackAction<ExtendSelectionByCharacterIntent>(
-      onInvoke: (ExtendSelectionByCharacterIntent intent) { myIntentWasCalled = true; return null; },
+    var myIntentWasCalled = false;
+    final overrideAction = CallbackAction<ExtendSelectionByCharacterIntent>(
+      onInvoke: (ExtendSelectionByCharacterIntent intent) {
+        myIntentWasCalled = true;
+        return null;
+      },
     );
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: Actions(
-            actions: <Type, Action<Intent>>{ ExtendSelectionByCharacterIntent: overrideAction, },
-            child: EditableText(
-              maxLines: 10,
-              controller: controller,
-              showSelectionHandles: true,
-              autofocus: true,
-              focusNode: focusNode,
-              style: Typography.material2018().black.titleMedium!,
-              cursorColor: Colors.blue,
-              backgroundCursorColor: Colors.grey,
-              selectionControls: materialTextSelectionControls,
-              keyboardType: TextInputType.text,
-              textAlign: TextAlign.right,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 400,
+            child: Actions(
+              actions: <Type, Action<Intent>>{ExtendSelectionByCharacterIntent: overrideAction},
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pump(); // Wait for autofocus to take effect.
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
@@ -12454,44 +13103,120 @@ void main() {
     // On web, using keyboard for selection is handled by the browser.
   }, skip: kIsWeb); // [intended]
 
-  testWidgets('ignore key event from web platform', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(
-      text: 'test\ntest',
+  testWidgets('can change tap outside behavior by overriding actions', (WidgetTester tester) async {
+    var myIntentWasCalled = false;
+    final overrideAction = CallbackAction<EditableTextTapOutsideIntent>(
+      onInvoke: (EditableTextTapOutsideIntent intent) {
+        myIntentWasCalled = true;
+        return null;
+      },
     );
+    final GlobalKey key = GlobalKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Column(
+          children: <Widget>[
+            SizedBox(key: key, width: 200, height: 200),
+            Actions(
+              actions: <Type, Action<Intent>>{EditableTextTapOutsideIntent: overrideAction},
+              child: EditableText(
+                autofocus: true,
+                controller: controller,
+                focusNode: focusNode,
+                style: textStyle,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(key), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(myIntentWasCalled, isTrue);
+    expect(focusNode.hasFocus, true);
+  });
+
+  testWidgets('can change tap up outside behavior by overriding actions', (
+    WidgetTester tester,
+  ) async {
+    var myIntentWasCalled = false;
+    final overrideAction = CallbackAction<EditableTextTapUpOutsideIntent>(
+      onInvoke: (EditableTextTapUpOutsideIntent intent) {
+        myIntentWasCalled = true;
+        return null;
+      },
+    );
+    final GlobalKey key = GlobalKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Column(
+          children: <Widget>[
+            SizedBox(key: key, width: 200, height: 200),
+            Actions(
+              actions: <Type, Action<Intent>>{EditableTextTapUpOutsideIntent: overrideAction},
+              child: EditableText(
+                controller: controller,
+                focusNode: focusNode,
+                style: textStyle,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                autofocus: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(key), warnIfMissed: false);
+    await tester.pump();
+    expect(myIntentWasCalled, isTrue);
+  });
+
+  testWidgets('ignore key event from web platform', (WidgetTester tester) async {
+    controller.text = 'test\ntest';
     controller.selection = const TextSelection(
       baseOffset: 0,
       extentOffset: 0,
       affinity: TextAffinity.upstream,
     );
-    bool myIntentWasCalled = false;
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: Actions(
-            actions: <Type, Action<Intent>>{
-              ExtendSelectionByCharacterIntent: CallbackAction<ExtendSelectionByCharacterIntent>(
-                onInvoke: (ExtendSelectionByCharacterIntent intent) { myIntentWasCalled = true; return null; },
+    var myIntentWasCalled = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 400,
+            child: Actions(
+              actions: <Type, Action<Intent>>{
+                ExtendSelectionByCharacterIntent: CallbackAction<ExtendSelectionByCharacterIntent>(
+                  onInvoke: (ExtendSelectionByCharacterIntent intent) {
+                    myIntentWasCalled = true;
+                    return null;
+                  },
+                ),
+              },
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
               ),
-            },
-            child: EditableText(
-              maxLines: 10,
-              controller: controller,
-              showSelectionHandles: true,
-              autofocus: true,
-              focusNode: focusNode,
-              style: Typography.material2018().black.titleMedium!,
-              cursorColor: Colors.blue,
-              backgroundCursorColor: Colors.grey,
-              selectionControls: materialTextSelectionControls,
-              keyboardType: TextInputType.text,
-              textAlign: TextAlign.right,
             ),
           ),
         ),
       ),
-    ));
+    );
 
     await tester.pump(); // Wait for autofocus to take effect.
 
@@ -12510,9 +13235,11 @@ void main() {
     }
   }, variant: KeySimulatorTransitModeVariant.all());
 
-  testWidgets('the toolbar is disposed when selection changes and there is no selectionControls', (WidgetTester tester) async {
+  testWidgets('the toolbar is disposed when selection changes and there is no selectionControls', (
+    WidgetTester tester,
+  ) async {
     late StateSetter setState;
-    bool enableInteractiveSelection = true;
+    var enableInteractiveSelection = true;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -12525,7 +13252,9 @@ void main() {
                   style: Typography.material2018().black.titleMedium!,
                   cursorColor: Colors.blue,
                   backgroundCursorColor: Colors.grey,
-                  selectionControls: enableInteractiveSelection ? materialTextSelectionControls : null,
+                  selectionControls: enableInteractiveSelection
+                      ? materialTextSelectionControls
+                      : null,
                   controller: controller,
                   enableInteractiveSelection: enableInteractiveSelection,
                 );
@@ -12536,8 +13265,7 @@ void main() {
       ),
     );
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     // Can't show the toolbar when there's no focus.
     expect(state.showToolbar(), false);
@@ -12545,10 +13273,7 @@ void main() {
     expect(find.text('Paste'), findsNothing);
 
     // Can show the toolbar when focused even though there's no text.
-    state.renderEditable.selectWordsInRange(
-      from: Offset.zero,
-      cause: SelectionChangedCause.tap,
-    );
+    state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
     await tester.pump();
     expect(state.showToolbar(), isTrue);
     await tester.pumpAndSettle();
@@ -12556,11 +13281,13 @@ void main() {
 
     // Find the FadeTransition in the toolbar and expect that it has not been
     // disposed.
-    final FadeTransition fadeTransition = find.byType(FadeTransition).evaluate()
-      .map((Element element) => element.widget as FadeTransition)
-      .firstWhere((FadeTransition fadeTransition) {
-        return fadeTransition.child is CompositedTransformFollower;
-      });
+    final FadeTransition fadeTransition = find
+        .byType(FadeTransition)
+        .evaluate()
+        .map((Element element) => element.widget as FadeTransition)
+        .firstWhere((FadeTransition fadeTransition) {
+          return fadeTransition.child is CompositedTransformFollower;
+        });
     expect(fadeTransition.toString(), isNot(contains('DISPOSED')));
 
     // Turn off interactive selection and change the text, which triggers the
@@ -12577,12 +13304,13 @@ void main() {
   }, skip: kIsWeb); // [intended]
 
   testWidgets('EditableText does not leak animation controllers', (WidgetTester tester) async {
-    final FocusNode focusNode = FocusNode();
+    controller.text = 'A';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           autofocus: true,
-          controller: TextEditingController(text: 'A'),
+          controller: controller,
           focusNode: focusNode,
           style: textStyle,
           cursorColor: Colors.blue,
@@ -12595,7 +13323,9 @@ void main() {
     expect(focusNode.hasPrimaryFocus, isTrue);
     final EditableTextState state = tester.state(find.byType(EditableText));
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero),
+    );
 
     // Start the cursor blink opacity animation controller.
     // _kCursorBlinkWaitForStart
@@ -12604,7 +13334,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     // Start the floating cursor reset animation controller.
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.End, offset: Offset.zero));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.End, offset: Offset.zero),
+    );
 
     expect(tester.binding.transientCallbackCount, 2);
 
@@ -12614,17 +13346,15 @@ void main() {
 
   testWidgets('Floating cursor affinity', (WidgetTester tester) async {
     EditableText.debugDeterministicCursor = true;
-    final FocusNode focusNode = FocusNode();
     final GlobalKey key = GlobalKey();
     // Set it up so that there will be word-wrap.
-    final TextEditingController controller = TextEditingController(text: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz');
+    controller.text = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz';
+
     await tester.pumpWidget(
       MaterialApp(
         home: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 500,
-            ),
+            constraints: const BoxConstraints(maxWidth: 500),
             child: EditableText(
               key: key,
               autofocus: true,
@@ -12647,43 +13377,55 @@ void main() {
     // Select after the first word, with default affinity (downstream).
     controller.selection = const TextSelection.collapsed(offset: 27);
     await tester.pump();
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero),
+    );
     await tester.pump();
 
     // The floating cursor should be drawn at the end of the first line.
-    expect(key.currentContext!.findRenderObject(), paints..rrect(
-      rrect: RRect.fromRectAndRadius(
-        const Rect.fromLTWH(0.5, 15, 3, 12),
-        const Radius.circular(1)
-      )
-    ));
+    expect(
+      key.currentContext!.findRenderObject(),
+      paints..rrect(
+        rrect: RRect.fromRectAndRadius(
+          const Rect.fromLTWH(0.5, 15, 3, 12),
+          const Radius.circular(1),
+        ),
+      ),
+    );
 
     // Select after the first word, with upstream affinity.
-    controller.selection = const TextSelection.collapsed(offset: 27, affinity: TextAffinity.upstream);
+    controller.selection = const TextSelection.collapsed(
+      offset: 27,
+      affinity: TextAffinity.upstream,
+    );
     await tester.pump();
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero),
+    );
     await tester.pump();
 
     // The floating cursor should be drawn at the beginning of the second line.
-    expect(key.currentContext!.findRenderObject(), paints..rrect(
-      rrect: RRect.fromRectAndRadius(
-        const Rect.fromLTWH(378.5, 1, 3, 12),
-        const Radius.circular(1)
-      )
-    ));
+    expect(
+      key.currentContext!.findRenderObject(),
+      paints..rrect(
+        rrect: RRect.fromRectAndRadius(
+          const Rect.fromLTWH(378.5, 1, 3, 12),
+          const Radius.circular(1),
+        ),
+      ),
+    );
 
     EditableText.debugDeterministicCursor = false;
   });
 
-testWidgets('Floating cursor ending with selection', (WidgetTester tester) async {
+  testWidgets('Floating cursor ending with selection', (WidgetTester tester) async {
     EditableText.debugDeterministicCursor = true;
-    final FocusNode focusNode = FocusNode();
     final GlobalKey key = GlobalKey();
     SelectionChangedCause? lastSelectionChangedCause;
-
-    final TextEditingController controller = TextEditingController(text: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ\n1234567890');
+    controller.text = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ\n1234567890';
     controller.selection = const TextSelection.collapsed(offset: 0);
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
@@ -12706,30 +13448,44 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     await tester.pump();
     final EditableTextState state = tester.state(find.byType(EditableText));
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero),
+    );
     await tester.pump();
 
     // The cursor should be drawn at the start of the line.
-    expect(key.currentContext!.findRenderObject(), paints..rrect(
-      rrect: RRect.fromRectAndRadius(
-        const Rect.fromLTWH(0.5, 1, 3, 12),
-        const Radius.circular(1)
-      )
-    ));
+    expect(
+      key.currentContext!.findRenderObject(),
+      paints..rrect(
+        rrect: RRect.fromRectAndRadius(
+          const Rect.fromLTWH(0.5, 1, 3, 12),
+          const Radius.circular(1),
+        ),
+      ),
+    );
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.Update, offset: const Offset(50, 0)));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.Update, offset: const Offset(50, 0)),
+    );
     await tester.pump();
 
     // The cursor should be drawn somewhere in the middle of the line
-    expect(key.currentContext!.findRenderObject(), paints..rrect(
-      rrect: RRect.fromRectAndRadius(
-        const Rect.fromLTWH(50.5, 1, 3, 12),
-        const Radius.circular(1)
-      )
-    ));
+    expect(
+      key.currentContext!.findRenderObject(),
+      paints..rrect(
+        rrect: RRect.fromRectAndRadius(
+          const Rect.fromLTWH(50.5, 1, 3, 12),
+          const Radius.circular(1),
+        ),
+      ),
+    );
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.End, offset: Offset.zero));
-    await tester.pumpAndSettle(const Duration(milliseconds: 125)); // Floating cursor has an end animation.
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.End, offset: Offset.zero),
+    );
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 125),
+    ); // Floating cursor has an end animation.
 
     // Selection should be updated based on the floating cursor location.
     expect(controller.selection.isCollapsed, true);
@@ -12737,34 +13493,50 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     expect(lastSelectionChangedCause, SelectionChangedCause.forcePress);
     lastSelectionChangedCause = null;
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero),
+    );
     await tester.pump();
 
     // The cursor should be drawn near to the previous position.
     // It's different because it's snapped to exactly between characters.
-    expect(key.currentContext!.findRenderObject(), paints..rrect(
-      rrect: RRect.fromRectAndRadius(
-        const Rect.fromLTWH(56.5, 1, 3, 12),
-        const Radius.circular(1)
-      )
-    ));
+    expect(
+      key.currentContext!.findRenderObject(),
+      paints..rrect(
+        rrect: RRect.fromRectAndRadius(
+          const Rect.fromLTWH(56.5, 1, 3, 12),
+          const Radius.circular(1),
+        ),
+      ),
+    );
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.Update, offset: const Offset(-56, 0)));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.Update, offset: const Offset(-56, 0)),
+    );
     await tester.pump();
 
     // The cursor should be drawn at the start of the line.
-    expect(key.currentContext!.findRenderObject(), paints..rrect(
-      rrect: RRect.fromRectAndRadius(
-        const Rect.fromLTWH(0.5, 1, 3, 12),
-        const Radius.circular(1)
-      )
-    ));
+    expect(
+      key.currentContext!.findRenderObject(),
+      paints..rrect(
+        rrect: RRect.fromRectAndRadius(
+          const Rect.fromLTWH(0.5, 1, 3, 12),
+          const Radius.circular(1),
+        ),
+      ),
+    );
 
     // Simulate UIKit setting the selection using keyboard selection.
-    state.updateEditingValue(state.currentTextEditingValue.copyWith(selection: const TextSelection(baseOffset: 0, extentOffset: 4)));
+    state.updateEditingValue(
+      state.currentTextEditingValue.copyWith(
+        selection: const TextSelection(baseOffset: 0, extentOffset: 4),
+      ),
+    );
     await tester.pump();
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.End, offset: Offset.zero));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.End, offset: Offset.zero),
+    );
     await tester.pump();
 
     // Selection should not be changed since it wasn't previously collapsed.
@@ -12775,35 +13547,53 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     lastSelectionChangedCause = null;
 
     // Now test using keyboard selection in a forwards direction.
-    state.updateEditingValue(state.currentTextEditingValue.copyWith(selection: const TextSelection.collapsed(offset: 0)));
+    state.updateEditingValue(
+      state.currentTextEditingValue.copyWith(selection: const TextSelection.collapsed(offset: 0)),
+    );
     await tester.pump();
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero),
+    );
     await tester.pump();
 
     // The cursor should be drawn in the same (start) position.
-    expect(key.currentContext!.findRenderObject(), paints..rrect(
-      rrect: RRect.fromRectAndRadius(
-        const Rect.fromLTWH(0.5, 1, 3, 12),
-        const Radius.circular(1)
-      )
-    ));
+    expect(
+      key.currentContext!.findRenderObject(),
+      paints..rrect(
+        rrect: RRect.fromRectAndRadius(
+          const Rect.fromLTWH(0.5, 1, 3, 12),
+          const Radius.circular(1),
+        ),
+      ),
+    );
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.Update, offset: const Offset(56, 0)));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.Update, offset: const Offset(56, 0)),
+    );
     await tester.pump();
 
     // The cursor should be drawn somewhere in the middle of the line.
-    expect(key.currentContext!.findRenderObject(), paints..rrect(
-      rrect: RRect.fromRectAndRadius(
-        const Rect.fromLTWH(56.5, 1, 3, 12),
-        const Radius.circular(1)
-      )
-    ));
+    expect(
+      key.currentContext!.findRenderObject(),
+      paints..rrect(
+        rrect: RRect.fromRectAndRadius(
+          const Rect.fromLTWH(56.5, 1, 3, 12),
+          const Radius.circular(1),
+        ),
+      ),
+    );
 
     // Simulate UIKit setting the selection using keyboard selection.
-    state.updateEditingValue(state.currentTextEditingValue.copyWith(selection: const TextSelection(baseOffset: 0, extentOffset: 4)));
+    state.updateEditingValue(
+      state.currentTextEditingValue.copyWith(
+        selection: const TextSelection(baseOffset: 0, extentOffset: 4),
+      ),
+    );
     await tester.pump();
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.End, offset: Offset.zero));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.End, offset: Offset.zero),
+    );
     await tester.pump();
 
     // Selection should not be changed since it wasn't previously collapsed.
@@ -12816,35 +13606,52 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     // Test that the affinity is updated in case the floating cursor ends at the same offset.
 
     // Put the selection at the beginning of the second line.
-    state.updateEditingValue(state.currentTextEditingValue.copyWith(selection: const TextSelection.collapsed(offset: 27)));
+    state.updateEditingValue(
+      state.currentTextEditingValue.copyWith(selection: const TextSelection.collapsed(offset: 27)),
+    );
     await tester.pump();
 
     // Now test using keyboard selection in a forwards direction.
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.Start, offset: Offset.zero),
+    );
     await tester.pump();
 
     // The cursor should be drawn at the start of the second line.
-    expect(key.currentContext!.findRenderObject(), paints..rrect(
-      rrect: RRect.fromRectAndRadius(
-        const Rect.fromLTWH(0.5, 15, 3, 12),
-        const Radius.circular(1)
-      )
-    ));
+    expect(
+      key.currentContext!.findRenderObject(),
+      paints..rrect(
+        rrect: RRect.fromRectAndRadius(
+          const Rect.fromLTWH(0.5, 15, 3, 12),
+          const Radius.circular(1),
+        ),
+      ),
+    );
 
     // Move the cursor to the end of the first line.
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.Update, offset: const Offset(9999, -14)));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(
+        state: FloatingCursorDragState.Update,
+        offset: const Offset(9999, -14),
+      ),
+    );
     await tester.pump();
 
     // The cursor should be drawn at the end of the first line.
-    expect(key.currentContext!.findRenderObject(), paints..rrect(
-      rrect: RRect.fromRectAndRadius(
-        const Rect.fromLTWH(800.5, 1, 3, 12),
-        const Radius.circular(1)
-      )
-    ));
+    expect(
+      key.currentContext!.findRenderObject(),
+      paints..rrect(
+        rrect: RRect.fromRectAndRadius(
+          const Rect.fromLTWH(800.5, 1, 3, 12),
+          const Radius.circular(1),
+        ),
+      ),
+    );
 
-    state.updateFloatingCursor(RawFloatingCursorPoint(state: FloatingCursorDragState.End, offset: Offset.zero));
+    state.updateFloatingCursor(
+      RawFloatingCursorPoint(state: FloatingCursorDragState.End, offset: Offset.zero),
+    );
     await tester.pump();
 
     // Selection should be changed as it was previously collapsed.
@@ -12857,29 +13664,37 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     EditableText.debugDeterministicCursor = false;
   });
 
-
   group('Selection changed scroll into view', () {
     final String text = List<int>.generate(64, (int index) => index).join('\n');
-    final TextEditingController controller = TextEditingController(text: text);
-    final ScrollController scrollController = ScrollController();
+    final controller = TextEditingController(text: text);
+    final scrollController = ScrollController();
     late double maxScrollExtent;
 
-    Future<void> resetSelectionAndScrollOffset(WidgetTester tester, {required bool setMaxScrollExtent}) async {
+    tearDownAll(() {
+      controller.dispose();
+      scrollController.dispose();
+    });
+
+    Future<void> resetSelectionAndScrollOffset(
+      WidgetTester tester, {
+      required bool setMaxScrollExtent,
+    }) async {
       controller.value = controller.value.copyWith(
         text: text,
         selection: controller.selection.copyWith(baseOffset: 0, extentOffset: 1),
       );
       await tester.pump();
-      final double targetOffset = setMaxScrollExtent ? scrollController.position.maxScrollExtent : 0.0;
+      final double targetOffset = setMaxScrollExtent
+          ? scrollController.position.maxScrollExtent
+          : 0.0;
       scrollController.jumpTo(targetOffset);
       await tester.pumpAndSettle();
       maxScrollExtent = scrollController.position.maxScrollExtent;
       expect(scrollController.offset, targetOffset);
     }
 
-
     Future<TextSelectionDelegate> pumpLongScrollableText(WidgetTester tester) async {
-      final GlobalKey<EditableTextState> key = GlobalKey<EditableTextState>();
+      final key = GlobalKey<EditableTextState>();
 
       await tester.pumpWidget(
         MaterialApp(
@@ -12908,78 +13723,88 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       return key.currentState!;
     }
 
-    testWidgets('SelectAll toolbar action will not set max scroll on designated platforms', (WidgetTester tester) async {
-      final TextSelectionDelegate textSelectionDelegate = await pumpLongScrollableText(tester);
+    testWidgets(
+      'SelectAll toolbar action will not set max scroll on designated platforms',
+      (WidgetTester tester) async {
+        final TextSelectionDelegate textSelectionDelegate = await pumpLongScrollableText(tester);
 
-      await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: false);
-      textSelectionDelegate.selectAll(SelectionChangedCause.toolbar);
-      await tester.pump();
-      expect(scrollController.offset, 0.0);
-    }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS, TargetPlatform.macOS }));
+        await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: false);
+        textSelectionDelegate.selectAll(SelectionChangedCause.toolbar);
+        await tester.pump();
+        expect(scrollController.offset, 0.0);
+      },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.iOS,
+        TargetPlatform.macOS,
+      }),
+    );
 
-    testWidgets('Selection will be scrolled into view with SelectionChangedCause', (WidgetTester tester) async {
-      final TextSelectionDelegate textSelectionDelegate = await pumpLongScrollableText(tester);
+    testWidgets(
+      'Selection will be scrolled into view with SelectionChangedCause',
+      (WidgetTester tester) async {
+        final TextSelectionDelegate textSelectionDelegate = await pumpLongScrollableText(tester);
 
-      // Cut
-      await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
-      textSelectionDelegate.cutSelection(SelectionChangedCause.keyboard);
-      await tester.pump();
-      expect(scrollController.offset, maxScrollExtent);
+        // Cut
+        await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
+        textSelectionDelegate.cutSelection(SelectionChangedCause.keyboard);
+        await tester.pump();
+        expect(scrollController.offset, maxScrollExtent);
 
-      await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
-      textSelectionDelegate.cutSelection(SelectionChangedCause.toolbar);
-      await tester.pump();
-      expect(scrollController.offset.roundToDouble(), 0.0);
+        await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
+        textSelectionDelegate.cutSelection(SelectionChangedCause.toolbar);
+        await tester.pump();
+        expect(scrollController.offset.roundToDouble(), 0.0);
 
-      // Paste
-      await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
-      await textSelectionDelegate.pasteText(SelectionChangedCause.keyboard);
-      await tester.pump();
-      expect(scrollController.offset, maxScrollExtent);
+        // Paste
+        await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
+        await textSelectionDelegate.pasteText(SelectionChangedCause.keyboard);
+        await tester.pump();
+        expect(scrollController.offset, maxScrollExtent);
 
-      await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
-      await textSelectionDelegate.pasteText(SelectionChangedCause.toolbar);
-      await tester.pump();
-      expect(scrollController.offset.roundToDouble(), 0.0);
+        await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
+        await textSelectionDelegate.pasteText(SelectionChangedCause.toolbar);
+        await tester.pump();
+        expect(scrollController.offset.roundToDouble(), 0.0);
 
-      // Select all
-      await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: false);
-      textSelectionDelegate.selectAll(SelectionChangedCause.keyboard);
-      await tester.pump();
-      expect(scrollController.offset, 0.0);
+        // Select all
+        await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: false);
+        textSelectionDelegate.selectAll(SelectionChangedCause.keyboard);
+        await tester.pump();
+        expect(scrollController.offset, 0.0);
 
-      await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: false);
-      textSelectionDelegate.selectAll(SelectionChangedCause.toolbar);
-      await tester.pump();
-      expect(scrollController.offset.roundToDouble(), maxScrollExtent);
+        await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: false);
+        textSelectionDelegate.selectAll(SelectionChangedCause.toolbar);
+        await tester.pump();
+        expect(scrollController.offset.roundToDouble(), maxScrollExtent);
 
-      // Copy
-      await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
-      textSelectionDelegate.copySelection(SelectionChangedCause.keyboard);
-      await tester.pump();
-      expect(scrollController.offset, maxScrollExtent);
+        // Copy
+        await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
+        textSelectionDelegate.copySelection(SelectionChangedCause.keyboard);
+        await tester.pump();
+        expect(scrollController.offset, maxScrollExtent);
 
-      await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
-      textSelectionDelegate.copySelection(SelectionChangedCause.toolbar);
-      await tester.pump();
-      expect(scrollController.offset.roundToDouble(), 0.0);
-    }, variant: TargetPlatformVariant.all(excluding: <TargetPlatform>{ TargetPlatform.iOS, TargetPlatform.macOS }));
+        await resetSelectionAndScrollOffset(tester, setMaxScrollExtent: true);
+        textSelectionDelegate.copySelection(SelectionChangedCause.toolbar);
+        await tester.pump();
+        expect(scrollController.offset.roundToDouble(), 0.0);
+      },
+      variant: TargetPlatformVariant.all(
+        excluding: <TargetPlatform>{TargetPlatform.iOS, TargetPlatform.macOS},
+      ),
+    );
   });
 
   testWidgets('Should not scroll on paste if caret already visible', (WidgetTester tester) async {
     // Regression test for https://github.com/flutter/flutter/issues/96658.
-    final ScrollController scrollController = ScrollController();
-    final TextEditingController controller = TextEditingController(
-      text: 'Lorem ipsum please paste here: \n${".\n" * 50}',
-    );
-    final FocusNode focusNode = FocusNode();
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
+    controller.text = 'Lorem ipsum please paste here: \n${".\n" * 50}';
 
     await tester.pumpWidget(
       MaterialApp(
         home: Center(
-          child: SizedBox(
-            height: 600.0,
-            width: 600.0,
+          child: SizedBox.square(
+            dimension: 600.0,
             child: EditableText(
               controller: controller,
               scrollController: scrollController,
@@ -12991,14 +13816,13 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
             ),
           ),
         ),
-      )
+      ),
     );
 
     await Clipboard.setData(const ClipboardData(text: 'Fairly long text to be pasted'));
     focusNode.requestFocus();
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     expect(scrollController.offset, 0.0);
 
@@ -13011,12 +13835,13 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
   });
 
   testWidgets('Autofill enabled by default', (WidgetTester tester) async {
-    final FocusNode focusNode = FocusNode();
+    controller.text = 'A';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           autofocus: true,
-          controller: TextEditingController(text: 'A'),
+          controller: controller,
           focusNode: focusNode,
           style: textStyle,
           cursorColor: Colors.blue,
@@ -13027,19 +13852,17 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     );
 
     assert(focusNode.hasFocus);
-    expect(
-      tester.testTextInput.log,
-      contains(matchesMethodCall('TextInput.requestAutofill')),
-    );
+    expect(tester.testTextInput.log, contains(matchesMethodCall('TextInput.requestAutofill')));
   });
 
   testWidgets('Autofill can be disabled', (WidgetTester tester) async {
-    final FocusNode focusNode = FocusNode();
+    controller.text = 'A';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           autofocus: true,
-          controller: TextEditingController(text: 'A'),
+          controller: controller,
           focusNode: focusNode,
           style: textStyle,
           cursorColor: Colors.blue,
@@ -13061,9 +13884,7 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     Future<void> sendUndoRedo(WidgetTester tester, [bool redo = false]) {
       return sendKeys(
         tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.keyZ,
-        ],
+        <LogicalKeyboardKey>[LogicalKeyboardKey.keyZ],
         shortcutModifier: true,
         shift: redo,
         targetPlatform: defaultTargetPlatform,
@@ -13073,11 +13894,18 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     Future<void> sendUndo(WidgetTester tester) => sendUndoRedo(tester);
     Future<void> sendRedo(WidgetTester tester) => sendUndoRedo(tester, true);
 
-    Widget boilerplate(TextEditingController controller, [FocusNode? focusNode]) {
+    TextEditingValue emptyComposingOnAndroid(TextEditingValue value) {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        return value.copyWith(composing: TextRange.empty);
+      }
+      return value;
+    }
+
+    Widget boilerplate() {
       return MaterialApp(
         home: EditableText(
           controller: controller,
-          focusNode: focusNode ?? FocusNode(),
+          focusNode: focusNode,
           style: textStyle,
           cursorColor: Colors.blue,
           backgroundCursorColor: Colors.grey,
@@ -13093,1266 +13921,1123 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     }
 
     // Empty text editing value with a collapsed selection.
-    const TextEditingValue emptyTextCollapsed = TextEditingValue(
-      selection: TextSelection.collapsed(offset: 0),
-    );
+    const emptyTextCollapsed = TextEditingValue(selection: TextSelection.collapsed(offset: 0));
 
     // Texts and text editing values used repeatedly in undo/redo tests.
-    const String textA = 'A';
-    const String textAB = 'AB';
-    const String textAC = 'AC';
+    const textA = 'A';
+    const textAB = 'AB';
+    const textAC = 'AC';
 
-    const TextEditingValue textACollapsedAtEnd = TextEditingValue(
+    const textACollapsedAtEnd = TextEditingValue(
       text: textA,
       selection: TextSelection.collapsed(offset: textA.length),
     );
 
-    const TextEditingValue textABCollapsedAtEnd = TextEditingValue(
+    const textASelected = TextEditingValue(
+      text: textA,
+      selection: TextSelection(baseOffset: 0, extentOffset: textA.length),
+    );
+
+    const textABCollapsedAtEnd = TextEditingValue(
       text: textAB,
       selection: TextSelection.collapsed(offset: textAB.length),
     );
 
-    const TextEditingValue textACCollapsedAtEnd = TextEditingValue(
+    const textACCollapsedAtEnd = TextEditingValue(
       text: textAC,
       selection: TextSelection.collapsed(offset: textAC.length),
     );
 
-    testWidgets('Should have no effect on an empty and non-focused field', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
-      await tester.pumpWidget(boilerplate(controller));
-      expect(controller.value, TextEditingValue.empty);
+    bool isDesktop() {
+      return debugDefaultTargetPlatformOverride == TargetPlatform.macOS ||
+          debugDefaultTargetPlatformOverride == TargetPlatform.windows ||
+          debugDefaultTargetPlatformOverride == TargetPlatform.linux;
+    }
 
-      // Undo/redo have no effect on an empty field that has never been edited.
-      await sendUndo(tester);
-      expect(controller.value, TextEditingValue.empty);
-      await sendRedo(tester);
-      expect(controller.value, TextEditingValue.empty);
-      await tester.pump();
-      expect(controller.value, TextEditingValue.empty);
+    testWidgets(
+      'Should have no effect on an empty and non-focused field',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(boilerplate());
+        expect(controller.value, TextEditingValue.empty);
 
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
+        // Undo/redo have no effect on an empty field that has never been edited.
+        await sendUndo(tester);
+        expect(controller.value, TextEditingValue.empty);
+        await sendRedo(tester);
+        expect(controller.value, TextEditingValue.empty);
+        await tester.pump();
+        expect(controller.value, TextEditingValue.empty);
 
-    testWidgets('Should have no effect on an empty and focused field', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
-      final FocusNode focusNode = FocusNode();
-      await tester.pumpWidget(boilerplate(controller, focusNode));
-      await waitForThrottling(tester);
-      expect(controller.value, TextEditingValue.empty);
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended]
+    );
 
-      // Focus the field and wait for throttling delay to get the initial
-      // state saved in text editing history.
-      focusNode.requestFocus();
-      await tester.pump();
-      expect(controller.value,  emptyTextCollapsed);
-      await waitForThrottling(tester);
+    testWidgets(
+      'Should have no effect on an empty and focused field',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(boilerplate());
+        await waitForThrottling(tester);
+        expect(controller.value, TextEditingValue.empty);
 
-      // Undo/redo should have no effect. The field is focused and the value has
-      // changed, but the text remains empty.
-      await sendUndo(tester);
-      expect(controller.value,  emptyTextCollapsed);
+        // Focus the field and wait for throttling delay to get the initial
+        // state saved in text editing history.
+        focusNode.requestFocus();
+        await tester.pump();
+        expect(controller.value, emptyTextCollapsed);
+        await waitForThrottling(tester);
 
-      await sendRedo(tester);
-      expect(controller.value,  emptyTextCollapsed);
+        // Undo/redo should have no effect. The field is focused and the value has
+        // changed, but the text remains empty.
+        await sendUndo(tester);
+        expect(controller.value, emptyTextCollapsed);
 
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
+        await sendRedo(tester);
+        expect(controller.value, emptyTextCollapsed);
 
-    testWidgets('Can undo/redo a single insertion', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
-      final FocusNode focusNode = FocusNode();
-      await tester.pumpWidget(boilerplate(controller, focusNode));
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended]
+    );
 
-      // Focus the field and wait for throttling delay to get the initial
-      // state saved in text editing history.
-      focusNode.requestFocus();
-      await tester.pump();
-      await waitForThrottling(tester);
-      expect(controller.value,  emptyTextCollapsed);
+    testWidgets(
+      'Can undo/redo a single insertion',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(boilerplate());
 
-      // First insertion.
-      await tester.enterText(find.byType(EditableText), textA);
-      await waitForThrottling(tester);
-      expect(controller.value, textACollapsedAtEnd);
+        // Focus the field and wait for throttling delay to get the initial
+        // state saved in text editing history.
+        focusNode.requestFocus();
+        await tester.pump();
+        await waitForThrottling(tester);
+        expect(controller.value, emptyTextCollapsed);
 
-      // A redo before any undo has no effect.
-      await sendRedo(tester);
-      expect(controller.value, textACollapsedAtEnd);
+        // First insertion.
+        await tester.enterText(find.byType(EditableText), textA);
+        await waitForThrottling(tester);
+        expect(controller.value, textACollapsedAtEnd);
 
-      // Can undo a single insertion.
-      await sendUndo(tester);
-      expect(controller.value, emptyTextCollapsed);
+        // A redo before any undo has no effect.
+        await sendRedo(tester);
+        expect(controller.value, textACollapsedAtEnd);
 
-      // A second undo has no effect.
-      await sendUndo(tester);
-      expect(controller.value, emptyTextCollapsed);
+        // Can undo a single insertion.
+        await sendUndo(tester);
+        expect(controller.value, emptyTextCollapsed);
 
-      // Can redo a single insertion.
-      await sendRedo(tester);
-      expect(controller.value, textACollapsedAtEnd);
+        // A second undo has no effect.
+        await sendUndo(tester);
+        expect(controller.value, emptyTextCollapsed);
 
-      // A second redo has no effect.
-      await sendRedo(tester);
-      expect(controller.value, textACollapsedAtEnd);
+        // Can redo a single insertion.
+        await sendRedo(tester);
+        expect(controller.value, textACollapsedAtEnd);
 
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
+        // A second redo has no effect.
+        await sendRedo(tester);
+        expect(controller.value, textACollapsedAtEnd);
 
-    testWidgets('Can undo/redo multiple insertions', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
-      final FocusNode focusNode = FocusNode();
-      await tester.pumpWidget(boilerplate(controller, focusNode));
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended]
+    );
 
-      // Focus the field and wait for throttling delay to get the initial
-      // state saved in text editing history.
-      focusNode.requestFocus();
-      await tester.pump();
-      await waitForThrottling(tester);
-      expect(controller.value,  emptyTextCollapsed);
+    testWidgets(
+      'Can undo/redo multiple insertions',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(boilerplate());
 
-      // First insertion.
-      await tester.enterText(find.byType(EditableText), textA);
-      await waitForThrottling(tester);
-      expect(controller.value, textACollapsedAtEnd);
+        // Focus the field and wait for throttling delay to get the initial
+        // state saved in text editing history.
+        focusNode.requestFocus();
+        await tester.pump();
+        await waitForThrottling(tester);
+        expect(controller.value, emptyTextCollapsed);
 
-      // Second insertion.
-      await tester.enterText(find.byType(EditableText), textAB);
-      await waitForThrottling(tester);
-      expect(controller.value, textABCollapsedAtEnd);
+        // First insertion.
+        await tester.enterText(find.byType(EditableText), textA);
+        await waitForThrottling(tester);
+        expect(controller.value, textACollapsedAtEnd);
 
-      // Undo the first insertion.
-      await sendUndo(tester);
-      expect(controller.value, textACollapsedAtEnd);
+        // Second insertion.
+        await tester.enterText(find.byType(EditableText), textAB);
+        await waitForThrottling(tester);
+        expect(controller.value, textABCollapsedAtEnd);
 
-      // Undo the second insertion.
-      await sendUndo(tester);
-      expect(controller.value, emptyTextCollapsed);
+        // Undo the first insertion.
+        await sendUndo(tester);
+        expect(controller.value, textACollapsedAtEnd);
 
-      // Redo the second insertion.
-      await sendRedo(tester);
-      expect(controller.value, textACollapsedAtEnd);
+        // Undo the second insertion.
+        await sendUndo(tester);
+        expect(controller.value, emptyTextCollapsed);
 
-      // Redo the first insertion.
-      await sendRedo(tester);
-      expect(controller.value, textABCollapsedAtEnd);
+        // Redo the second insertion.
+        await sendRedo(tester);
+        expect(controller.value, textACollapsedAtEnd);
 
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
+        // Redo the first insertion.
+        await sendRedo(tester);
+        expect(controller.value, textABCollapsedAtEnd);
+
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended]
+    );
 
     // Regression test for https://github.com/flutter/flutter/issues/120794.
     // This is only reproducible on Android platform because it is the only
     // platform where composing changes are saved in the editing history.
-    testWidgets('Can undo as intented when adding a delay between undos', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
-      final FocusNode focusNode = FocusNode();
-      await tester.pumpWidget(boilerplate(controller, focusNode));
+    testWidgets(
+      'Can undo as intented when adding a delay between undos',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(boilerplate());
 
-      // Focus the field and wait for throttling delay to get the initial
-      // state saved in text editing history.
-      focusNode.requestFocus();
-      await tester.pump();
-      await waitForThrottling(tester);
-      expect(controller.value,  emptyTextCollapsed);
+        // Focus the field and wait for throttling delay to get the initial
+        // state saved in text editing history.
+        focusNode.requestFocus();
+        await tester.pump();
+        await waitForThrottling(tester);
+        expect(controller.value, emptyTextCollapsed);
 
-      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      const TextEditingValue composingStep1 = TextEditingValue(
-        text: '1 ni',
-        composing: TextRange(start: 2, end: 4),
-        selection: TextSelection.collapsed(offset: 4),
-      );
+        const composingStep1 = TextEditingValue(
+          text: '1 ni',
+          composing: TextRange(start: 2, end: 4),
+          selection: TextSelection.collapsed(offset: 4),
+        );
 
-      const TextEditingValue composingStep2 = TextEditingValue(
-        text: '1 nihao',
-        composing: TextRange(start: 2, end: 7),
-        selection: TextSelection.collapsed(offset: 7),
-      );
+        const composingStep2 = TextEditingValue(
+          text: '1 nihao',
+          composing: TextRange(start: 2, end: 7),
+          selection: TextSelection.collapsed(offset: 7),
+        );
 
-      const TextEditingValue composingStep3 = TextEditingValue(
-        text: '1 你好',
-        selection: TextSelection.collapsed(offset: 4),
-      );
+        const composingStep3 = TextEditingValue(
+          text: '1 你好',
+          selection: TextSelection.collapsed(offset: 4),
+        );
 
-      // Enter some composing text.
-      state.userUpdateTextEditingValue(composingStep1, SelectionChangedCause.keyboard);
-      await waitForThrottling(tester);
+        // Enter some composing text.
+        state.userUpdateTextEditingValue(composingStep1, SelectionChangedCause.keyboard);
+        await waitForThrottling(tester);
 
-      state.userUpdateTextEditingValue(composingStep2, SelectionChangedCause.keyboard);
-      await waitForThrottling(tester);
+        state.userUpdateTextEditingValue(composingStep2, SelectionChangedCause.keyboard);
+        await waitForThrottling(tester);
 
-      state.userUpdateTextEditingValue(composingStep3, SelectionChangedCause.keyboard);
-      await waitForThrottling(tester);
+        state.userUpdateTextEditingValue(composingStep3, SelectionChangedCause.keyboard);
+        await waitForThrottling(tester);
 
-      // Undo first insertion.
-      await sendUndo(tester);
-      expect(controller.value, composingStep2);
+        // Undo first insertion.
+        await sendUndo(tester);
+        expect(controller.value, emptyComposingOnAndroid(composingStep2));
 
-      // Waiting for the throttling between undos should have no effect.
-      await tester.pump(const Duration(milliseconds: 500));
+        // Waiting for the throttling between undos should have no effect.
+        await tester.pump(const Duration(milliseconds: 500));
 
-      // Undo second insertion.
-      await sendUndo(tester);
-      expect(controller.value, composingStep1);
+        // Undo second insertion.
+        await sendUndo(tester);
+        expect(controller.value, emptyComposingOnAndroid(composingStep1));
 
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.only(TargetPlatform.android), skip: kIsWeb); // [intended]
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+      skip: kIsWeb, // [intended]
+    );
 
     // Regression test for https://github.com/flutter/flutter/issues/120194.
-    testWidgets('Cursor does not jump after undo', (WidgetTester tester) async {
-      // Initialize the controller with a non empty text.
-      final TextEditingController controller = TextEditingController(text: textA);
-      final FocusNode focusNode = FocusNode();
-      await tester.pumpWidget(boilerplate(controller, focusNode));
-
-      // Focus the field and wait for throttling delay to get the initial
-      // state saved in text editing history.
-      focusNode.requestFocus();
-      await tester.pump();
-      await waitForThrottling(tester);
-      expect(controller.value, textACollapsedAtEnd);
-
-      // Insert some text.
-      await tester.enterText(find.byType(EditableText), textAB);
-      expect(controller.value, textABCollapsedAtEnd);
-
-      // Undo the insertion without waiting for the throttling delay.
-      await sendUndo(tester);
-      expect(controller.value.selection.isValid, true);
-      expect(controller.value, textACollapsedAtEnd);
-
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
-
-    testWidgets('Initial value is recorded when an undo is received just after getting the focus', (WidgetTester tester) async {
-      // Initialize the controller with a non empty text.
-      final TextEditingController controller = TextEditingController(text: textA);
-      final FocusNode focusNode = FocusNode();
-      await tester.pumpWidget(boilerplate(controller, focusNode));
-
-      // Focus the field and do not wait for throttling delay before calling undo.
-      focusNode.requestFocus();
-      await tester.pump();
-      await sendUndo(tester);
-      await waitForThrottling(tester);
-      expect(controller.value, textACollapsedAtEnd);
-
-      // Insert some text.
-      await tester.enterText(find.byType(EditableText), textAB);
-      expect(controller.value, textABCollapsedAtEnd);
-
-      // Undo the insertion.
-      await sendUndo(tester);
-
-      // Initial text should have been recorded and restored.
-      expect(controller.value, textACollapsedAtEnd);
-
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
-
-    testWidgets('Can make changes in the middle of the history', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
-      final FocusNode focusNode = FocusNode();
-      await tester.pumpWidget(boilerplate(controller, focusNode));
-
-      // Focus the field and wait for throttling delay to get the initial
-      // state saved in text editing history.
-      focusNode.requestFocus();
-      await tester.pump();
-      await waitForThrottling(tester);
-      expect(controller.value,  emptyTextCollapsed);
-
-      // First insertion.
-      await tester.enterText(find.byType(EditableText), textA);
-      await waitForThrottling(tester);
-      expect(controller.value, textACollapsedAtEnd);
-
-      // Second insertion.
-      await tester.enterText(find.byType(EditableText), textAC);
-      await waitForThrottling(tester);
-      expect(controller.value, textACCollapsedAtEnd);
-
-      // Undo and make a change.
-      await sendUndo(tester);
-      expect(controller.value, textACollapsedAtEnd);
-      await tester.enterText(find.byType(EditableText), textAB);
-      await waitForThrottling(tester);
-      expect(controller.value, textABCollapsedAtEnd);
-
-      // Try a redo, state should not change because of the previous undo.
-      await sendRedo(tester);
-      expect(controller.value, textABCollapsedAtEnd);
-
-      // Trying again will have no effect.
-      await sendRedo(tester);
-      expect(controller.value, textABCollapsedAtEnd);
-
-      // Undo should restore state as it was before second insertion.
-      await sendUndo(tester);
-      expect(controller.value, textACollapsedAtEnd);
-
-      // Another undo will restore state as before first insertion.
-      await sendUndo(tester);
-      expect(controller.value,  emptyTextCollapsed);
-
-      // Redo all changes.
-      await sendRedo(tester);
-      expect(controller.value, textACollapsedAtEnd);
-      await sendRedo(tester);
-      expect(controller.value, textABCollapsedAtEnd);
-
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
-
-    testWidgets('inside EditableText, duplicate changes', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
-      final FocusNode focusNode = FocusNode();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            cursorOpacityAnimates: true,
-            autofillHints: null,
-          ),
-        ),
-      );
-
-      expect(
-        controller.value,
-        TextEditingValue.empty,
-      );
-
-      focusNode.requestFocus();
-      expect(
-        controller.value,
-        TextEditingValue.empty,
-      );
-      await tester.pump();
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-
-      // Wait for the throttling.
-      await tester.pump(const Duration(milliseconds: 500));
-
-      await tester.enterText(find.byType(EditableText), '1');
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1',
-          selection: TextSelection.collapsed(offset: 1),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Can undo/redo a single insertion.
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1',
-          selection: TextSelection.collapsed(offset: 1),
-        ),
-      );
-
-      // Changes that result in the same state won't be saved on the undo stack.
-      await tester.enterText(find.byType(EditableText), '12');
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '12',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-      await tester.enterText(find.byType(EditableText), '1');
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1',
-          selection: TextSelection.collapsed(offset: 1),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1',
-          selection: TextSelection.collapsed(offset: 1),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1',
-          selection: TextSelection.collapsed(offset: 1),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1',
-          selection: TextSelection.collapsed(offset: 1),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1',
-          selection: TextSelection.collapsed(offset: 1),
-        ),
-      );
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
-
-    testWidgets('inside EditableText, autofocus', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            autofocus: true,
-            controller: controller,
-            focusNode: FocusNode(),
-            style: textStyle,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            cursorOpacityAnimates: true,
-            autofillHints: null,
-          ),
-        ),
-      );
-
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-      await tester.pump();
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-      // Wait for the throttling.
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.enterText(find.byType(EditableText), '1');
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1',
-          selection: TextSelection.collapsed(offset: 1),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1',
-          selection: TextSelection.collapsed(offset: 1),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1',
-          selection: TextSelection.collapsed(offset: 1),
-        ),
-      );
-    }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
-
-    testWidgets('does not save composing changes (except Android)', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
-      final FocusNode focusNode = FocusNode();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            cursorOpacityAnimates: true,
-            autofillHints: null,
-          ),
-        ),
-      );
-
-      expect(
-        controller.value,
-        TextEditingValue.empty,
-      );
-
-      focusNode.requestFocus();
-      expect(
-        controller.value,
-        TextEditingValue.empty,
-      );
-      await tester.pump();
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-
-      // Wait for the throttling.
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Enter some regular non-composing text that is undoable.
-      await tester.enterText(find.byType(EditableText), '1 ');
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Enter some composing text.
-      final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
-      state.userUpdateTextEditingValue(
-        const TextEditingValue(
-          text: '1 ni',
-          composing: TextRange(start: 2, end: 4),
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-        SelectionChangedCause.keyboard,
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Enter some more composing text.
-      state.userUpdateTextEditingValue(
-        const TextEditingValue(
-          text: '1 nihao',
-          composing: TextRange(start: 2, end: 7),
-          selection: TextSelection.collapsed(offset: 7),
-        ),
-        SelectionChangedCause.keyboard,
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Commit the composing text.
-      state.userUpdateTextEditingValue(
-        const TextEditingValue(
-          text: '1 你好',
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-        SelectionChangedCause.keyboard,
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 你好',
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-
-      // Undo/redo ignores the composing changes.
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 你好',
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 你好',
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 你好',
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.all(excluding: <TargetPlatform>{ TargetPlatform.android }), skip: kIsWeb); // [intended]
-
-    testWidgets('does save composing changes on Android', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
-      final FocusNode focusNode = FocusNode();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            cursorOpacityAnimates: true,
-            autofillHints: null,
-          ),
-        ),
-      );
-
-      expect(
-        controller.value,
-        TextEditingValue.empty,
-      );
-
-      focusNode.requestFocus();
-      expect(
-        controller.value,
-        TextEditingValue.empty,
-      );
-      await tester.pump();
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-
-      // Wait for the throttling.
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Enter some regular non-composing text that is undoable.
-      await tester.enterText(find.byType(EditableText), '1 ');
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Enter some composing text.
-      final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
-      state.userUpdateTextEditingValue(
-        const TextEditingValue(
-          text: '1 ni',
-          composing: TextRange(start: 2, end: 4),
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-        SelectionChangedCause.keyboard,
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Enter some more composing text.
-      state.userUpdateTextEditingValue(
-        const TextEditingValue(
-          text: '1 nihao',
-          composing: TextRange(start: 2, end: 7),
-          selection: TextSelection.collapsed(offset: 7),
-        ),
-        SelectionChangedCause.keyboard,
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Commit the composing text.
-      state.userUpdateTextEditingValue(
-        const TextEditingValue(
-          text: '1 你好',
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-        SelectionChangedCause.keyboard,
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 你好',
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-
-      // Undo/redo includes the composing changes.
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 nihao',
-          composing: TextRange(start: 2, end: 7),
-          selection: TextSelection.collapsed(offset: 7),
-        ),
-      );
-
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ni',
-          composing: TextRange(start: 2, end: 4),
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ni',
-          composing: TextRange(start: 2, end: 4),
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 nihao',
-          composing: TextRange(start: 2, end: 7),
-          selection: TextSelection.collapsed(offset: 7),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 你好',
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 你好',
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 nihao',
-          composing: TextRange(start: 2, end: 7),
-          selection: TextSelection.collapsed(offset: 7),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ni',
-          composing: TextRange(start: 2, end: 4),
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ni',
-          composing: TextRange(start: 2, end: 4),
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 nihao',
-          composing: TextRange(start: 2, end: 7),
-          selection: TextSelection.collapsed(offset: 7),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 你好',
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.only(TargetPlatform.android), skip: kIsWeb); // [intended]
-
-    testWidgets('saves right up to composing change even when throttled', (WidgetTester tester) async {
-      final TextEditingController controller = TextEditingController();
-      final FocusNode focusNode = FocusNode();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            cursorOpacityAnimates: true,
-            autofillHints: null,
-          ),
-        ),
-      );
-
-      expect(
-        controller.value,
-        TextEditingValue.empty,
-      );
-
-      focusNode.requestFocus();
-      expect(
-        controller.value,
-        TextEditingValue.empty,
-      );
-      await tester.pump();
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-
-      // Wait for the throttling.
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Enter some regular non-composing text that is undoable.
-      await tester.enterText(find.byType(EditableText), '1 ');
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Enter some regular non-composing text and then immediately enter some
-      // composing text.
-      await tester.enterText(find.byType(EditableText), '1 2 ');
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 2 ',
-          selection: TextSelection.collapsed(offset: 4),
-        ),
-      );
-      final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
-      state.userUpdateTextEditingValue(
-        const TextEditingValue(
-          text: '1 2 ni',
-          composing: TextRange(start: 4, end: 6),
-          selection: TextSelection.collapsed(offset: 6),
-        ),
-        SelectionChangedCause.keyboard,
-      );
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 2 ni',
-          composing: TextRange(start: 4, end: 6),
-          selection: TextSelection.collapsed(offset: 6),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Commit the composing text.
-      state.userUpdateTextEditingValue(
-        const TextEditingValue(
-          text: '1 2 你',
-          selection: TextSelection.collapsed(offset: 5),
-        ),
-        SelectionChangedCause.keyboard,
-      );
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 2 你',
-          selection: TextSelection.collapsed(offset: 5),
-        ),
-      );
-
-      // Undo/redo still gets the second non-composing change.
-      await sendUndo(tester);
-      switch (defaultTargetPlatform) {
-        // Android includes composing changes.
-        case TargetPlatform.android:
-          expect(
-            controller.value,
-            const TextEditingValue(
-              text: '1 2 ni',
-              composing: TextRange(start: 4, end: 6),
-              selection: TextSelection.collapsed(offset: 6),
+    testWidgets(
+      'Cursor does not jump after undo',
+      (WidgetTester tester) async {
+        // Initialize the controller with a non empty text.
+        controller.text = textA;
+        await tester.pumpWidget(boilerplate());
+
+        // Focus the field and wait for throttling delay to get the initial
+        // state saved in text editing history.
+        focusNode.requestFocus();
+        await tester.pump();
+        await waitForThrottling(tester);
+        expect(controller.value, isDesktop() ? textASelected : textACollapsedAtEnd);
+
+        // Insert some text.
+        await tester.enterText(find.byType(EditableText), textAB);
+        expect(controller.value, textABCollapsedAtEnd);
+
+        // Undo the insertion without waiting for the throttling delay.
+        await sendUndo(tester);
+        expect(controller.value.selection.isValid, true);
+        expect(controller.value, isDesktop() ? textASelected : textACollapsedAtEnd);
+
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended]
+    );
+
+    testWidgets(
+      'Initial value is recorded when an undo is received just after getting the focus',
+      (WidgetTester tester) async {
+        // Initialize the controller with a non empty text.
+        controller.text = textA;
+        await tester.pumpWidget(boilerplate());
+
+        // Focus the field and do not wait for throttling delay before calling undo.
+        focusNode.requestFocus();
+        await tester.pump();
+        await sendUndo(tester);
+        await waitForThrottling(tester);
+        expect(controller.value, isDesktop() ? textASelected : textACollapsedAtEnd);
+
+        // Insert some text.
+        await tester.enterText(find.byType(EditableText), textAB);
+        expect(controller.value, textABCollapsedAtEnd);
+
+        // Undo the insertion.
+        await sendUndo(tester);
+
+        // Initial text should have been recorded and restored.
+        expect(controller.value, isDesktop() ? textASelected : textACollapsedAtEnd);
+
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended]
+    );
+
+    testWidgets(
+      'Can make changes in the middle of the history',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(boilerplate());
+
+        // Focus the field and wait for throttling delay to get the initial
+        // state saved in text editing history.
+        focusNode.requestFocus();
+        await tester.pump();
+        await waitForThrottling(tester);
+        expect(controller.value, emptyTextCollapsed);
+
+        // First insertion.
+        await tester.enterText(find.byType(EditableText), textA);
+        await waitForThrottling(tester);
+        expect(controller.value, textACollapsedAtEnd);
+
+        // Second insertion.
+        await tester.enterText(find.byType(EditableText), textAC);
+        await waitForThrottling(tester);
+        expect(controller.value, textACCollapsedAtEnd);
+
+        // Undo and make a change.
+        await sendUndo(tester);
+        expect(controller.value, textACollapsedAtEnd);
+        await tester.enterText(find.byType(EditableText), textAB);
+        await waitForThrottling(tester);
+        expect(controller.value, textABCollapsedAtEnd);
+
+        // Try a redo, state should not change because of the previous undo.
+        await sendRedo(tester);
+        expect(controller.value, textABCollapsedAtEnd);
+
+        // Trying again will have no effect.
+        await sendRedo(tester);
+        expect(controller.value, textABCollapsedAtEnd);
+
+        // Undo should restore state as it was before second insertion.
+        await sendUndo(tester);
+        expect(controller.value, textACollapsedAtEnd);
+
+        // Another undo will restore state as before first insertion.
+        await sendUndo(tester);
+        expect(controller.value, emptyTextCollapsed);
+
+        // Redo all changes.
+        await sendRedo(tester);
+        expect(controller.value, textACollapsedAtEnd);
+        await sendRedo(tester);
+        expect(controller.value, textABCollapsedAtEnd);
+
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended]
+    );
+
+    testWidgets(
+      'inside EditableText, duplicate changes',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              cursorOpacityAnimates: true,
+              autofillHints: null,
             ),
-          );
-        // Composing changes are ignored on all other platforms.
-        case TargetPlatform.fuchsia:
-        case TargetPlatform.linux:
-        case TargetPlatform.windows:
-        case TargetPlatform.iOS:
-        case TargetPlatform.macOS:
-          expect(
-            controller.value,
-            const TextEditingValue(
-              text: '1 2 ',
-              selection: TextSelection.collapsed(offset: 4),
-            ),
-          );
-      }
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
-      await sendUndo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          selection: TextSelection.collapsed(offset: 0),
-        ),
-      );
+          ),
+        );
 
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 ',
-          selection: TextSelection.collapsed(offset: 2),
-        ),
-      );
-      await sendRedo(tester);
-      switch (defaultTargetPlatform) {
-        // Android includes composing changes.
-        case TargetPlatform.android:
-          expect(
-            controller.value,
-            const TextEditingValue(
-              text: '1 2 ni',
-              composing: TextRange(start: 4, end: 6),
-              selection: TextSelection.collapsed(offset: 6),
-            ),
-          );
-        // Composing changes are ignored on all other platforms.
-        case TargetPlatform.fuchsia:
-        case TargetPlatform.linux:
-        case TargetPlatform.windows:
-        case TargetPlatform.iOS:
-        case TargetPlatform.macOS:
-          expect(
-            controller.value,
-            const TextEditingValue(
-              text: '1 2 ',
-              selection: TextSelection.collapsed(offset: 4),
-            ),
-          );
-      }
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 2 你',
-          selection: TextSelection.collapsed(offset: 5),
-        ),
-      );
-      await sendRedo(tester);
-      expect(
-        controller.value,
-        const TextEditingValue(
-          text: '1 2 你',
-          selection: TextSelection.collapsed(offset: 5),
-        ),
-      );
+        expect(controller.value, TextEditingValue.empty);
 
-    // On web, these keyboard shortcuts are handled by the browser.
-    }, variant: TargetPlatformVariant.all(), skip: kIsWeb); // [intended]
+        focusNode.requestFocus();
+        expect(controller.value, TextEditingValue.empty);
+        await tester.pump();
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+
+        // Wait for the throttling.
+        await tester.pump(const Duration(milliseconds: 500));
+
+        await tester.enterText(find.byType(EditableText), '1');
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Can undo/redo a single insertion.
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+        );
+
+        // Changes that result in the same state won't be saved on the undo stack.
+        await tester.enterText(find.byType(EditableText), '12');
+        expect(
+          controller.value,
+          const TextEditingValue(text: '12', selection: TextSelection.collapsed(offset: 2)),
+        );
+        await tester.enterText(find.byType(EditableText), '1');
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+        );
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended]
+    );
+
+    testWidgets(
+      'inside EditableText, autofocus',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              autofocus: true,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              cursorOpacityAnimates: true,
+              autofillHints: null,
+            ),
+          ),
+        );
+
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+        await tester.pump();
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+        // Wait for the throttling.
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.enterText(find.byType(EditableText), '1');
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1', selection: TextSelection.collapsed(offset: 1)),
+        );
+      },
+      variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended]
+    );
+
+    testWidgets(
+      'does not save composing changes (except Android)',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              cursorOpacityAnimates: true,
+              autofillHints: null,
+            ),
+          ),
+        );
+
+        expect(controller.value, TextEditingValue.empty);
+
+        focusNode.requestFocus();
+        expect(controller.value, TextEditingValue.empty);
+        await tester.pump();
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+
+        // Wait for the throttling.
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Enter some regular non-composing text that is undoable.
+        await tester.enterText(find.byType(EditableText), '1 ');
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ', selection: TextSelection.collapsed(offset: 2)),
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Enter some composing text.
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+        state.userUpdateTextEditingValue(
+          const TextEditingValue(
+            text: '1 ni',
+            composing: TextRange(start: 2, end: 4),
+            selection: TextSelection.collapsed(offset: 4),
+          ),
+          SelectionChangedCause.keyboard,
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Enter some more composing text.
+        state.userUpdateTextEditingValue(
+          const TextEditingValue(
+            text: '1 nihao',
+            composing: TextRange(start: 2, end: 7),
+            selection: TextSelection.collapsed(offset: 7),
+          ),
+          SelectionChangedCause.keyboard,
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Commit the composing text.
+        state.userUpdateTextEditingValue(
+          const TextEditingValue(text: '1 你好', selection: TextSelection.collapsed(offset: 4)),
+          SelectionChangedCause.keyboard,
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 你好', selection: TextSelection.collapsed(offset: 4)),
+        );
+
+        // Undo/redo ignores the composing changes.
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ', selection: TextSelection.collapsed(offset: 2)),
+        );
+
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 你好', selection: TextSelection.collapsed(offset: 4)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 你好', selection: TextSelection.collapsed(offset: 4)),
+        );
+
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ', selection: TextSelection.collapsed(offset: 2)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ', selection: TextSelection.collapsed(offset: 2)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 你好', selection: TextSelection.collapsed(offset: 4)),
+        );
+
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.all(excluding: <TargetPlatform>{TargetPlatform.android}),
+      skip: kIsWeb, // [intended]
+    );
+
+    testWidgets(
+      'does save composing changes on Android',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              cursorOpacityAnimates: true,
+              autofillHints: null,
+            ),
+          ),
+        );
+
+        expect(controller.value, TextEditingValue.empty);
+
+        focusNode.requestFocus();
+        expect(controller.value, TextEditingValue.empty);
+        await tester.pump();
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+
+        // Wait for the throttling.
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Enter some regular non-composing text that is undoable.
+        await tester.enterText(find.byType(EditableText), '1 ');
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ', selection: TextSelection.collapsed(offset: 2)),
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Enter some composing text.
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+        state.userUpdateTextEditingValue(
+          const TextEditingValue(
+            text: '1 ni',
+            composing: TextRange(start: 2, end: 4),
+            selection: TextSelection.collapsed(offset: 4),
+          ),
+          SelectionChangedCause.keyboard,
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Enter some more composing text.
+        state.userUpdateTextEditingValue(
+          const TextEditingValue(
+            text: '1 nihao',
+            composing: TextRange(start: 2, end: 7),
+            selection: TextSelection.collapsed(offset: 7),
+          ),
+          SelectionChangedCause.keyboard,
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Commit the composing text.
+        state.userUpdateTextEditingValue(
+          const TextEditingValue(text: '1 你好', selection: TextSelection.collapsed(offset: 4)),
+          SelectionChangedCause.keyboard,
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 你好', selection: TextSelection.collapsed(offset: 4)),
+        );
+
+        // Undo/redo includes the composing changes.
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 nihao', selection: TextSelection.collapsed(offset: 7)),
+        );
+
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ni', selection: TextSelection.collapsed(offset: 4)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ', selection: TextSelection.collapsed(offset: 2)),
+        );
+
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ni', selection: TextSelection.collapsed(offset: 4)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 nihao', selection: TextSelection.collapsed(offset: 7)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 你好', selection: TextSelection.collapsed(offset: 4)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 你好', selection: TextSelection.collapsed(offset: 4)),
+        );
+
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 nihao', selection: TextSelection.collapsed(offset: 7)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ni', selection: TextSelection.collapsed(offset: 4)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ', selection: TextSelection.collapsed(offset: 2)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ', selection: TextSelection.collapsed(offset: 2)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ni', selection: TextSelection.collapsed(offset: 4)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 nihao', selection: TextSelection.collapsed(offset: 7)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 你好', selection: TextSelection.collapsed(offset: 4)),
+        );
+
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+      skip: kIsWeb, // [intended]
+    );
+
+    testWidgets(
+      'saves right up to composing change even when throttled',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              cursorOpacityAnimates: true,
+              autofillHints: null,
+            ),
+          ),
+        );
+
+        expect(controller.value, TextEditingValue.empty);
+
+        focusNode.requestFocus();
+        expect(controller.value, TextEditingValue.empty);
+        await tester.pump();
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+
+        // Wait for the throttling.
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Enter some regular non-composing text that is undoable.
+        await tester.enterText(find.byType(EditableText), '1 ');
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ', selection: TextSelection.collapsed(offset: 2)),
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Enter some regular non-composing text and then immediately enter some
+        // composing text.
+        await tester.enterText(find.byType(EditableText), '1 2 ');
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 2 ', selection: TextSelection.collapsed(offset: 4)),
+        );
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+        state.userUpdateTextEditingValue(
+          const TextEditingValue(
+            text: '1 2 ni',
+            composing: TextRange(start: 4, end: 6),
+            selection: TextSelection.collapsed(offset: 6),
+          ),
+          SelectionChangedCause.keyboard,
+        );
+        expect(
+          controller.value,
+          const TextEditingValue(
+            text: '1 2 ni',
+            composing: TextRange(start: 4, end: 6),
+            selection: TextSelection.collapsed(offset: 6),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Commit the composing text.
+        state.userUpdateTextEditingValue(
+          const TextEditingValue(text: '1 2 你', selection: TextSelection.collapsed(offset: 5)),
+          SelectionChangedCause.keyboard,
+        );
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 2 你', selection: TextSelection.collapsed(offset: 5)),
+        );
+
+        // Undo/redo still gets the second non-composing change.
+        await sendUndo(tester);
+        switch (defaultTargetPlatform) {
+          // Android includes composing changes.
+          case TargetPlatform.android:
+            expect(
+              controller.value,
+              emptyComposingOnAndroid(
+                const TextEditingValue(
+                  text: '1 2 ni',
+                  composing: TextRange(start: 4, end: 6),
+                  selection: TextSelection.collapsed(offset: 6),
+                ),
+              ),
+            );
+          // Composing changes are ignored on all other platforms.
+          case TargetPlatform.fuchsia:
+          case TargetPlatform.linux:
+          case TargetPlatform.windows:
+          case TargetPlatform.iOS:
+          case TargetPlatform.macOS:
+            expect(
+              controller.value,
+              const TextEditingValue(text: '1 2 ', selection: TextSelection.collapsed(offset: 4)),
+            );
+        }
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ', selection: TextSelection.collapsed(offset: 2)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+        await sendUndo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
+        );
+
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 ', selection: TextSelection.collapsed(offset: 2)),
+        );
+        await sendRedo(tester);
+        switch (defaultTargetPlatform) {
+          // Android includes composing changes.
+          case TargetPlatform.android:
+            expect(
+              controller.value,
+              emptyComposingOnAndroid(
+                const TextEditingValue(
+                  text: '1 2 ni',
+                  composing: TextRange(start: 4, end: 6),
+                  selection: TextSelection.collapsed(offset: 6),
+                ),
+              ),
+            );
+          // Composing changes are ignored on all other platforms.
+          case TargetPlatform.fuchsia:
+          case TargetPlatform.linux:
+          case TargetPlatform.windows:
+          case TargetPlatform.iOS:
+          case TargetPlatform.macOS:
+            expect(
+              controller.value,
+              const TextEditingValue(text: '1 2 ', selection: TextSelection.collapsed(offset: 4)),
+            );
+        }
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 2 你', selection: TextSelection.collapsed(offset: 5)),
+        );
+        await sendRedo(tester);
+        expect(
+          controller.value,
+          const TextEditingValue(text: '1 2 你', selection: TextSelection.collapsed(offset: 5)),
+        );
+
+        // On web, these keyboard shortcuts are handled by the browser.
+      },
+      variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended]
+    );
   });
 
-  testWidgets('pasting with the keyboard collapses the selection and places it after the pasted content', (WidgetTester tester) async {
-    Future<void> testPasteSelection(WidgetTester tester, _VoidFutureCallback paste) async {
-      final TextEditingController controller = TextEditingController();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            backgroundCursorColor: Colors.grey,
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            selectionControls: materialTextSelectionControls,
+  testWidgets(
+    'pasting with the keyboard collapses the selection and places it after the pasted content',
+    (WidgetTester tester) async {
+      Future<void> testPasteSelection(WidgetTester tester, _VoidFutureCallback paste) async {
+        final controller = TextEditingController();
+        addTearDown(controller.dispose);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              selectionControls: materialTextSelectionControls,
+            ),
           ),
-        ),
-      );
+        );
 
-      await tester.pump();
-      expect(controller.text, '');
+        await tester.pump();
+        expect(controller.text, '');
 
-      await tester.enterText(find.byType(EditableText), '12345');
-      expect(controller.value, const TextEditingValue(
-        text: '12345',
-        selection: TextSelection.collapsed(offset: 5),
-      ));
+        await tester.enterText(find.byType(EditableText), '12345');
+        expect(
+          controller.value,
+          const TextEditingValue(text: '12345', selection: TextSelection.collapsed(offset: 5)),
+        );
 
-      await sendKeys(
-        tester,
-        <LogicalKeyboardKey>[
+        await sendKeys(
+          tester,
+          <LogicalKeyboardKey>[
+            LogicalKeyboardKey.arrowLeft,
+            LogicalKeyboardKey.arrowLeft,
+            LogicalKeyboardKey.arrowLeft,
+            LogicalKeyboardKey.arrowLeft,
+            LogicalKeyboardKey.arrowLeft,
+          ],
+          shift: true,
+          targetPlatform: defaultTargetPlatform,
+        );
+
+        expect(
+          controller.value,
+          const TextEditingValue(
+            text: '12345',
+            selection: TextSelection(baseOffset: 5, extentOffset: 0),
+          ),
+        );
+
+        await sendKeys(
+          tester,
+          <LogicalKeyboardKey>[LogicalKeyboardKey.keyC],
+          shortcutModifier: true,
+          targetPlatform: defaultTargetPlatform,
+        );
+        expect(
+          controller.value,
+          const TextEditingValue(
+            text: '12345',
+            selection: TextSelection(baseOffset: 5, extentOffset: 0),
+          ),
+        );
+
+        // Pasting content of equal length, reversed selection.
+        await paste();
+        expect(
+          controller.value,
+          const TextEditingValue(text: '12345', selection: TextSelection.collapsed(offset: 5)),
+        );
+
+        // Pasting content of longer length, forward selection.
+        await sendKeys(tester, <LogicalKeyboardKey>[
           LogicalKeyboardKey.arrowLeft,
-          LogicalKeyboardKey.arrowLeft,
-          LogicalKeyboardKey.arrowLeft,
-          LogicalKeyboardKey.arrowLeft,
-          LogicalKeyboardKey.arrowLeft,
-        ],
-        shift: true,
-        targetPlatform: defaultTargetPlatform,
-      );
+        ], targetPlatform: defaultTargetPlatform);
+        await sendKeys(
+          tester,
+          <LogicalKeyboardKey>[LogicalKeyboardKey.arrowRight],
+          shift: true,
+          targetPlatform: defaultTargetPlatform,
+        );
+        expect(
+          controller.value,
+          const TextEditingValue(
+            text: '12345',
+            selection: TextSelection(baseOffset: 4, extentOffset: 5),
+          ),
+        );
+        await paste();
+        expect(
+          controller.value,
+          const TextEditingValue(text: '123412345', selection: TextSelection.collapsed(offset: 9)),
+        );
 
-      expect(controller.value, const TextEditingValue(
-        text: '12345',
-        selection: TextSelection(baseOffset: 5, extentOffset: 0),
-      ));
+        // Pasting content of shorter length, forward selection.
+        await sendKeys(
+          tester,
+          <LogicalKeyboardKey>[LogicalKeyboardKey.keyA],
+          shortcutModifier: true,
+          targetPlatform: defaultTargetPlatform,
+        );
+        expect(
+          controller.value,
+          const TextEditingValue(
+            text: '123412345',
+            selection: TextSelection(baseOffset: 0, extentOffset: 9),
+          ),
+        );
+        await paste();
+        // Pump to allow postFrameCallbacks to finish before dispose.
+        await tester.pump();
+        expect(
+          controller.value,
+          const TextEditingValue(text: '12345', selection: TextSelection.collapsed(offset: 5)),
+        );
+      }
 
-      await sendKeys(
-        tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.keyC,
-        ],
-        shortcutModifier: true,
-        targetPlatform: defaultTargetPlatform,
-      );
-      expect(controller.value, const TextEditingValue(
-        text: '12345',
-        selection: TextSelection(baseOffset: 5, extentOffset: 0),
-      ));
+      // Test pasting with the keyboard.
+      await testPasteSelection(tester, () {
+        return sendKeys(
+          tester,
+          <LogicalKeyboardKey>[LogicalKeyboardKey.keyV],
+          shortcutModifier: true,
+          targetPlatform: defaultTargetPlatform,
+        );
+      });
 
-      // Pasting content of equal length, reversed selection.
-      await paste();
-      expect(controller.value, const TextEditingValue(
-        text: '12345',
-        selection: TextSelection.collapsed(offset: 5),
-      ));
-
-      // Pasting content of longer length, forward selection.
-      await sendKeys(
-        tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.arrowLeft,
-        ],
-        targetPlatform: defaultTargetPlatform,
-      );
-      await sendKeys(
-        tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.arrowRight,
-        ],
-        shift: true,
-        targetPlatform: defaultTargetPlatform,
-      );
-      expect(controller.value, const TextEditingValue(
-        text: '12345',
-        selection: TextSelection(baseOffset: 4, extentOffset: 5),
-      ));
-      await paste();
-      expect(controller.value, const TextEditingValue(
-        text: '123412345',
-        selection: TextSelection.collapsed(offset: 9),
-      ));
-
-      // Pasting content of shorter length, forward selection.
-      await sendKeys(
-        tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.keyA,
-        ],
-        shortcutModifier: true,
-        targetPlatform: defaultTargetPlatform,
-      );
-      expect(controller.value, const TextEditingValue(
-        text: '123412345',
-        selection: TextSelection(baseOffset: 0, extentOffset: 9),
-      ));
-      await paste();
-      // Pump to allow postFrameCallbacks to finish before dispose.
-      await tester.pump();
-      expect(controller.value, const TextEditingValue(
-        text: '12345',
-        selection: TextSelection.collapsed(offset: 5),
-      ));
-    }
-
-    // Test pasting with the keyboard.
-    await testPasteSelection(tester, () {
-      return sendKeys(
-        tester,
-        <LogicalKeyboardKey>[
-          LogicalKeyboardKey.keyV,
-        ],
-        shortcutModifier: true,
-        targetPlatform: defaultTargetPlatform,
-      );
-    });
-
-    // Test pasting with the toolbar.
-    await testPasteSelection(tester, () async {
-      final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
-      expect(state.showToolbar(), true);
-      await tester.pumpAndSettle();
-      expect(find.text('Paste'), findsOneWidget);
-      return tester.tap(find.text('Paste'));
-    });
-  }, skip: kIsWeb); // [intended]
+      // Test pasting with the toolbar.
+      await testPasteSelection(tester, () async {
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+        expect(state.showToolbar(), true);
+        await tester.pumpAndSettle();
+        expect(find.text('Paste'), findsOneWidget);
+        return tester.tap(find.text('Paste'));
+      });
+    },
+    skip: kIsWeb, // [intended]
+  );
 
   // Regression test for https://github.com/flutter/flutter/issues/98322.
-  testWidgets('EditableText consumes ActivateIntent and ButtonActivateIntent', (WidgetTester tester) async {
-    bool receivedIntent = false;
+  testWidgets('EditableText consumes ActivateIntent and ButtonActivateIntent', (
+    WidgetTester tester,
+  ) async {
+    var receivedIntent = false;
     await tester.pumpWidget(
       MaterialApp(
         home: Actions(
           actions: <Type, Action<Intent>>{
-            ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) {
-              receivedIntent = true;
-              return;
-            }),
-            ButtonActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) {
-              receivedIntent = true;
-              return;
-            }),
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                receivedIntent = true;
+                return;
+              },
+            ),
+            ButtonActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                receivedIntent = true;
+                return;
+              },
+            ),
           },
           child: EditableText(
             autofocus: true,
@@ -14382,40 +15067,41 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
 
   // Regression test for https://github.com/flutter/flutter/issues/100585.
   testWidgets('can paste and remove field', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: 'text');
+    controller.text = 'text';
     late StateSetter setState;
-    bool showField = true;
-    final _CustomTextSelectionControls controls = _CustomTextSelectionControls(
+    var showField = true;
+    final controls = _CustomTextSelectionControls(
       onPaste: () {
         setState(() {
           showField = false;
         });
       },
     );
-    await tester.pumpWidget(MaterialApp(
-      home: StatefulBuilder(
-        builder: (BuildContext context, StateSetter stateSetter) {
-          setState = stateSetter;
-          if (!showField) {
-            return const Placeholder();
-          }
-          return EditableText(
-            backgroundCursorColor: Colors.grey,
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            selectionControls: controls,
-          );
-        },
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (BuildContext context, StateSetter stateSetter) {
+            setState = stateSetter;
+            if (!showField) {
+              return const Placeholder();
+            }
+            return EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              selectionControls: controls,
+            );
+          },
+        ),
       ),
-    ));
+    );
 
     await tester.tap(find.byType(EditableText));
     await tester.pump();
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     await tester.longPress(find.byType(EditableText));
     await tester.pump();
@@ -14427,45 +15113,46 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), null);
-  // On web, the text selection toolbar paste button is handled by the browser.
+    // On web, the text selection toolbar paste button is handled by the browser.
   }, skip: kIsWeb); // [intended]
 
   // Regression test for https://github.com/flutter/flutter/issues/100585.
   testWidgets('can cut and remove field', (WidgetTester tester) async {
-    final TextEditingController controller = TextEditingController(text: 'text');
+    controller.text = 'text';
     late StateSetter setState;
-    bool showField = true;
-    final _CustomTextSelectionControls controls = _CustomTextSelectionControls(
+    var showField = true;
+    final controls = _CustomTextSelectionControls(
       onCut: () {
         setState(() {
           showField = false;
         });
       },
     );
-    await tester.pumpWidget(MaterialApp(
-      home: StatefulBuilder(
-        builder: (BuildContext context, StateSetter stateSetter) {
-          setState = stateSetter;
-          if (!showField) {
-            return const Placeholder();
-          }
-          return EditableText(
-            backgroundCursorColor: Colors.grey,
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            selectionControls: controls,
-          );
-        },
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (BuildContext context, StateSetter stateSetter) {
+            setState = stateSetter;
+            if (!showField) {
+              return const Placeholder();
+            }
+            return EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              selectionControls: controls,
+            );
+          },
+        ),
       ),
-    ));
+    );
 
     await tester.tap(find.byType(EditableText));
     await tester.pump();
 
-    final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
     await tester.tapAt(textOffsetToPosition(tester, 2));
     state.renderEditable.selectWord(cause: SelectionChangedCause.longPress);
@@ -14478,229 +15165,226 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), null);
-  // On web, the text selection toolbar cut button is handled by the browser.
+    // On web, the text selection toolbar cut button is handled by the browser.
   }, skip: kIsWeb); // [intended]
 
   group('Mac document shortcuts', () {
-    testWidgets('ctrl-A/E', (WidgetTester tester) async {
-      final String targetPlatformString = defaultTargetPlatform.toString();
-      final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
-      final TextEditingController controller = TextEditingController(text: testText);
-      controller.selection = const TextSelection(
-        baseOffset: 0,
-        extentOffset: 0,
-        affinity: TextAffinity.upstream,
-      );
-      await tester.pumpWidget(MaterialApp(
-        home: Align(
-          alignment: Alignment.topLeft,
-          child: SizedBox(
-            width: 400,
-            child: EditableText(
-              maxLines: 10,
-              controller: controller,
-              showSelectionHandles: true,
-              autofocus: true,
-              focusNode: FocusNode(),
-              style: Typography.material2018().black.titleMedium!,
-              cursorColor: Colors.blue,
-              backgroundCursorColor: Colors.grey,
-              selectionControls: materialTextSelectionControls,
-              keyboardType: TextInputType.text,
-              textAlign: TextAlign.right,
+    testWidgets(
+      'ctrl-A/E',
+      (WidgetTester tester) async {
+        final targetPlatformString = defaultTargetPlatform.toString();
+        final String platform = targetPlatformString
+            .substring(targetPlatformString.indexOf('.') + 1)
+            .toLowerCase();
+        controller.text = testText;
+        controller.selection = const TextSelection(
+          baseOffset: 0,
+          extentOffset: 0,
+          affinity: TextAffinity.upstream,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 400,
+                child: EditableText(
+                  maxLines: 10,
+                  controller: controller,
+                  showSelectionHandles: true,
+                  autofocus: true,
+                  focusNode: focusNode,
+                  style: Typography.material2018().black.titleMedium!,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                  selectionControls: materialTextSelectionControls,
+                  keyboardType: TextInputType.text,
+                  textAlign: TextAlign.right,
+                ),
+              ),
             ),
           ),
-        ),
-      ));
+        );
 
-      await tester.pump(); // Wait for autofocus to take effect.
+        await tester.pump(); // Wait for autofocus to take effect.
 
-      expect(controller.selection.isCollapsed, isTrue);
-      expect(controller.selection.baseOffset, 0);
+        expect(controller.selection.isCollapsed, isTrue);
+        expect(controller.selection.baseOffset, 0);
 
-      await tester.sendKeyDownEvent(
-        LogicalKeyboardKey.controlLeft,
-        platform: platform,
-      );
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyE, platform: platform);
-      await tester.pump();
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
-      await tester.pump();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyE, platform: platform);
+        await tester.pump();
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
 
-      expect(
-        controller.selection,
-        equals(
-          const TextSelection.collapsed(
-            offset: 19,
-            affinity: TextAffinity.upstream,
-          ),
-        ),
-        reason: 'on $platform',
-      );
+        expect(
+          controller.selection,
+          equals(const TextSelection.collapsed(offset: 19, affinity: TextAffinity.upstream)),
+          reason: 'on $platform',
+        );
 
-      await tester.sendKeyDownEvent(
-        LogicalKeyboardKey.controlLeft,
-        platform: platform,
-      );
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyA, platform: platform);
-      await tester.pump();
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
-      await tester.pump();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyA, platform: platform);
+        await tester.pump();
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
 
-      expect(
-        controller.selection,
-        equals(
-          const TextSelection.collapsed(
-            offset: 0,
-          ),
-        ),
-        reason: 'on $platform',
-      );
-    },
+        expect(
+          controller.selection,
+          equals(const TextSelection.collapsed(offset: 0)),
+          reason: 'on $platform',
+        );
+      },
       skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-      variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }),
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.iOS,
+        TargetPlatform.macOS,
+      }),
     );
 
-    testWidgets('ctrl-F/B', (WidgetTester tester) async {
-      final String targetPlatformString = defaultTargetPlatform.toString();
-      final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
-      final TextEditingController controller = TextEditingController(text: testText);
-      controller.selection = const TextSelection(
-        baseOffset: 0,
-        extentOffset: 0,
-        affinity: TextAffinity.upstream,
-      );
-      await tester.pumpWidget(MaterialApp(
-        home: Align(
-          alignment: Alignment.topLeft,
-          child: SizedBox(
-            width: 400,
-            child: EditableText(
-              maxLines: 10,
-              controller: controller,
-              showSelectionHandles: true,
-              autofocus: true,
-              focusNode: FocusNode(),
-              style: Typography.material2018().black.titleMedium!,
-              cursorColor: Colors.blue,
-              backgroundCursorColor: Colors.grey,
-              selectionControls: materialTextSelectionControls,
-              keyboardType: TextInputType.text,
-              textAlign: TextAlign.right,
+    testWidgets(
+      'ctrl-F/B',
+      (WidgetTester tester) async {
+        final targetPlatformString = defaultTargetPlatform.toString();
+        final String platform = targetPlatformString
+            .substring(targetPlatformString.indexOf('.') + 1)
+            .toLowerCase();
+        controller.text = testText;
+        controller.selection = const TextSelection(
+          baseOffset: 0,
+          extentOffset: 0,
+          affinity: TextAffinity.upstream,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 400,
+                child: EditableText(
+                  maxLines: 10,
+                  controller: controller,
+                  showSelectionHandles: true,
+                  autofocus: true,
+                  focusNode: focusNode,
+                  style: Typography.material2018().black.titleMedium!,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                  selectionControls: materialTextSelectionControls,
+                  keyboardType: TextInputType.text,
+                  textAlign: TextAlign.right,
+                ),
+              ),
             ),
           ),
-        ),
-      ));
+        );
 
-      await tester.pump(); // Wait for autofocus to take effect.
+        await tester.pump(); // Wait for autofocus to take effect.
 
-      expect(controller.selection.isCollapsed, isTrue);
-      expect(controller.selection.baseOffset, 0);
+        expect(controller.selection.isCollapsed, isTrue);
+        expect(controller.selection.baseOffset, 0);
 
-      await tester.sendKeyDownEvent(
-        LogicalKeyboardKey.controlLeft,
-        platform: platform,
-      );
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyF, platform: platform);
-      await tester.pump();
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
-      await tester.pump();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyF, platform: platform);
+        await tester.pump();
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
 
-      expect(controller.selection.isCollapsed, isTrue);
-      expect(controller.selection.baseOffset, 1);
+        expect(controller.selection.isCollapsed, isTrue);
+        expect(controller.selection.baseOffset, 1);
 
-      await tester.sendKeyDownEvent(
-        LogicalKeyboardKey.controlLeft,
-        platform: platform,
-      );
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyB, platform: platform);
-      await tester.pump();
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
-      await tester.pump();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyB, platform: platform);
+        await tester.pump();
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
 
-      expect(controller.selection.isCollapsed, isTrue);
-      expect(controller.selection.baseOffset, 0);
-    },
+        expect(controller.selection.isCollapsed, isTrue);
+        expect(controller.selection.baseOffset, 0);
+      },
       skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-      variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }),
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.iOS,
+        TargetPlatform.macOS,
+      }),
     );
 
-    testWidgets('ctrl-N/P', (WidgetTester tester) async {
-      final String targetPlatformString = defaultTargetPlatform.toString();
-      final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
-      final TextEditingController controller = TextEditingController(text: testText);
-      controller.selection = const TextSelection(
-        baseOffset: 0,
-        extentOffset: 0,
-        affinity: TextAffinity.upstream,
-      );
-      await tester.pumpWidget(MaterialApp(
-        home: Align(
-          alignment: Alignment.topLeft,
-          child: SizedBox(
-            width: 400,
-            child: EditableText(
-              maxLines: 10,
-              controller: controller,
-              showSelectionHandles: true,
-              autofocus: true,
-              focusNode: FocusNode(),
-              style: Typography.material2018().black.titleMedium!,
-              cursorColor: Colors.blue,
-              backgroundCursorColor: Colors.grey,
-              selectionControls: materialTextSelectionControls,
-              keyboardType: TextInputType.text,
-              textAlign: TextAlign.right,
+    testWidgets(
+      'ctrl-N/P',
+      (WidgetTester tester) async {
+        final targetPlatformString = defaultTargetPlatform.toString();
+        final String platform = targetPlatformString
+            .substring(targetPlatformString.indexOf('.') + 1)
+            .toLowerCase();
+        controller.text = testText;
+        controller.selection = const TextSelection(
+          baseOffset: 0,
+          extentOffset: 0,
+          affinity: TextAffinity.upstream,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 400,
+                child: EditableText(
+                  maxLines: 10,
+                  controller: controller,
+                  showSelectionHandles: true,
+                  autofocus: true,
+                  focusNode: focusNode,
+                  style: Typography.material2018().black.titleMedium!,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                  selectionControls: materialTextSelectionControls,
+                  keyboardType: TextInputType.text,
+                  textAlign: TextAlign.right,
+                ),
+              ),
             ),
           ),
-        ),
-      ));
+        );
 
-      await tester.pump(); // Wait for autofocus to take effect.
+        await tester.pump(); // Wait for autofocus to take effect.
 
-      expect(controller.selection.isCollapsed, isTrue);
-      expect(controller.selection.baseOffset, 0);
+        expect(controller.selection.isCollapsed, isTrue);
+        expect(controller.selection.baseOffset, 0);
 
-      await tester.sendKeyDownEvent(
-        LogicalKeyboardKey.controlLeft,
-        platform: platform,
-      );
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyN, platform: platform);
-      await tester.pump();
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
-      await tester.pump();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyN, platform: platform);
+        await tester.pump();
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
 
-      expect(controller.selection.isCollapsed, isTrue);
-      expect(controller.selection.baseOffset, 20);
+        expect(controller.selection.isCollapsed, isTrue);
+        expect(controller.selection.baseOffset, 20);
 
-      await tester.sendKeyDownEvent(
-        LogicalKeyboardKey.controlLeft,
-        platform: platform,
-      );
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyP, platform: platform);
-      await tester.pump();
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
-      await tester.pump();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyP, platform: platform);
+        await tester.pump();
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft, platform: platform);
+        await tester.pump();
 
-      expect(controller.selection.isCollapsed, isTrue);
-      expect(controller.selection.baseOffset, 0);
-    },
+        expect(controller.selection.isCollapsed, isTrue);
+        expect(controller.selection.baseOffset, 0);
+      },
       skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-      variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }),
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.iOS,
+        TargetPlatform.macOS,
+      }),
     );
 
     group('ctrl-T to transpose', () {
       Future<void> ctrlT(WidgetTester tester, String platform) async {
-        await tester.sendKeyDownEvent(
-          LogicalKeyboardKey.controlLeft,
-          platform: platform,
-        );
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft, platform: platform);
         await tester.pump();
         await tester.sendKeyEvent(LogicalKeyboardKey.keyT, platform: platform);
         await tester.pump();
@@ -14708,182 +15392,190 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
         await tester.pump();
       }
 
-      testWidgets('with normal characters', (WidgetTester tester) async {
-        final String targetPlatformString = defaultTargetPlatform.toString();
-        final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
+      testWidgets(
+        'with normal characters',
+        (WidgetTester tester) async {
+          final targetPlatformString = defaultTargetPlatform.toString();
+          final String platform = targetPlatformString
+              .substring(targetPlatformString.indexOf('.') + 1)
+              .toLowerCase();
 
-        final TextEditingController controller = TextEditingController(text: testText);
-        controller.selection = const TextSelection(
-          baseOffset: 0,
-          extentOffset: 0,
-          affinity: TextAffinity.upstream,
-        );
-        await tester.pumpWidget(MaterialApp(
-          home: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 400,
-              child: EditableText(
-                maxLines: 10,
-                controller: controller,
-                showSelectionHandles: true,
-                autofocus: true,
-                focusNode: FocusNode(),
-                style: Typography.material2018().black.titleMedium!,
-                cursorColor: Colors.blue,
-                backgroundCursorColor: Colors.grey,
-                selectionControls: materialTextSelectionControls,
-                keyboardType: TextInputType.text,
-                textAlign: TextAlign.right,
+          controller.text = testText;
+          controller.selection = const TextSelection(
+            baseOffset: 0,
+            extentOffset: 0,
+            affinity: TextAffinity.upstream,
+          );
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: 400,
+                  child: EditableText(
+                    maxLines: 10,
+                    controller: controller,
+                    showSelectionHandles: true,
+                    autofocus: true,
+                    focusNode: focusNode,
+                    style: Typography.material2018().black.titleMedium!,
+                    cursorColor: Colors.blue,
+                    backgroundCursorColor: Colors.grey,
+                    selectionControls: materialTextSelectionControls,
+                    keyboardType: TextInputType.text,
+                    textAlign: TextAlign.right,
+                  ),
+                ),
               ),
             ),
-          ),
-        ));
+          );
 
-        await tester.pump(); // Wait for autofocus to take effect.
+          await tester.pump(); // Wait for autofocus to take effect.
 
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, 0);
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, 0);
 
-        // ctrl-T does nothing at the start of the field.
-        await ctrlT(tester, platform);
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, 0);
+          // ctrl-T does nothing at the start of the field.
+          await ctrlT(tester, platform);
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, 0);
 
-        controller.selection = const TextSelection(
-          baseOffset: 1,
-          extentOffset: 4,
-        );
-        await tester.pump();
-        expect(controller.selection.isCollapsed, isFalse);
-        expect(controller.selection.baseOffset, 1);
-        expect(controller.selection.extentOffset, 4);
+          controller.selection = const TextSelection(baseOffset: 1, extentOffset: 4);
+          await tester.pump();
+          expect(controller.selection.isCollapsed, isFalse);
+          expect(controller.selection.baseOffset, 1);
+          expect(controller.selection.extentOffset, 4);
 
-        // ctrl-T does nothing when the selection isn't collapsed.
-        await ctrlT(tester, platform);
-        expect(controller.selection.isCollapsed, isFalse);
-        expect(controller.selection.baseOffset, 1);
-        expect(controller.selection.extentOffset, 4);
+          // ctrl-T does nothing when the selection isn't collapsed.
+          await ctrlT(tester, platform);
+          expect(controller.selection.isCollapsed, isFalse);
+          expect(controller.selection.baseOffset, 1);
+          expect(controller.selection.extentOffset, 4);
 
-        controller.selection = const TextSelection.collapsed(offset: 5);
-        await tester.pump();
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, 5);
+          controller.selection = const TextSelection.collapsed(offset: 5);
+          await tester.pump();
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, 5);
 
-        // ctrl-T swaps the previous and next characters when they exist.
-        await ctrlT(tester, platform);
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, 6);
-        expect(controller.text.substring(0, 19), 'Now si the time for');
+          // ctrl-T swaps the previous and next characters when they exist.
+          await ctrlT(tester, platform);
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, 6);
+          expect(controller.text.substring(0, 19), 'Now si the time for');
 
-        await ctrlT(tester, platform);
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, 7);
-        expect(controller.text.substring(0, 19), 'Now s ithe time for');
+          await ctrlT(tester, platform);
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, 7);
+          expect(controller.text.substring(0, 19), 'Now s ithe time for');
 
-        await ctrlT(tester, platform);
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, 8);
-        expect(controller.text.substring(0, 19), 'Now s tihe time for');
+          await ctrlT(tester, platform);
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, 8);
+          expect(controller.text.substring(0, 19), 'Now s tihe time for');
 
-        controller.selection = TextSelection.collapsed(
-          offset: controller.text.length,
-        );
-        await tester.pump();
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, controller.text.length);
-        expect(controller.text.substring(55, 72), 'of their country.');
+          controller.selection = TextSelection.collapsed(offset: controller.text.length);
+          await tester.pump();
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, controller.text.length);
+          expect(controller.text.substring(55, 72), 'of their country.');
 
-        await ctrlT(tester, platform);
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, controller.text.length);
-        expect(controller.text.substring(55, 72), 'of their countr.y');
-      },
+          await ctrlT(tester, platform);
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, controller.text.length);
+          expect(controller.text.substring(55, 72), 'of their countr.y');
+        },
         skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-        variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }),
+        variant: const TargetPlatformVariant(<TargetPlatform>{
+          TargetPlatform.iOS,
+          TargetPlatform.macOS,
+        }),
       );
 
-      testWidgets('with extended grapheme clusters', (WidgetTester tester) async {
-        final String targetPlatformString = defaultTargetPlatform.toString();
-        final String platform = targetPlatformString.substring(targetPlatformString.indexOf('.') + 1).toLowerCase();
+      testWidgets(
+        'with extended grapheme clusters',
+        (WidgetTester tester) async {
+          final targetPlatformString = defaultTargetPlatform.toString();
+          final String platform = targetPlatformString
+              .substring(targetPlatformString.indexOf('.') + 1)
+              .toLowerCase();
 
-        final TextEditingController controller = TextEditingController(
           // One extended grapheme cluster of length 8 and one surrogate pair of
           // length 2.
-          text: '👨‍👩‍👦😆',
-        );
-        controller.selection = const TextSelection(
-          baseOffset: 0,
-          extentOffset: 0,
-          affinity: TextAffinity.upstream,
-        );
-        await tester.pumpWidget(MaterialApp(
-          home: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 400,
-              child: EditableText(
-                maxLines: 10,
-                controller: controller,
-                showSelectionHandles: true,
-                autofocus: true,
-                focusNode: FocusNode(),
-                style: Typography.material2018().black.titleMedium!,
-                cursorColor: Colors.blue,
-                backgroundCursorColor: Colors.grey,
-                selectionControls: materialTextSelectionControls,
-                keyboardType: TextInputType.text,
-                textAlign: TextAlign.right,
+          controller.text = '👨‍👩‍👦😆';
+          controller.selection = const TextSelection(
+            baseOffset: 0,
+            extentOffset: 0,
+            affinity: TextAffinity.upstream,
+          );
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: 400,
+                  child: EditableText(
+                    maxLines: 10,
+                    controller: controller,
+                    showSelectionHandles: true,
+                    autofocus: true,
+                    focusNode: focusNode,
+                    style: Typography.material2018().black.titleMedium!,
+                    cursorColor: Colors.blue,
+                    backgroundCursorColor: Colors.grey,
+                    selectionControls: materialTextSelectionControls,
+                    keyboardType: TextInputType.text,
+                    textAlign: TextAlign.right,
+                  ),
+                ),
               ),
             ),
-          ),
-        ));
+          );
 
-        await tester.pump(); // Wait for autofocus to take effect.
+          await tester.pump(); // Wait for autofocus to take effect.
 
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, 0);
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, 0);
 
-        // ctrl-T does nothing at the start of the field.
-        await ctrlT(tester, platform);
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, 0);
-        expect(controller.text, '👨‍👩‍👦😆');
+          // ctrl-T does nothing at the start of the field.
+          await ctrlT(tester, platform);
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, 0);
+          expect(controller.text, '👨‍👩‍👦😆');
 
-        controller.selection = const TextSelection(
-          baseOffset: 8,
-          extentOffset: 10,
-        );
-        await tester.pump();
-        expect(controller.selection.isCollapsed, isFalse);
-        expect(controller.selection.baseOffset, 8);
-        expect(controller.selection.extentOffset, 10);
+          controller.selection = const TextSelection(baseOffset: 8, extentOffset: 10);
+          await tester.pump();
+          expect(controller.selection.isCollapsed, isFalse);
+          expect(controller.selection.baseOffset, 8);
+          expect(controller.selection.extentOffset, 10);
 
-        // ctrl-T does nothing when the selection isn't collapsed.
-        await ctrlT(tester, platform);
-        expect(controller.selection.isCollapsed, isFalse);
-        expect(controller.selection.baseOffset, 8);
-        expect(controller.selection.extentOffset, 10);
-        expect(controller.text, '👨‍👩‍👦😆');
+          // ctrl-T does nothing when the selection isn't collapsed.
+          await ctrlT(tester, platform);
+          expect(controller.selection.isCollapsed, isFalse);
+          expect(controller.selection.baseOffset, 8);
+          expect(controller.selection.extentOffset, 10);
+          expect(controller.text, '👨‍👩‍👦😆');
 
-        controller.selection = const TextSelection.collapsed(offset: 8);
-        await tester.pump();
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, 8);
+          controller.selection = const TextSelection.collapsed(offset: 8);
+          await tester.pump();
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, 8);
 
-        // ctrl-T swaps the previous and next characters when they exist.
-        await ctrlT(tester, platform);
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, 10);
-        expect(controller.text, '😆👨‍👩‍👦');
+          // ctrl-T swaps the previous and next characters when they exist.
+          await ctrlT(tester, platform);
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, 10);
+          expect(controller.text, '😆👨‍👩‍👦');
 
-        await ctrlT(tester, platform);
-        expect(controller.selection.isCollapsed, isTrue);
-        expect(controller.selection.baseOffset, 10);
-        expect(controller.text, '👨‍👩‍👦😆');
-      },
+          await ctrlT(tester, platform);
+          expect(controller.selection.isCollapsed, isTrue);
+          expect(controller.selection.baseOffset, 10);
+          expect(controller.text, '👨‍👩‍👦😆');
+        },
         skip: kIsWeb, // [intended] on web these keys are handled by the browser.
-        variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }),
+        variant: const TargetPlatformVariant(<TargetPlatform>{
+          TargetPlatform.iOS,
+          TargetPlatform.macOS,
+        }),
       );
     });
 
@@ -14891,46 +15583,42 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       controller.text = 'test\nline2';
       controller.selection = TextSelection.collapsed(offset: controller.text.length);
 
-      final GlobalKey<EditableTextState> key = GlobalKey<EditableTextState>();
+      final key = GlobalKey<EditableTextState>();
 
-      await tester.pumpWidget(MaterialApp(
-        home: Align(
-          alignment: Alignment.topLeft,
-          child: SizedBox(
-            width: 400,
-            child: EditableText(
-              key: key,
-              maxLines: 10,
-              controller: controller,
-              showSelectionHandles: true,
-              autofocus: true,
-              focusNode: FocusNode(),
-              style: Typography.material2018().black.titleMedium!,
-              cursorColor: Colors.blue,
-              backgroundCursorColor: Colors.grey,
-              selectionControls: materialTextSelectionControls,
-              keyboardType: TextInputType.text,
-              textAlign: TextAlign.right,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                key: key,
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                selectionControls: materialTextSelectionControls,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+              ),
             ),
           ),
         ),
-      ));
+      );
 
       key.currentState!.performSelector('moveLeft:');
       await tester.pump();
 
-      expect(
-        controller.selection,
-        const TextSelection.collapsed(offset: 9),
-      );
+      expect(controller.selection, const TextSelection.collapsed(offset: 9));
 
       key.currentState!.performSelector('moveToBeginningOfParagraph:');
       await tester.pump();
 
-      expect(
-        controller.selection,
-        const TextSelection.collapsed(offset: 5),
-      );
+      expect(controller.selection, const TextSelection.collapsed(offset: 5));
 
       // These both need to be handled, first moves cursor to the end of previous
       // paragraph, second moves to the beginning of paragraph.
@@ -14938,72 +15626,476 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       key.currentState!.performSelector('moveToBeginningOfParagraph:');
       await tester.pump();
 
-      expect(
-        controller.selection,
-        const TextSelection.collapsed(offset: 0),
-      );
+      expect(controller.selection, const TextSelection.collapsed(offset: 0));
     });
   });
 
-  testWidgets('contextMenuBuilder is used in place of the default text selection toolbar', (WidgetTester tester) async {
-    final GlobalKey key = GlobalKey();
-    final TextEditingController controller = TextEditingController(text: '');
-    await tester.pumpWidget(MaterialApp(
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 400,
-          child: EditableText(
-            maxLines: 10,
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.subtitle1!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-            selectionControls: materialTextSelectionHandleControls,
-            contextMenuBuilder: (
-              BuildContext context,
-              EditableTextState editableTextState,
-            ) {
-              return SizedBox(
-                key: key,
-                width: 10.0,
-                height: 10.0,
+  testWidgets(
+    'contextMenuBuilder is used in place of the default text selection toolbar',
+    (WidgetTester tester) async {
+      final GlobalKey key = GlobalKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: EditableText(
+                maxLines: 10,
+                controller: controller,
+                showSelectionHandles: true,
+                autofocus: true,
+                focusNode: focusNode,
+                style: Typography.material2018().black.titleMedium!,
+                cursorColor: Colors.blue,
+                backgroundCursorColor: Colors.grey,
+                keyboardType: TextInputType.text,
+                textAlign: TextAlign.right,
+                selectionControls: materialTextSelectionHandleControls,
+                contextMenuBuilder: (BuildContext context, EditableTextState editableTextState) {
+                  return SizedBox(key: key, width: 10.0, height: 10.0);
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      expect(find.byKey(key), findsNothing);
+
+      // Long-press to bring up the context menu.
+      final Finder textFinder = find.byType(EditableText);
+      await tester.longPress(textFinder);
+      tester.state<EditableTextState>(textFinder).showToolbar();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(key), findsOneWidget);
+    },
+    skip: kIsWeb, // [intended] on web the browser handles the context menu.
+  );
+
+  testWidgets(
+    'contextMenuBuilder can be updated to display a new menu',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/142077.
+      late StateSetter setState;
+      final GlobalKey keyOne = GlobalKey();
+      final GlobalKey keyTwo = GlobalKey();
+      var key = keyOne;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: StatefulBuilder(
+                builder: (BuildContext context, StateSetter localSetState) {
+                  setState = localSetState;
+                  return EditableText(
+                    maxLines: 10,
+                    controller: controller,
+                    showSelectionHandles: true,
+                    autofocus: true,
+                    focusNode: focusNode,
+                    style: Typography.material2018().black.titleMedium!,
+                    cursorColor: Colors.blue,
+                    backgroundCursorColor: Colors.grey,
+                    keyboardType: TextInputType.text,
+                    textAlign: TextAlign.right,
+                    selectionControls: materialTextSelectionHandleControls,
+                    contextMenuBuilder:
+                        (BuildContext context, EditableTextState editableTextState) {
+                          return SizedBox(key: key, width: 10.0, height: 10.0);
+                        },
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      expect(find.byKey(keyOne), findsNothing);
+      expect(find.byKey(keyTwo), findsNothing);
+
+      // Long-press to bring up the context menu.
+      final Finder textFinder = find.byType(EditableText);
+      await tester.longPress(textFinder);
+      tester.state<EditableTextState>(textFinder).showToolbar();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(keyOne), findsOneWidget);
+      expect(find.byKey(keyTwo), findsNothing);
+
+      setState(() {
+        key = keyTwo;
+      });
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(keyOne), findsNothing);
+      expect(find.byKey(keyTwo), findsOneWidget);
+    },
+    skip: kIsWeb, // [intended] on web the browser handles the context menu.
+  );
+
+  testWidgets(
+    'contextMenuBuilder can be updated with inline lambda without crash',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/155514.
+      late StateSetter setState;
+      var buildCount = 0;
+
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: StatefulBuilder(
+            builder: (BuildContext context, StateSetter localSetState) {
+              setState = localSetState;
+              return TestTextField(
+                autofocus: true,
+                contextMenuBuilder: (BuildContext context, EditableTextState editableTextState) {
+                  buildCount++;
+                  return _EditableTextStatefulMenu(value: buildCount);
+                },
               );
             },
           ),
         ),
-      ),
-    ));
+      );
 
-    await tester.pump(); // Wait for autofocus to take effect.
+      await tester.pump();
 
-    expect(find.byKey(key), findsNothing);
+      final Finder textFinder = find.byType(EditableText);
+      tester.state<EditableTextState>(textFinder).showToolbar();
+      await tester.pumpAndSettle();
 
-    // Long-press to bring up the context menu.
-    final Finder textFinder = find.byType(EditableText);
-    await tester.longPress(textFinder);
-    tester.state<EditableTextState>(textFinder).showToolbar();
-    await tester.pumpAndSettle();
+      expect(find.text('Initial: 1, Current: 1'), findsOneWidget);
 
-    expect(find.byKey(key), findsOneWidget);
-  },
+      // First rebuild: the inline lambda produces a new function reference.
+      // With the fix the entry is updated in-place and initState is never
+      // called again.
+      setState(() {});
+
+      await tester.pumpAndSettle();
+      expect(find.text('Initial: 1, Current: 2'), findsOneWidget);
+    },
+    skip: kIsWeb, // [intended] on web the browser handles the context menu.
+  );
+
+  testWidgets(
+    'selectionControls can be updated',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/142077.
+      controller.text = 'test';
+      late StateSetter setState;
+      TextSelectionControls selectionControls = materialTextSelectionControls;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: StatefulBuilder(
+                builder: (BuildContext context, StateSetter localSetState) {
+                  setState = localSetState;
+                  return EditableText(
+                    maxLines: 10,
+                    controller: controller,
+                    showSelectionHandles: true,
+                    autofocus: true,
+                    focusNode: focusNode,
+                    style: Typography.material2018().black.titleMedium!,
+                    cursorColor: Colors.blue,
+                    backgroundCursorColor: Colors.grey,
+                    keyboardType: TextInputType.text,
+                    textAlign: TextAlign.right,
+                    selectionControls: selectionControls,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      final Finder materialHandleFinder = find.byWidgetPredicate((Widget widget) {
+        if (widget.runtimeType != CustomPaint) {
+          return false;
+        }
+        final customPaint = widget as CustomPaint;
+        return '${customPaint.painter.runtimeType}' == '_TextSelectionHandlePainter';
+      });
+      final Finder cupertinoHandleFinder = find.byWidgetPredicate((Widget widget) {
+        if (widget.runtimeType != CustomPaint) {
+          return false;
+        }
+        final customPaint = widget as CustomPaint;
+        return '${customPaint.painter.runtimeType}' == '_CupertinoTextSelectionHandlePainter';
+      });
+      expect(materialHandleFinder, findsOneWidget);
+      expect(cupertinoHandleFinder, findsNothing);
+
+      // Long-press to select the text because Cupertino doesn't show a selection
+      // handle when the selection is collapsed.
+      final Finder textFinder = find.byType(EditableText);
+      await tester.longPress(textFinder);
+      tester.state<EditableTextState>(textFinder).showToolbar();
+      await tester.pumpAndSettle();
+
+      expect(materialHandleFinder, findsNWidgets(2));
+      expect(cupertinoHandleFinder, findsNothing);
+
+      setState(() {
+        selectionControls = cupertinoTextSelectionControls;
+      });
+      await tester.pumpAndSettle();
+
+      expect(materialHandleFinder, findsNothing);
+      expect(cupertinoHandleFinder, findsNWidgets(2));
+    },
+    skip: kIsWeb, // [intended] on web the browser handles the context menu.
+  );
+
+  testWidgets(
+    'onSelectionHandleTapped can be updated',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/142077.
+      late StateSetter setState;
+      var tapCount = 0;
+      VoidCallback? onSelectionHandleTapped;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: StatefulBuilder(
+                builder: (BuildContext context, StateSetter localSetState) {
+                  setState = localSetState;
+                  return EditableText(
+                    maxLines: 10,
+                    controller: controller,
+                    showSelectionHandles: true,
+                    autofocus: true,
+                    focusNode: focusNode,
+                    style: Typography.material2018().black.titleMedium!,
+                    cursorColor: Colors.blue,
+                    backgroundCursorColor: Colors.grey,
+                    keyboardType: TextInputType.text,
+                    textAlign: TextAlign.right,
+                    selectionControls: materialTextSelectionControls,
+                    onSelectionHandleTapped: onSelectionHandleTapped,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      final Finder materialHandleFinder = find.byWidgetPredicate((Widget widget) {
+        if (widget.runtimeType != CustomPaint) {
+          return false;
+        }
+        final customPaint = widget as CustomPaint;
+        return '${customPaint.painter.runtimeType}' == '_TextSelectionHandlePainter';
+      });
+      expect(materialHandleFinder, findsOneWidget);
+      expect(tapCount, equals(0));
+
+      await tester.tap(materialHandleFinder);
+      await tester.pump();
+      expect(tapCount, equals(0));
+
+      setState(() {
+        onSelectionHandleTapped = () => tapCount += 1;
+      });
+      await tester.pumpAndSettle();
+
+      await tester.tap(materialHandleFinder);
+      await tester.pump();
+      expect(tapCount, equals(1));
+    },
+    skip: kIsWeb, // [intended] on web the browser handles the context menu.
+  );
+
+  testWidgets(
+    'dragStartBehavior can be updated',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/142077.
+      late StateSetter setState;
+      DragStartBehavior dragStartBehavior = DragStartBehavior.down;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: StatefulBuilder(
+                builder: (BuildContext context, StateSetter localSetState) {
+                  setState = localSetState;
+                  return EditableText(
+                    maxLines: 10,
+                    controller: controller,
+                    showSelectionHandles: true,
+                    autofocus: true,
+                    focusNode: focusNode,
+                    style: Typography.material2018().black.titleMedium!,
+                    cursorColor: Colors.blue,
+                    backgroundCursorColor: Colors.grey,
+                    keyboardType: TextInputType.text,
+                    textAlign: TextAlign.right,
+                    selectionControls: materialTextSelectionControls,
+                    dragStartBehavior: dragStartBehavior,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      final Finder handleOverlayFinder = find.descendant(
+        of: find.byType(Overlay),
+        matching: find.byWidgetPredicate(
+          (Widget w) => '${w.runtimeType}' == '_SelectionHandleOverlay',
+        ),
+      );
+      expect(handleOverlayFinder, findsOneWidget);
+
+      // Expects that the selection handle has the given DragStartBehavior.
+      void checkDragStartBehavior(DragStartBehavior dragStartBehavior) {
+        final RawGestureDetector rawGestureDetector = tester.widget(
+          find.descendant(of: handleOverlayFinder, matching: find.byType(RawGestureDetector)).first,
+        );
+        final GestureRecognizerFactory<GestureRecognizer>? recognizerFactory =
+            rawGestureDetector.gestures[PanGestureRecognizer];
+        final recognizer = PanGestureRecognizer();
+        recognizerFactory?.initializer(recognizer);
+        expect(recognizer.dragStartBehavior, dragStartBehavior);
+        recognizer.dispose();
+      }
+
+      checkDragStartBehavior(DragStartBehavior.down);
+
+      setState(() {
+        dragStartBehavior = DragStartBehavior.start;
+      });
+      await tester.pumpAndSettle();
+
+      expect(handleOverlayFinder, findsOneWidget);
+      checkDragStartBehavior(DragStartBehavior.start);
+    },
+    skip: kIsWeb, // [intended] on web the browser handles the context menu.
+  );
+
+  testWidgets(
+    'magnifierConfiguration can be updated to display a new magnifier',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/142077.
+      late StateSetter setState;
+      final GlobalKey keyOne = GlobalKey();
+      final GlobalKey keyTwo = GlobalKey();
+      var key = keyOne;
+
+      final magnifierConfiguration = TextMagnifierConfiguration(
+        magnifierBuilder:
+            (
+              BuildContext context,
+              MagnifierController controller,
+              ValueNotifier<MagnifierInfo>? info,
+            ) {
+              return Placeholder(key: key);
+            },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: StatefulBuilder(
+                builder: (BuildContext context, StateSetter localSetState) {
+                  setState = localSetState;
+                  return EditableText(
+                    maxLines: 10,
+                    controller: controller,
+                    showSelectionHandles: true,
+                    autofocus: true,
+                    focusNode: focusNode,
+                    style: Typography.material2018().black.titleMedium!,
+                    cursorColor: Colors.blue,
+                    backgroundCursorColor: Colors.grey,
+                    keyboardType: TextInputType.text,
+                    textAlign: TextAlign.right,
+                    selectionControls: materialTextSelectionHandleControls,
+                    magnifierConfiguration: magnifierConfiguration,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(); // Wait for autofocus to take effect.
+
+      void checkMagnifierKey(Key testKey) {
+        final EditableText editableText = tester.widget(find.byType(EditableText));
+        final BuildContext context = tester.firstElement(find.byType(EditableText));
+        final magnifierInfo = ValueNotifier<MagnifierInfo>(MagnifierInfo.empty);
+        addTearDown(magnifierInfo.dispose);
+        expect(
+          editableText.magnifierConfiguration.magnifierBuilder(
+            context,
+            MagnifierController(),
+            magnifierInfo,
+          ),
+          isA<Widget>().having(
+            (Widget widget) => widget.key,
+            'built magnifier key equal to passed in magnifier key',
+            equals(testKey),
+          ),
+        );
+      }
+
+      checkMagnifierKey(keyOne);
+
+      setState(() {
+        key = keyTwo;
+      });
+      await tester.pumpAndSettle();
+
+      checkMagnifierKey(keyTwo);
+    },
     skip: kIsWeb, // [intended] on web the browser handles the context menu.
   );
 
   group('Spell check', () {
-    testWidgets(
-      'Spell check configured properly when spell check disabled by default',
-        (WidgetTester tester) async {
+    testWidgets('Spell check configured properly when spell check disabled by default', (
+      WidgetTester tester,
+    ) async {
+      controller.text = 'A';
+
       await tester.pumpWidget(
         MaterialApp(
           home: EditableText(
-            controller: TextEditingController(text: 'A'),
-            focusNode: FocusNode(),
+            controller: controller,
+            focusNode: focusNode,
             style: const TextStyle(),
             cursorColor: Colors.blue,
             backgroundCursorColor: Colors.grey,
@@ -15013,19 +16105,20 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
         ),
       );
 
-      final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
       expect(state.spellCheckEnabled, isFalse);
     });
 
-    testWidgets(
-      'Spell check configured properly when spell check disabled manually',
-        (WidgetTester tester) async {
+    testWidgets('Spell check configured properly when spell check disabled manually', (
+      WidgetTester tester,
+    ) async {
+      controller.text = 'A';
+
       await tester.pumpWidget(
         MaterialApp(
           home: EditableText(
-            controller: TextEditingController(text: 'A'),
-            focusNode: FocusNode(),
+            controller: controller,
+            focusNode: focusNode,
             style: const TextStyle(),
             cursorColor: Colors.blue,
             backgroundCursorColor: Colors.grey,
@@ -15036,247 +16129,461 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
         ),
       );
 
-      final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
       expect(state.spellCheckEnabled, isFalse);
     });
 
     testWidgets(
       'Error thrown when spell check configuration defined without specifying misspelled text style',
-        (WidgetTester tester) async {
-      expect(
-          () {
-            EditableText(
-                controller: TextEditingController(text: 'A'),
-                focusNode: FocusNode(),
-                style: const TextStyle(),
-                cursorColor: Colors.blue,
-                backgroundCursorColor: Colors.grey,
-                cursorOpacityAnimates: true,
-                autofillHints: null,
-                spellCheckConfiguration: const SpellCheckConfiguration(),
-            );
-          },
-          throwsAssertionError,
-      );
-    });
+      (WidgetTester tester) async {
+        controller.text = 'A';
+
+        expect(() {
+          EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            style: const TextStyle(),
+            cursorColor: Colors.blue,
+            backgroundCursorColor: Colors.grey,
+            cursorOpacityAnimates: true,
+            autofillHints: null,
+            spellCheckConfiguration: const SpellCheckConfiguration(),
+          );
+        }, throwsAssertionError);
+      },
+    );
 
     testWidgets(
       'Spell check configured properly when spell check enabled without specified spell check service and native spell check service defined',
-          (WidgetTester tester) async {
-        tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-          true;
+      (WidgetTester tester) async {
+        tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = true;
+        controller.text = 'A';
 
         await tester.pumpWidget(
           MaterialApp(
             home: EditableText(
-              controller: TextEditingController(text: 'A'),
-              focusNode: FocusNode(),
+              controller: controller,
+              focusNode: focusNode,
               style: const TextStyle(),
               cursorColor: Colors.blue,
               backgroundCursorColor: Colors.grey,
               cursorOpacityAnimates: true,
               autofillHints: null,
-              spellCheckConfiguration:
-                const SpellCheckConfiguration(
-                  misspelledTextStyle: TextField.materialMisspelledTextStyle,
+              spellCheckConfiguration: const SpellCheckConfiguration(
+                misspelledTextStyle: TextField.materialMisspelledTextStyle,
               ),
             ),
           ),
         );
 
-        final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
         expect(state.spellCheckEnabled, isTrue);
         expect(
           state.spellCheckConfiguration.spellCheckService.runtimeType,
           equals(DefaultSpellCheckService),
         );
         tester.binding.platformDispatcher.clearNativeSpellCheckServiceDefined();
-    });
+      },
+    );
 
-    testWidgets(
-      'Spell check configured properly with specified spell check service',
-        (WidgetTester tester) async {
-      final FakeSpellCheckService fakeSpellCheckService = FakeSpellCheckService();
+    testWidgets('Spell check configured properly with specified spell check service', (
+      WidgetTester tester,
+    ) async {
+      final fakeSpellCheckService = FakeSpellCheckService();
+      controller.text = 'A';
 
       await tester.pumpWidget(
         MaterialApp(
           home: EditableText(
-            controller: TextEditingController(text: 'A'),
-            focusNode: FocusNode(),
+            controller: controller,
+            focusNode: focusNode,
             style: const TextStyle(),
             cursorColor: Colors.blue,
             backgroundCursorColor: Colors.grey,
             cursorOpacityAnimates: true,
             autofillHints: null,
-            spellCheckConfiguration:
-              SpellCheckConfiguration(
-                spellCheckService: fakeSpellCheckService,
-                misspelledTextStyle: TextField.materialMisspelledTextStyle,
+            spellCheckConfiguration: SpellCheckConfiguration(
+              spellCheckService: fakeSpellCheckService,
+              misspelledTextStyle: TextField.materialMisspelledTextStyle,
             ),
           ),
         ),
       );
 
-      final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
       expect(
         state.spellCheckConfiguration.spellCheckService.runtimeType,
         equals(FakeSpellCheckService),
       );
     });
 
-    testWidgets(
-      'Spell check disabled when spell check configuration specified but no default spell check service available',
-        (WidgetTester tester) async {
-      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-        false;
+    testWidgets('Spell check disabled when obscureText is true', (WidgetTester tester) async {
+      final fakeSpellCheckService = FakeSpellCheckService();
+      controller.text = 'A';
 
       await tester.pumpWidget(
-        MaterialApp(
+        TestWidgetsApp(
           home: EditableText(
-            controller: TextEditingController(text: 'A'),
-            focusNode: FocusNode(),
+            controller: controller,
+            focusNode: focusNode,
+            obscureText: true,
             style: const TextStyle(),
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
+            cursorColor: const Color(0xFF0000FF),
+            backgroundCursorColor: const Color(0xFF808080),
             cursorOpacityAnimates: true,
             autofillHints: null,
-            spellCheckConfiguration:
-              const SpellCheckConfiguration(
-                misspelledTextStyle: TextField.materialMisspelledTextStyle,
+            spellCheckConfiguration: SpellCheckConfiguration(
+              spellCheckService: fakeSpellCheckService,
+              misspelledTextStyle: const TextStyle(decoration: TextDecoration.underline),
             ),
           ),
-        )
+        ),
       );
 
-      expect(tester.takeException(), isA<AssertionError>());
-      final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.spellCheckEnabled, isFalse);
       expect(state.spellCheckConfiguration, equals(const SpellCheckConfiguration.disabled()));
-      tester.binding.platformDispatcher.clearNativeSpellCheckServiceDefined();
     });
+
+    testWidgets('Spell check disabled for visible password input type', (
+      WidgetTester tester,
+    ) async {
+      final fakeSpellCheckService = FakeSpellCheckService();
+      controller.text = 'A';
+
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            keyboardType: TextInputType.visiblePassword,
+            style: const TextStyle(),
+            cursorColor: const Color(0xFF0000FF),
+            backgroundCursorColor: const Color(0xFF808080),
+            cursorOpacityAnimates: true,
+            autofillHints: null,
+            spellCheckConfiguration: SpellCheckConfiguration(
+              spellCheckService: fakeSpellCheckService,
+              misspelledTextStyle: const TextStyle(decoration: TextDecoration.underline),
+            ),
+          ),
+        ),
+      );
+
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.spellCheckEnabled, isFalse);
+      expect(state.spellCheckConfiguration, equals(const SpellCheckConfiguration.disabled()));
+    });
+
+    testWidgets('Spell check disabled for numeric password input type', (
+      WidgetTester tester,
+    ) async {
+      final fakeSpellCheckService = FakeSpellCheckService();
+      controller.text = 'A';
+
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            keyboardType: const TextInputType.numberWithOptions(password: true),
+            style: const TextStyle(),
+            cursorColor: const Color(0xFF0000FF),
+            backgroundCursorColor: const Color(0xFF808080),
+            cursorOpacityAnimates: true,
+            autofillHints: null,
+            spellCheckConfiguration: SpellCheckConfiguration(
+              spellCheckService: fakeSpellCheckService,
+              misspelledTextStyle: const TextStyle(decoration: TextDecoration.underline),
+            ),
+          ),
+        ),
+      );
+
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.spellCheckEnabled, isFalse);
+      expect(state.spellCheckConfiguration, equals(const SpellCheckConfiguration.disabled()));
+    });
+
+    testWidgets('Spell check disabled for password autofill hints', (WidgetTester tester) async {
+      final fakeSpellCheckService = FakeSpellCheckService();
+      controller.text = 'A';
+
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            style: const TextStyle(),
+            cursorColor: const Color(0xFF0000FF),
+            backgroundCursorColor: const Color(0xFF808080),
+            cursorOpacityAnimates: true,
+            autofillHints: const <String>[AutofillHints.password],
+            spellCheckConfiguration: SpellCheckConfiguration(
+              spellCheckService: fakeSpellCheckService,
+              misspelledTextStyle: const TextStyle(decoration: TextDecoration.underline),
+            ),
+          ),
+        ),
+      );
+
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.spellCheckEnabled, isFalse);
+      expect(state.spellCheckConfiguration, equals(const SpellCheckConfiguration.disabled()));
+    });
+
+    testWidgets('Spell check updates when non-password obscureText changes', (
+      WidgetTester tester,
+    ) async {
+      const suggestionSpans = <SuggestionSpan>[
+        SuggestionSpan(TextRange(start: 0, end: 1), <String>['a']),
+      ];
+      final fakeSpellCheckService = FakeSpellCheckService(
+        suggestionSpansByText: const <String, List<SuggestionSpan>?>{'A': suggestionSpans},
+      );
+      controller.text = 'A';
+      var obscureText = false;
+      late StateSetter setState;
+
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: StatefulBuilder(
+            builder: (BuildContext context, StateSetter localSetState) {
+              setState = localSetState;
+              return EditableText(
+                controller: controller,
+                focusNode: focusNode,
+                obscureText: obscureText,
+                style: const TextStyle(),
+                cursorColor: const Color(0xFF0000FF),
+                backgroundCursorColor: const Color(0xFF808080),
+                cursorOpacityAnimates: true,
+                autofillHints: null,
+                spellCheckConfiguration: SpellCheckConfiguration(
+                  spellCheckService: fakeSpellCheckService,
+                  misspelledTextStyle: const TextStyle(decoration: TextDecoration.underline),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+
+      void setObscureText(bool value) {
+        setState(() {
+          obscureText = value;
+        });
+      }
+
+      EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.spellCheckEnabled, isTrue);
+      state.spellCheckResults = const SpellCheckResults('A', suggestionSpans);
+
+      setObscureText(true);
+      await tester.pump();
+
+      state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.spellCheckEnabled, isFalse);
+      expect(state.spellCheckConfiguration, equals(const SpellCheckConfiguration.disabled()));
+      expect(state.spellCheckResults, isNull);
+      expect(fakeSpellCheckService.fetchSpellCheckSuggestionsCallCount, 0);
+
+      setObscureText(false);
+      await tester.pump();
+
+      state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.spellCheckEnabled, isTrue);
+      expect(fakeSpellCheckService.fetchSpellCheckSuggestionsCallCount, 1);
+      expect(fakeSpellCheckService.lastSpellCheckText, 'A');
+      expect(state.spellCheckResults, const SpellCheckResults('A', suggestionSpans));
+    });
+
+    testWidgets('Spell check stays disabled for visible password when obscureText changes', (
+      WidgetTester tester,
+    ) async {
+      final fakeSpellCheckService = FakeSpellCheckService();
+      controller.text = 'A';
+      var obscureText = true;
+      late StateSetter setState;
+
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: StatefulBuilder(
+            builder: (BuildContext context, StateSetter localSetState) {
+              setState = localSetState;
+              return EditableText(
+                controller: controller,
+                focusNode: focusNode,
+                keyboardType: TextInputType.visiblePassword,
+                obscureText: obscureText,
+                style: const TextStyle(),
+                cursorColor: const Color(0xFF0000FF),
+                backgroundCursorColor: const Color(0xFF808080),
+                cursorOpacityAnimates: true,
+                autofillHints: null,
+                spellCheckConfiguration: SpellCheckConfiguration(
+                  spellCheckService: fakeSpellCheckService,
+                  misspelledTextStyle: const TextStyle(decoration: TextDecoration.underline),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+
+      EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.spellCheckEnabled, isFalse);
+
+      setState(() {
+        obscureText = false;
+      });
+      await tester.pump();
+
+      state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.spellCheckEnabled, isFalse);
+      expect(state.spellCheckConfiguration, equals(const SpellCheckConfiguration.disabled()));
+      expect(fakeSpellCheckService.fetchSpellCheckSuggestionsCallCount, 0);
+    });
+
+    testWidgets(
+      'Spell check disabled when spell check configuration specified but no default spell check service available',
+      (WidgetTester tester) async {
+        tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = false;
+        controller.text = 'A';
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              focusNode: focusNode,
+              style: const TextStyle(),
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              cursorOpacityAnimates: true,
+              autofillHints: null,
+              spellCheckConfiguration: const SpellCheckConfiguration(
+                misspelledTextStyle: TextField.materialMisspelledTextStyle,
+              ),
+            ),
+          ),
+        );
+
+        expect(tester.takeException(), isA<AssertionError>());
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+        expect(state.spellCheckConfiguration, equals(const SpellCheckConfiguration.disabled()));
+        tester.binding.platformDispatcher.clearNativeSpellCheckServiceDefined();
+      },
+    );
 
     testWidgets(
       'findSuggestionSpanAtCursorIndex finds correct span with cursor in middle of a word',
-        (WidgetTester tester) async {
-      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-        true;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: TextEditingController(text: 'A'),
-            focusNode: FocusNode(),
-            style: const TextStyle(),
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            cursorOpacityAnimates: true,
-            autofillHints: null,
-            spellCheckConfiguration:
-              const SpellCheckConfiguration(
+      (WidgetTester tester) async {
+        tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = true;
+        controller.text = 'A';
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              focusNode: focusNode,
+              style: const TextStyle(),
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              cursorOpacityAnimates: true,
+              autofillHints: null,
+              spellCheckConfiguration: const SpellCheckConfiguration(
                 misspelledTextStyle: TextField.materialMisspelledTextStyle,
+              ),
             ),
           ),
-        ),
-      );
-      final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+        );
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      const int cursorIndex = 21;
-      const SuggestionSpan expectedSpan = SuggestionSpan(TextRange(start: 20, end: 23), <String>['Hey', 'He']);
-      const List<SuggestionSpan> suggestionSpans =
-        <SuggestionSpan>[
-          SuggestionSpan(
-            TextRange(start: 13, end: 18), <String>['world', 'word', 'old']),
+        const cursorIndex = 21;
+        const expectedSpan = SuggestionSpan(TextRange(start: 20, end: 23), <String>['Hey', 'He']);
+        const suggestionSpans = <SuggestionSpan>[
+          SuggestionSpan(TextRange(start: 13, end: 18), <String>['world', 'word', 'old']),
           expectedSpan,
-          SuggestionSpan(
-            TextRange(start: 25, end: 30), <String>['green', 'grey', 'great']),
-      ];
+          SuggestionSpan(TextRange(start: 25, end: 30), <String>['green', 'grey', 'great']),
+        ];
 
-      // Omitting actual text in results for brevity. Same for following tests that test the findSuggestionSpanAtCursorIndex method.
-      state.spellCheckResults = const SpellCheckResults('', suggestionSpans);
-      final SuggestionSpan? suggestionSpan = state.findSuggestionSpanAtCursorIndex(cursorIndex);
+        // Omitting actual text in results for brevity. Same for following tests that test the findSuggestionSpanAtCursorIndex method.
+        state.spellCheckResults = const SpellCheckResults('', suggestionSpans);
+        final SuggestionSpan? suggestionSpan = state.findSuggestionSpanAtCursorIndex(cursorIndex);
 
-      expect(suggestionSpan, equals(expectedSpan));
-    });
+        expect(suggestionSpan, equals(expectedSpan));
+      },
+    );
 
     testWidgets(
-        'findSuggestionSpanAtCursorIndex finds correct span with cursor on edge of a word',
-        (WidgetTester tester) async {
-      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-        true;
+      'findSuggestionSpanAtCursorIndex finds correct span with cursor on edge of a word',
+      (WidgetTester tester) async {
+        tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = true;
+        controller.text = 'A';
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              controller: controller,
+              focusNode: focusNode,
+              style: const TextStyle(),
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              cursorOpacityAnimates: true,
+              autofillHints: null,
+              spellCheckConfiguration: const SpellCheckConfiguration(
+                misspelledTextStyle: TextField.materialMisspelledTextStyle,
+              ),
+            ),
+          ),
+        );
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+
+        const cursorIndex = 23;
+        const expectedSpan = SuggestionSpan(TextRange(start: 20, end: 23), <String>['Hey', 'He']);
+        const suggestionSpans = <SuggestionSpan>[
+          SuggestionSpan(TextRange(start: 13, end: 18), <String>['world', 'word', 'old']),
+          expectedSpan,
+          SuggestionSpan(TextRange(start: 25, end: 30), <String>['green', 'grey', 'great']),
+        ];
+
+        state.spellCheckResults = const SpellCheckResults('', suggestionSpans);
+        final SuggestionSpan? suggestionSpan = state.findSuggestionSpanAtCursorIndex(cursorIndex);
+
+        expect(suggestionSpan, equals(expectedSpan));
+      },
+    );
+
+    testWidgets('findSuggestionSpanAtCursorIndex finds no span when cursor out of range of spans', (
+      WidgetTester tester,
+    ) async {
+      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = true;
+      controller.text = 'A';
+
       await tester.pumpWidget(
         MaterialApp(
           home: EditableText(
-            controller: TextEditingController(text: 'A'),
-            focusNode: FocusNode(),
+            controller: controller,
+            focusNode: focusNode,
             style: const TextStyle(),
             cursorColor: Colors.blue,
             backgroundCursorColor: Colors.grey,
             cursorOpacityAnimates: true,
             autofillHints: null,
-            spellCheckConfiguration:
-              const SpellCheckConfiguration(
-                misspelledTextStyle: TextField.materialMisspelledTextStyle,
+            spellCheckConfiguration: const SpellCheckConfiguration(
+              misspelledTextStyle: TextField.materialMisspelledTextStyle,
             ),
           ),
         ),
       );
-      final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      const int cursorIndex = 23;
-      const SuggestionSpan expectedSpan = SuggestionSpan(TextRange(start: 20, end: 23), <String>['Hey', 'He']);
-      const List<SuggestionSpan> suggestionSpans =
-        <SuggestionSpan>[
-          SuggestionSpan(
-            TextRange(start: 13, end: 18), <String>['world', 'word', 'old']),
-          expectedSpan,
-          SuggestionSpan(
-            TextRange(start: 25, end: 30), <String>['green', 'grey', 'great']),
-      ];
-
-      state.spellCheckResults = const SpellCheckResults('', suggestionSpans);
-      final SuggestionSpan? suggestionSpan = state.findSuggestionSpanAtCursorIndex(cursorIndex);
-
-      expect(suggestionSpan, equals(expectedSpan));
-    });
-
-    testWidgets(
-        'findSuggestionSpanAtCursorIndex finds no span when cursor out of range of spans',
-        (WidgetTester tester) async {
-      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-        true;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            controller: TextEditingController(text: 'A'),
-            focusNode: FocusNode(),
-            style: const TextStyle(),
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            cursorOpacityAnimates: true,
-            autofillHints: null,
-            spellCheckConfiguration:
-              const SpellCheckConfiguration(
-                misspelledTextStyle: TextField.materialMisspelledTextStyle,
-            ),
-          ),
-        ),
-      );
-      final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
-
-      const int cursorIndex = 33;
-      const SuggestionSpan expectedSpan = SuggestionSpan(TextRange(start: 20, end: 23), <String>['Hey', 'He']);
-      const List<SuggestionSpan> suggestionSpans =
-        <SuggestionSpan>[
-          SuggestionSpan(
-            TextRange(start: 13, end: 18), <String>['world', 'word', 'old']),
-          expectedSpan,
-          SuggestionSpan(
-            TextRange(start: 25, end: 30), <String>['green', 'grey', 'great']),
+      const cursorIndex = 33;
+      const expectedSpan = SuggestionSpan(TextRange(start: 20, end: 23), <String>['Hey', 'He']);
+      const suggestionSpans = <SuggestionSpan>[
+        SuggestionSpan(TextRange(start: 13, end: 18), <String>['world', 'word', 'old']),
+        expectedSpan,
+        SuggestionSpan(TextRange(start: 25, end: 30), <String>['green', 'grey', 'great']),
       ];
 
       state.spellCheckResults = const SpellCheckResults('', suggestionSpans);
@@ -15285,40 +16592,36 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       expect(suggestionSpan, isNull);
     });
 
-    testWidgets(
-        'findSuggestionSpanAtCursorIndex finds no span when word correctly spelled',
-        (WidgetTester tester) async {
-      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-        true;
+    testWidgets('findSuggestionSpanAtCursorIndex finds no span when word correctly spelled', (
+      WidgetTester tester,
+    ) async {
+      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = true;
+      controller.text = 'A';
+
       await tester.pumpWidget(
         MaterialApp(
           home: EditableText(
-            controller: TextEditingController(text: 'A'),
-            focusNode: FocusNode(),
+            controller: controller,
+            focusNode: focusNode,
             style: const TextStyle(),
             cursorColor: Colors.blue,
             backgroundCursorColor: Colors.grey,
             cursorOpacityAnimates: true,
             autofillHints: null,
-            spellCheckConfiguration:
-              const SpellCheckConfiguration(
-                misspelledTextStyle: TextField.materialMisspelledTextStyle,
+            spellCheckConfiguration: const SpellCheckConfiguration(
+              misspelledTextStyle: TextField.materialMisspelledTextStyle,
             ),
           ),
         ),
       );
-      final EditableTextState state =
-        tester.state<EditableTextState>(find.byType(EditableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      const int cursorIndex = 5;
-      const SuggestionSpan expectedSpan = SuggestionSpan(TextRange(start: 20, end: 23), <String>['Hey', 'He']);
-      const List<SuggestionSpan> suggestionSpans =
-        <SuggestionSpan>[
-          SuggestionSpan(
-            TextRange(start: 13, end: 18), <String>['world', 'word', 'old']),
-          expectedSpan,
-          SuggestionSpan(
-            TextRange(start: 25, end: 30), <String>['green', 'grey', 'great']),
+      const cursorIndex = 5;
+      const expectedSpan = SuggestionSpan(TextRange(start: 20, end: 23), <String>['Hey', 'He']);
+      const suggestionSpans = <SuggestionSpan>[
+        SuggestionSpan(TextRange(start: 13, end: 18), <String>['world', 'word', 'old']),
+        expectedSpan,
+        SuggestionSpan(TextRange(start: 25, end: 30), <String>['green', 'grey', 'great']),
       ];
 
       state.spellCheckResults = const SpellCheckResults('', suggestionSpans);
@@ -15327,10 +16630,11 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       expect(suggestionSpan, isNull);
     });
 
-    testWidgets('can show spell check suggestions toolbar when there are spell check results', (WidgetTester tester) async {
-      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-        true;
-      const TextEditingValue value = TextEditingValue(
+    testWidgets('can show spell check suggestions toolbar when there are spell check results', (
+      WidgetTester tester,
+    ) async {
+      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = true;
+      const value = TextEditingValue(
         text: 'tset test test',
         selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 0, extentOffset: 4),
       );
@@ -15344,17 +16648,16 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
             style: textStyle,
             cursorColor: cursorColor,
             selectionControls: materialTextSelectionControls,
-            spellCheckConfiguration:
-              const SpellCheckConfiguration(
-                misspelledTextStyle: TextField.materialMisspelledTextStyle,
-                spellCheckSuggestionsToolbarBuilder: TextField.defaultSpellCheckSuggestionsToolbarBuilder,
-              ),
+            spellCheckConfiguration: const SpellCheckConfiguration(
+              misspelledTextStyle: TextField.materialMisspelledTextStyle,
+              spellCheckSuggestionsToolbarBuilder:
+                  TextField.defaultSpellCheckSuggestionsToolbarBuilder,
+            ),
           ),
         ),
       );
 
-      final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
       // Can't show the toolbar when there's no focus.
       expect(state.showSpellCheckSuggestionsToolbar(), false);
@@ -15370,11 +16673,10 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       expect(find.text('DELETE'), findsNothing);
 
       // Can show the toolbar when there are spell check results.
-      state.spellCheckResults = const SpellCheckResults('test tset test', <SuggestionSpan>[SuggestionSpan(TextRange(start: 0, end: 4), <String>['test', 'sets', 'set'])]);
-      state.renderEditable.selectWordsInRange(
-        from: Offset.zero,
-        cause: SelectionChangedCause.tap,
-      );
+      state.spellCheckResults = const SpellCheckResults('test tset test', <SuggestionSpan>[
+        SuggestionSpan(TextRange(start: 0, end: 4), <String>['test', 'sets', 'set']),
+      ]);
+      state.renderEditable.selectWordsInRange(from: Offset.zero, cause: SelectionChangedCause.tap);
 
       await tester.pumpAndSettle();
       // Toolbar will only show on non-web platforms.
@@ -15388,138 +16690,143 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       expect(find.text('DELETE'), matcher);
     });
 
-    testWidgets('can show spell check suggestions toolbar when there are no spell check results on iOS', (WidgetTester tester) async {
-      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-        true;
-      const TextEditingValue value = TextEditingValue(
-        text: 'tset test test',
-        selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 0, extentOffset: 4),
-      );
-      controller.value = value;
-      await tester.pumpWidget(
-        CupertinoApp(
-          home: EditableText(
-            backgroundCursorColor: Colors.grey,
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            selectionControls: materialTextSelectionControls,
-            spellCheckConfiguration:
-              const SpellCheckConfiguration(
+    testWidgets(
+      'can show spell check suggestions toolbar when there are no spell check results on iOS',
+      (WidgetTester tester) async {
+        tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = true;
+        const value = TextEditingValue(
+          text: 'tset test test',
+          selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 0, extentOffset: 4),
+        );
+        controller.value = value;
+        await tester.pumpWidget(
+          CupertinoApp(
+            home: EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              selectionControls: materialTextSelectionControls,
+              spellCheckConfiguration: const SpellCheckConfiguration(
                 misspelledTextStyle: CupertinoTextField.cupertinoMisspelledTextStyle,
-                spellCheckSuggestionsToolbarBuilder: CupertinoTextField.defaultSpellCheckSuggestionsToolbarBuilder,
+                spellCheckSuggestionsToolbarBuilder:
+                    CupertinoTextField.defaultSpellCheckSuggestionsToolbarBuilder,
               ),
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      // Can't show the toolbar when there's no focus.
-      expect(state.showSpellCheckSuggestionsToolbar(), false);
-      await tester.pumpAndSettle();
-      expect(find.byType(CupertinoTextSelectionToolbarButton), findsNothing);
+        // Can't show the toolbar when there's no focus.
+        expect(state.showSpellCheckSuggestionsToolbar(), false);
+        await tester.pumpAndSettle();
+        expect(find.byType(CupertinoTextSelectionToolbarButton), findsNothing);
 
-      // Can't show the toolbar when there are no spell check results.
-      expect(state.showSpellCheckSuggestionsToolbar(), false);
-      await tester.pumpAndSettle();
-      expect(find.byType(CupertinoTextSelectionToolbarButton), findsNothing);
+        // Can't show the toolbar when there are no spell check results.
+        expect(state.showSpellCheckSuggestionsToolbar(), false);
+        await tester.pumpAndSettle();
+        expect(find.byType(CupertinoTextSelectionToolbarButton), findsNothing);
 
-      // Shows 'No Replacements Found' when there are spell check results but no
-      // suggestions.
-      state.spellCheckResults = const SpellCheckResults('test tset test', <SuggestionSpan>[SuggestionSpan(TextRange(start: 0, end: 4), <String>[])]);
-      state.renderEditable.selectWordsInRange(
-        from: Offset.zero,
-        cause: SelectionChangedCause.tap,
-      );
+        // Shows 'No Replacements Found' when there are spell check results but no
+        // suggestions.
+        state.spellCheckResults = const SpellCheckResults('test tset test', <SuggestionSpan>[
+          SuggestionSpan(TextRange(start: 0, end: 4), <String>[]),
+        ]);
+        state.renderEditable.selectWordsInRange(
+          from: Offset.zero,
+          cause: SelectionChangedCause.tap,
+        );
 
-      await tester.pumpAndSettle();
-      // Toolbar will only show on non-web platforms.
-      expect(state.showSpellCheckSuggestionsToolbar(), isTrue);
-      await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
+        // Toolbar will only show on non-web platforms.
+        expect(state.showSpellCheckSuggestionsToolbar(), isTrue);
+        await tester.pumpAndSettle();
 
-      expect(find.byType(CupertinoTextSelectionToolbarButton), findsOneWidget);
-      expect(find.byType(CupertinoButton), findsOneWidget);
-      expect(find.text('No Replacements Found'), findsOneWidget);
-      final CupertinoButton button = tester.widget(find.byType(CupertinoButton));
-      expect(button.enabled, isFalse);
-    },
-      variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS }),
+        expect(find.byType(CupertinoTextSelectionToolbarButton), findsOneWidget);
+        expect(find.byType(CupertinoButton), findsOneWidget);
+        expect(find.text('No Replacements Found'), findsOneWidget);
+        final CupertinoButton button = tester.widget(find.byType(CupertinoButton));
+        expect(button.enabled, isFalse);
+      },
+      variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.iOS}),
       skip: kIsWeb, // [intended]
     );
 
-    testWidgets('cupertino spell check suggestions toolbar buttons correctly change the composing region', (WidgetTester tester) async {
-      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-        true;
-      const TextEditingValue value = TextEditingValue(
-        text: 'tset test test',
-        selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 0, extentOffset: 4),
-      );
-      controller.value = value;
-      await tester.pumpWidget(
-        CupertinoApp(
-          home: EditableText(
-            backgroundCursorColor: Colors.grey,
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            selectionControls: cupertinoTextSelectionControls,
-            spellCheckConfiguration:
-              const SpellCheckConfiguration(
+    testWidgets(
+      'cupertino spell check suggestions toolbar buttons correctly change the composing region',
+      (WidgetTester tester) async {
+        tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = true;
+        const value = TextEditingValue(
+          text: 'tset test test',
+          selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 0, extentOffset: 4),
+        );
+        controller.value = value;
+        await tester.pumpWidget(
+          CupertinoApp(
+            home: EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              selectionControls: cupertinoTextSelectionControls,
+              spellCheckConfiguration: const SpellCheckConfiguration(
                 misspelledTextStyle: CupertinoTextField.cupertinoMisspelledTextStyle,
-                spellCheckSuggestionsToolbarBuilder: CupertinoTextField.defaultSpellCheckSuggestionsToolbarBuilder,
+                spellCheckSuggestionsToolbarBuilder:
+                    CupertinoTextField.defaultSpellCheckSuggestionsToolbarBuilder,
               ),
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
-      state.spellCheckResults = const SpellCheckResults('tset test test', <SuggestionSpan>[SuggestionSpan(TextRange(start: 0, end: 4), <String>['test', 'sets', 'set'])]);
-      state.renderEditable.selectWordsInRange(
-        from: Offset.zero,
-        cause: SelectionChangedCause.tap,
-      );
-      await tester.pumpAndSettle();
-
-      // Set last tap down position so that selecting the word edge will be
-      // a valid operation.
-      final Offset pos1 = textOffsetToPosition(tester, 1);
-      final TestGesture gesture = await tester.startGesture(pos1);
-      await tester.pump();
-      await gesture.up();
-      await tester.pumpAndSettle();
-      expect(state.currentTextEditingValue.selection.baseOffset, equals(1));
-
-      // Test that tapping misspelled word replacement buttons will replace
-      // the correct word and select the word edge.
-      state.showSpellCheckSuggestionsToolbar();
-      await tester.pumpAndSettle();
-
-      if (kIsWeb) {
-        expect(find.text('sets'), findsNothing);
-      }
-      else {
-        expect(find.text('sets'), findsOneWidget);
-        await tester.tap(find.text('sets'));
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+        state.spellCheckResults = const SpellCheckResults('tset test test', <SuggestionSpan>[
+          SuggestionSpan(TextRange(start: 0, end: 4), <String>['test', 'sets', 'set']),
+        ]);
+        state.renderEditable.selectWordsInRange(
+          from: Offset.zero,
+          cause: SelectionChangedCause.tap,
+        );
         await tester.pumpAndSettle();
-        expect(state.currentTextEditingValue.text, equals('sets test test'));
-        expect(state.currentTextEditingValue.selection.baseOffset, equals(4));
-      }
-    });
 
-    testWidgets('material spell check suggestions toolbar buttons correctly change the composing region', (WidgetTester tester) async {
-      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-        true;
-      const TextEditingValue value = TextEditingValue(
-        text: 'tset test test',
-        composing: TextRange(start: 0, end: 4),
-        selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 0, extentOffset: 4),
-      );
-      controller.value = value;
+        // Set last tap down position so that selecting the word edge will be
+        // a valid operation.
+        final Offset pos1 = textOffsetToPosition(tester, 1);
+        final TestGesture gesture = await tester.startGesture(pos1);
+        await tester.pump();
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(state.currentTextEditingValue.selection.baseOffset, equals(1));
+
+        // Test that tapping misspelled word replacement buttons will replace
+        // the correct word and select the word edge.
+        state.showSpellCheckSuggestionsToolbar();
+        await tester.pumpAndSettle();
+
+        if (kIsWeb) {
+          expect(find.text('sets'), findsNothing);
+        } else {
+          expect(find.text('sets'), findsOneWidget);
+          await tester.tap(find.text('sets'));
+          await tester.pumpAndSettle();
+          expect(state.currentTextEditingValue.text, equals('sets test test'));
+          expect(state.currentTextEditingValue.selection.baseOffset, equals(4));
+        }
+      },
+    );
+
+    testWidgets(
+      'material spell check suggestions toolbar buttons correctly change the composing region',
+      (WidgetTester tester) async {
+        tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = true;
+        const value = TextEditingValue(
+          text: 'tset test test',
+          composing: TextRange(start: 0, end: 4),
+          selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 0, extentOffset: 4),
+        );
+        controller.value = value;
         await tester.pumpWidget(
           MaterialApp(
             home: EditableText(
@@ -15529,270 +16836,371 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
               style: textStyle,
               cursorColor: cursorColor,
               selectionControls: materialTextSelectionControls,
-              spellCheckConfiguration:
-                const SpellCheckConfiguration(
-                  misspelledTextStyle: TextField.materialMisspelledTextStyle,
-                  spellCheckSuggestionsToolbarBuilder: TextField.defaultSpellCheckSuggestionsToolbarBuilder,
-                ),
+              spellCheckConfiguration: const SpellCheckConfiguration(
+                misspelledTextStyle: TextField.materialMisspelledTextStyle,
+                spellCheckSuggestionsToolbarBuilder:
+                    TextField.defaultSpellCheckSuggestionsToolbarBuilder,
+              ),
             ),
           ),
         );
 
-      final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
-      state.spellCheckResults = const SpellCheckResults('tset test test', <SuggestionSpan>[SuggestionSpan(TextRange(start: 0, end: 4), <String>['test', 'sets', 'set'])]);
-      state.renderEditable.selectWordsInRange(
-        from: Offset.zero,
-        cause: SelectionChangedCause.tap,
-      );
-      await tester.pumpAndSettle();
-      expect(state.currentTextEditingValue.selection.baseOffset, equals(0));
-
-      // Test misspelled word replacement buttons.
-      state.showSpellCheckSuggestionsToolbar();
-      await tester.pumpAndSettle();
-
-      if (kIsWeb) {
-        expect(find.text('sets'), findsNothing);
-      } else {
-        expect(find.text('sets'), findsOneWidget);
-        await tester.tap(find.text('sets'));
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+        state.spellCheckResults = const SpellCheckResults('tset test test', <SuggestionSpan>[
+          SuggestionSpan(TextRange(start: 0, end: 4), <String>['test', 'sets', 'set']),
+        ]);
+        state.renderEditable.selectWordsInRange(
+          from: Offset.zero,
+          cause: SelectionChangedCause.tap,
+        );
         await tester.pumpAndSettle();
-        expect(state.currentTextEditingValue.text, equals('sets test test'));
         expect(state.currentTextEditingValue.selection.baseOffset, equals(0));
-      }
 
-      // Test delete button.
-      state.showSpellCheckSuggestionsToolbar();
-      await tester.pumpAndSettle();
-      if (kIsWeb) {
-        expect(find.text('DELETE'), findsNothing);
-      } else {
-        expect(find.text('DELETE'), findsOneWidget);
-        await tester.tap(find.text('DELETE'));
+        // Test misspelled word replacement buttons.
+        state.showSpellCheckSuggestionsToolbar();
         await tester.pumpAndSettle();
-        expect(state.currentTextEditingValue.text, equals(' test test'));
-        expect(state.currentTextEditingValue.selection.baseOffset, equals(0));
-      }
-    });
 
-    testWidgets('replacing puts cursor at the end of the word', (WidgetTester tester) async {
-      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-        true;
-      controller.value = const TextEditingValue(
-        // All misspellings of "test". One the same length, one shorter, and one
-        // longer.
-        text: 'tset tst testt',
-        selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 0, extentOffset: 4),
-      );
-      await tester.pumpWidget(
-        CupertinoApp(
-          home: EditableText(
-            backgroundCursorColor: Colors.grey,
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            selectionControls: materialTextSelectionControls,
-            spellCheckConfiguration:
-              const SpellCheckConfiguration(
+        if (kIsWeb) {
+          expect(find.text('sets'), findsNothing);
+        } else {
+          expect(find.text('sets'), findsOneWidget);
+          await tester.tap(find.text('sets'));
+          await tester.pumpAndSettle();
+          expect(state.currentTextEditingValue.text, equals('sets test test'));
+          expect(state.currentTextEditingValue.selection.baseOffset, equals(0));
+        }
+
+        // Test delete button.
+        state.showSpellCheckSuggestionsToolbar();
+        await tester.pumpAndSettle();
+        if (kIsWeb) {
+          expect(find.text('DELETE'), findsNothing);
+        } else {
+          expect(find.text('DELETE'), findsOneWidget);
+          await tester.tap(find.text('DELETE'));
+          await tester.pumpAndSettle();
+          expect(state.currentTextEditingValue.text, equals(' test test'));
+          expect(state.currentTextEditingValue.selection.baseOffset, equals(0));
+        }
+      },
+    );
+
+    testWidgets(
+      'replacing puts cursor at the end of the word',
+      (WidgetTester tester) async {
+        tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = true;
+        controller.value = const TextEditingValue(
+          // All misspellings of "test". One the same length, one shorter, and one
+          // longer.
+          text: 'tset tst testt',
+          selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 0, extentOffset: 4),
+        );
+        await tester.pumpWidget(
+          CupertinoApp(
+            home: EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              selectionControls: materialTextSelectionControls,
+              spellCheckConfiguration: const SpellCheckConfiguration(
                 misspelledTextStyle: CupertinoTextField.cupertinoMisspelledTextStyle,
-                spellCheckSuggestionsToolbarBuilder: CupertinoTextField.defaultSpellCheckSuggestionsToolbarBuilder,
+                spellCheckSuggestionsToolbarBuilder:
+                    CupertinoTextField.defaultSpellCheckSuggestionsToolbarBuilder,
               ),
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      state.spellCheckResults = SpellCheckResults(
-        controller.value.text,
-        const <SuggestionSpan>[
+        state.spellCheckResults = SpellCheckResults(controller.value.text, const <SuggestionSpan>[
           SuggestionSpan(TextRange(start: 0, end: 4), <String>['test']),
           SuggestionSpan(TextRange(start: 5, end: 8), <String>['test']),
           SuggestionSpan(TextRange(start: 9, end: 13), <String>['test']),
         ]);
-      await tester.tapAt(textOffsetToPosition(tester, 0));
-      await tester.pumpAndSettle();
-      expect(state.showSpellCheckSuggestionsToolbar(), isTrue);
-      await tester.pumpAndSettle();
-      expect(find.text('test'), findsOneWidget);
+        await tester.tapAt(textOffsetToPosition(tester, 0));
+        await tester.pumpAndSettle();
+        expect(state.showSpellCheckSuggestionsToolbar(), isTrue);
+        await tester.pumpAndSettle();
+        expect(find.text('test'), findsOneWidget);
 
-      // Replacing a word of the same length as the replacement puts the cursor
-      // at the end of the new word.
-      await tester.tap(find.text('test'));
-      await tester.pumpAndSettle();
-      expect(
-        controller.value,
-        equals(const TextEditingValue(
-          text: 'test tst testt',
-          selection: TextSelection.collapsed(
-            offset: 4,
+        // Replacing a word of the same length as the replacement puts the cursor
+        // at the end of the new word.
+        await tester.tap(find.text('test'));
+        await tester.pumpAndSettle();
+        expect(
+          controller.value,
+          equals(
+            const TextEditingValue(
+              text: 'test tst testt',
+              selection: TextSelection.collapsed(offset: 4),
+            ),
           ),
-        )),
-      );
+        );
 
-      state.spellCheckResults = SpellCheckResults(
-        controller.value.text,
-        const <SuggestionSpan>[
+        state.spellCheckResults = SpellCheckResults(controller.value.text, const <SuggestionSpan>[
           SuggestionSpan(TextRange(start: 5, end: 8), <String>['test']),
           SuggestionSpan(TextRange(start: 9, end: 13), <String>['test']),
         ]);
-      await tester.tapAt(textOffsetToPosition(tester, 5));
-      await tester.pumpAndSettle();
-      expect(state.showSpellCheckSuggestionsToolbar(), isTrue);
-      await tester.pumpAndSettle();
-      expect(find.text('test'), findsOneWidget);
+        await tester.tapAt(textOffsetToPosition(tester, 5));
+        await tester.pumpAndSettle();
+        expect(state.showSpellCheckSuggestionsToolbar(), isTrue);
+        await tester.pumpAndSettle();
+        expect(find.text('test'), findsOneWidget);
 
-      // Replacing a word of less length as the replacement puts the cursor at
-      // the end of the new word.
-      await tester.tap(find.text('test'));
-      await tester.pumpAndSettle();
-      expect(
-        controller.value,
-        equals(const TextEditingValue(
-          text: 'test test testt',
-          selection: TextSelection.collapsed(
-            offset: 9,
+        // Replacing a word of less length as the replacement puts the cursor at
+        // the end of the new word.
+        await tester.tap(find.text('test'));
+        await tester.pumpAndSettle();
+        expect(
+          controller.value,
+          equals(
+            const TextEditingValue(
+              text: 'test test testt',
+              selection: TextSelection.collapsed(offset: 9),
+            ),
           ),
-        )),
-      );
+        );
 
-      state.spellCheckResults = SpellCheckResults(
-        controller.value.text,
-        const <SuggestionSpan>[
+        state.spellCheckResults = SpellCheckResults(controller.value.text, const <SuggestionSpan>[
           SuggestionSpan(TextRange(start: 10, end: 15), <String>['test']),
         ]);
-      await tester.tapAt(textOffsetToPosition(tester, 10));
-      await tester.pumpAndSettle();
-      expect(state.showSpellCheckSuggestionsToolbar(), isTrue);
-      await tester.pumpAndSettle();
-      expect(find.text('test'), findsOneWidget);
+        await tester.tapAt(textOffsetToPosition(tester, 10));
+        await tester.pumpAndSettle();
+        expect(state.showSpellCheckSuggestionsToolbar(), isTrue);
+        await tester.pumpAndSettle();
+        expect(find.text('test'), findsOneWidget);
 
-      // Replacing a word of greater length as the replacement puts the cursor
-      // at the end of the new word.
-      await tester.tap(find.text('test'));
-      await tester.pumpAndSettle();
-      expect(
-        controller.value,
-        equals(const TextEditingValue(
-          text: 'test test test',
-          selection: TextSelection.collapsed(
-            offset: 14,
+        // Replacing a word of greater length as the replacement puts the cursor
+        // at the end of the new word.
+        await tester.tap(find.text('test'));
+        await tester.pumpAndSettle();
+        expect(
+          controller.value,
+          equals(
+            const TextEditingValue(
+              text: 'test test test',
+              selection: TextSelection.collapsed(offset: 14),
+            ),
           ),
-        )),
-      );
-    },
-      variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS, TargetPlatform.android }),
+        );
+      },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.iOS,
+        TargetPlatform.android,
+      }),
       skip: kIsWeb, // [intended]
     );
 
-    testWidgets('tapping on a misspelled word hides the handles', (WidgetTester tester) async {
-      tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
-        true;
-      controller.value = const TextEditingValue(
-        // All misspellings of "test". One the same length, one shorter, and one
-        // longer.
-        text: 'test test testt',
-        selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 0, extentOffset: 4),
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: EditableText(
-            backgroundCursorColor: Colors.grey,
-            controller: controller,
-            focusNode: focusNode,
-            style: textStyle,
-            cursorColor: cursorColor,
-            selectionControls: materialTextSelectionControls,
-            showSelectionHandles: true,
-            spellCheckConfiguration:
-              const SpellCheckConfiguration(
+    testWidgets(
+      'tapping on a misspelled word hides the handles',
+      (WidgetTester tester) async {
+        tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue = true;
+        controller.value = const TextEditingValue(
+          // All misspellings of "test". One the same length, one shorter, and one
+          // longer.
+          text: 'test test testt',
+          selection: TextSelection(affinity: TextAffinity.upstream, baseOffset: 0, extentOffset: 4),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: EditableText(
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              style: textStyle,
+              cursorColor: cursorColor,
+              selectionControls: materialTextSelectionControls,
+              showSelectionHandles: true,
+              spellCheckConfiguration: const SpellCheckConfiguration(
                 misspelledTextStyle: TextField.materialMisspelledTextStyle,
-                spellCheckSuggestionsToolbarBuilder: TextField.defaultSpellCheckSuggestionsToolbarBuilder,
+                spellCheckSuggestionsToolbarBuilder:
+                    TextField.defaultSpellCheckSuggestionsToolbarBuilder,
               ),
+            ),
           ),
-        ),
-      );
+        );
 
-      final EditableTextState state =
-          tester.state<EditableTextState>(find.byType(EditableText));
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
 
-      state.spellCheckResults = SpellCheckResults(
-        controller.value.text,
-        const <SuggestionSpan>[
+        state.spellCheckResults = SpellCheckResults(controller.value.text, const <SuggestionSpan>[
           SuggestionSpan(TextRange(start: 10, end: 15), <String>['test']),
         ]);
-      await tester.tapAt(textOffsetToPosition(tester, 0));
-      await tester.pumpAndSettle();
-      expect(state.showSpellCheckSuggestionsToolbar(), isFalse);
-      await tester.pumpAndSettle();
-      expect(find.text('test'), findsNothing);
-      expect(state.selectionOverlay!.handlesAreVisible, isTrue);
+        await tester.tapAt(textOffsetToPosition(tester, 0));
+        await tester.pumpAndSettle();
+        expect(state.showSpellCheckSuggestionsToolbar(), isFalse);
+        await tester.pumpAndSettle();
+        expect(find.text('test'), findsNothing);
+        expect(state.selectionOverlay!.handlesAreVisible, isTrue);
 
-      await tester.tapAt(textOffsetToPosition(tester, 12));
-      await tester.pumpAndSettle();
-      expect(state.showSpellCheckSuggestionsToolbar(), isTrue);
-      await tester.pumpAndSettle();
-      expect(find.text('test'), findsOneWidget);
-      expect(state.selectionOverlay!.handlesAreVisible, isFalse);
+        await tester.tapAt(textOffsetToPosition(tester, 12));
+        await tester.pumpAndSettle();
+        expect(state.showSpellCheckSuggestionsToolbar(), isTrue);
+        await tester.pumpAndSettle();
+        expect(find.text('test'), findsOneWidget);
+        expect(state.selectionOverlay!.handlesAreVisible, isFalse);
 
-      await tester.tapAt(textOffsetToPosition(tester, 5));
-      await tester.pumpAndSettle();
-      expect(state.showSpellCheckSuggestionsToolbar(), isFalse);
-      await tester.pumpAndSettle();
-      expect(find.text('test'), findsNothing);
-      expect(state.selectionOverlay!.handlesAreVisible, isTrue);
-    },
-      variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.android }),
+        await tester.tapAt(textOffsetToPosition(tester, 5));
+        await tester.pumpAndSettle();
+        expect(state.showSpellCheckSuggestionsToolbar(), isFalse);
+        await tester.pumpAndSettle();
+        expect(find.text('test'), findsNothing);
+        expect(state.selectionOverlay!.handlesAreVisible, isTrue);
+      },
+      variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.android}),
       skip: kIsWeb, // [intended]
     );
   });
 
   group('magnifier', () {
     testWidgets('should build nothing by default', (WidgetTester tester) async {
-      final EditableText editableText = EditableText(
-            controller: controller,
-            showSelectionHandles: true,
-            autofocus: true,
-            focusNode: FocusNode(),
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
-            selectionControls: materialTextSelectionControls,
-            keyboardType: TextInputType.text,
-            textAlign: TextAlign.right,
-          );
+      final editableText = EditableText(
+        controller: controller,
+        showSelectionHandles: true,
+        autofocus: true,
+        focusNode: focusNode,
+        style: Typography.material2018().black.titleMedium!,
+        cursorColor: Colors.blue,
+        backgroundCursorColor: Colors.grey,
+        selectionControls: materialTextSelectionControls,
+        keyboardType: TextInputType.text,
+        textAlign: TextAlign.right,
+      );
 
+      await tester.pumpWidget(MaterialApp(home: editableText));
+
+      final BuildContext context = tester.firstElement(find.byType(EditableText));
+      final notifier = ValueNotifier<MagnifierInfo>(MagnifierInfo.empty);
+      addTearDown(notifier.dispose);
+
+      expect(
+        editableText.magnifierConfiguration.magnifierBuilder(
+          context,
+          MagnifierController(),
+          notifier,
+        ),
+        isNull,
+      );
+    });
+
+    testWidgets('magnifier is in correct position when EditableText is scaled', (
+      WidgetTester tester,
+    ) async {
+      controller.text = 'hello \n world \n this \n is \n text';
+      final GlobalKey magnifierKey = GlobalKey();
+      const scale = 0.5;
       await tester.pumpWidget(
         MaterialApp(
-          home: editableText,
+          home: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Transform.scale(
+                scale: scale,
+                child: EditableText(
+                  controller: controller,
+                  maxLines: null,
+                  showSelectionHandles: true,
+                  autofocus: true,
+                  focusNode: focusNode,
+                  style: Typography.material2018().black.titleMedium!,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                  selectionControls: materialTextSelectionControls,
+                  keyboardType: TextInputType.text,
+                  textAlign: TextAlign.right,
+                  magnifierConfiguration: TextMagnifierConfiguration(
+                    shouldDisplayHandlesInMagnifier: false,
+                    magnifierBuilder:
+                        (
+                          BuildContext context,
+                          MagnifierController controller,
+                          ValueNotifier<MagnifierInfo>? notifier,
+                        ) {
+                          return TextMagnifier(key: magnifierKey, magnifierInfo: notifier!);
+                        },
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
 
-      final BuildContext context = tester.firstElement(find.byType(EditableText));
-
-      expect(
-          editableText.magnifierConfiguration.magnifierBuilder(
-              context,
-              MagnifierController(),
-              ValueNotifier<MagnifierInfo>(MagnifierInfo.empty)
-            ),
-          isNull,
+      await tester.tapAt(textOffsetToPosition(tester, 3));
+      await tester.pumpAndSettle();
+      final handles = List<RenderBox>.of(
+        tester.renderObjectList<RenderBox>(
+          find.descendant(
+            of: find.byType(CompositedTransformFollower),
+            matching: find.byType(Padding),
+          ),
+        ),
       );
+      expect(handles, hasLength(1));
+      final RenderBox handle = handles.first;
+      expect(find.byKey(magnifierKey), findsNothing);
+
+      final TestGesture gesture = await tester.startGesture(
+        handle.localToGlobal(Offset(handle.size.width / 2, handle.size.height / 2)),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byKey(magnifierKey), findsOneWidget);
+      final Offset magnifierStart = tester.getTopLeft(find.byKey(magnifierKey));
+
+      // Dragging by a quarter of a line height does not move the magnifier.
+      // Typically, when not scaled, you need to drag by a full line height to
+      // get the magnifier to move vertically.
+      final double lineHeight = findRenderEditable(tester).preferredLineHeight;
+      await gesture.moveBy(Offset(0.0, lineHeight / 4));
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pumpAndSettle();
+      expect(find.byKey(magnifierKey), findsOneWidget);
+      expect(tester.getTopLeft(find.byKey(magnifierKey)), magnifierStart);
+
+      // Dragging by another quarter line height (total half a line height) does
+      // move the magnifier, because the text is scaled down by half.
+      await gesture.moveBy(Offset(0.0, lineHeight / 4));
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pumpAndSettle();
+      expect(find.byKey(magnifierKey), findsOneWidget);
+      expect(tester.getTopLeft(find.byKey(magnifierKey)).dy, magnifierStart.dy + lineHeight / 2);
+
+      // Drag back up by a quarter line height, cursor doesn't move.
+      await gesture.moveBy(Offset(0.0, -lineHeight / 4));
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pumpAndSettle();
+      expect(find.byKey(magnifierKey), findsOneWidget);
+      expect(tester.getTopLeft(find.byKey(magnifierKey)).dy, magnifierStart.dy + lineHeight / 2);
+
+      // Continuing the drag up to a half line height (whole line height scaled)
+      // does move the cursor.
+      await gesture.moveBy(Offset(0.0, -lineHeight / 4));
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pumpAndSettle();
+      expect(find.byKey(magnifierKey), findsOneWidget);
+      expect(tester.getTopLeft(find.byKey(magnifierKey)), magnifierStart);
+
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(find.byKey(magnifierKey), findsNothing);
+
+      await tester.pumpAndSettle();
     });
   });
 
   // Regression test for: https://github.com/flutter/flutter/issues/117418.
-  testWidgets('can handle the partial selection of a multi-code-unit glyph', (WidgetTester tester) async {
+  testWidgets('can handle the partial selection of a multi-code-unit glyph', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           controller: controller,
           showSelectionHandles: true,
           autofocus: true,
-          focusNode: FocusNode(),
+          focusNode: focusNode,
           style: Typography.material2018().black.titleMedium!,
           cursorColor: Colors.blue,
           backgroundCursorColor: Colors.grey,
@@ -15808,17 +17216,13 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     await tester.enterText(find.byType(EditableText), '12345');
     await tester.pumpAndSettle();
 
-    final EditableTextState state =
-      tester.state<EditableTextState>(find.byType(EditableText));
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
     state.userUpdateTextEditingValue(
       const TextEditingValue(
         // This is an extended grapheme cluster made up of several code units,
         // which has length 8.  A selection from 0-1 does not fully select it.
         text: '👨‍👩‍👦',
-        selection: TextSelection(
-          baseOffset: 0,
-          extentOffset: 1,
-        ),
+        selection: TextSelection(baseOffset: 0, extentOffset: 1),
       ),
       SelectionChangedCause.keyboard,
     );
@@ -15828,12 +17232,14 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     expect(tester.takeException(), null);
   });
 
-  testWidgets('does not crash when didChangeMetrics is called after unmounting', (WidgetTester tester) async {
+  testWidgets('does not crash when didChangeMetrics is called after unmounting', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
           controller: controller,
-          focusNode: FocusNode(),
+          focusNode: focusNode,
           style: Typography.material2018().black.titleMedium!,
           cursorColor: Colors.blue,
           backgroundCursorColor: Colors.grey,
@@ -15852,11 +17258,7 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
 
   testWidgets('_CompositionCallback widget does not skip frames', (WidgetTester tester) async {
     EditableText.debugDeterministicCursor = true;
-    final FocusNode focusNode = FocusNode();
-    final TextEditingController controller = TextEditingController.fromValue(
-      const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
-    );
-
+    controller.value = const TextEditingValue(selection: TextSelection.collapsed(offset: 0));
     Offset offset = Offset.zero;
     late StateSetter setState;
 
@@ -15894,7 +17296,9 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
 
     // The composition callback should be registered. To verify, change the
     // parent layer's transform.
-    setState(() { offset = const Offset(42, 0); });
+    setState(() {
+      offset = const Offset(42, 0);
+    });
     await tester.pump();
 
     expect(
@@ -15902,7 +17306,10 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       contains(
         matchesMethodCall(
           'TextInput.setEditableSizeAndTransform',
-          args: containsPair('transform', Matrix4.translationValues(offset.dx, offset.dy, 0).storage),
+          args: containsPair(
+            'transform',
+            Matrix4.translationValues(offset.dx, offset.dy, 0).storage,
+          ),
         ),
       ),
     );
@@ -15911,19 +17318,37 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
   });
 
   group('selection behavior when receiving focus', () {
+    Future<void> setAppLifecycleState(AppLifecycleState state) async {
+      final ByteData? message = const StringCodec().encodeMessage(state.toString());
+      await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.handlePlatformMessage(
+        'flutter/lifecycle',
+        message,
+        (_) {},
+      );
+    }
+
     testWidgets('tabbing between fields', (WidgetTester tester) async {
-      final TextEditingController controller1 = TextEditingController();
-      final TextEditingController controller2 = TextEditingController();
+      final bool isDesktop =
+          debugDefaultTargetPlatformOverride == TargetPlatform.macOS ||
+          debugDefaultTargetPlatformOverride == TargetPlatform.windows ||
+          debugDefaultTargetPlatformOverride == TargetPlatform.linux;
+
+      final controller1 = TextEditingController();
+      addTearDown(controller1.dispose);
+      final controller2 = TextEditingController();
+      addTearDown(controller2.dispose);
       controller1.text = 'Text1';
       controller2.text = 'Text2\nLine2';
-      final FocusNode focusNode1 = FocusNode();
-      final FocusNode focusNode2 = FocusNode();
+      final focusNode1 = FocusNode();
+      addTearDown(focusNode1.dispose);
+      final focusNode2 = FocusNode();
+      addTearDown(focusNode2.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
           home: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children:  <Widget>[
+            children: <Widget>[
               EditableText(
                 key: ValueKey<String>(controller1.text),
                 controller: controller1,
@@ -15951,14 +17376,8 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
 
       expect(focusNode1.hasFocus, isFalse);
       expect(focusNode2.hasFocus, isFalse);
-      expect(
-        controller1.selection,
-        const TextSelection.collapsed(offset: -1),
-      );
-      expect(
-        controller2.selection,
-        const TextSelection.collapsed(offset: -1),
-      );
+      expect(controller1.selection, const TextSelection.collapsed(offset: -1));
+      expect(controller2.selection, const TextSelection.collapsed(offset: -1));
 
       // Tab to the first field (single line).
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
@@ -15967,47 +17386,27 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       expect(focusNode2.hasFocus, isFalse);
       expect(
         controller1.selection,
-        kIsWeb
-          ? TextSelection(
-              baseOffset: 0,
-              extentOffset: controller1.text.length,
-            )
-          : TextSelection.collapsed(
-              offset: controller1.text.length,
-            ),
+        kIsWeb || isDesktop
+            ? TextSelection(baseOffset: 0, extentOffset: controller1.text.length)
+            : TextSelection.collapsed(offset: controller1.text.length),
       );
 
       // Move the cursor to another position in the first field.
       await tester.tapAt(textOffsetToPosition(tester, controller1.text.length - 1));
       await tester.pumpAndSettle();
-      expect(
-        controller1.selection,
-        TextSelection.collapsed(
-          offset: controller1.text.length - 1,
-        ),
-      );
+      expect(controller1.selection, TextSelection.collapsed(offset: controller1.text.length - 1));
 
       // Tab to the second field (multiline).
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
       expect(focusNode1.hasFocus, isFalse);
       expect(focusNode2.hasFocus, isTrue);
-      expect(
-        controller2.selection,
-        TextSelection.collapsed(
-          offset: controller2.text.length,
-        ),
-      );
+      expect(controller2.selection, TextSelection.collapsed(offset: controller2.text.length));
 
       // Move the cursor to another position in the second field.
       await tester.tapAt(textOffsetToPosition(tester, controller2.text.length - 1, index: 1));
       await tester.pumpAndSettle();
-      expect(
-        controller2.selection,
-        TextSelection.collapsed(
-          offset: controller2.text.length - 1,
-        ),
-      );
+      expect(controller2.selection, TextSelection.collapsed(offset: controller2.text.length - 1));
 
       // On web, the document root is also focusable.
       if (kIsWeb) {
@@ -16024,14 +17423,9 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       expect(focusNode2.hasFocus, isFalse);
       expect(
         controller1.selection,
-        kIsWeb
-          ? TextSelection(
-              baseOffset: 0,
-              extentOffset: controller1.text.length,
-            )
-          : TextSelection.collapsed(
-              offset: controller1.text.length - 1,
-            ),
+        kIsWeb || isDesktop
+            ? TextSelection(baseOffset: 0, extentOffset: controller1.text.length)
+            : TextSelection.collapsed(offset: controller1.text.length - 1),
       );
 
       // Tabbing to the second field again retains the moved selection.
@@ -16039,19 +17433,14 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       await tester.pumpAndSettle();
       expect(focusNode1.hasFocus, isFalse);
       expect(focusNode2.hasFocus, isTrue);
-      expect(
-        controller2.selection,
-        TextSelection.collapsed(
-          offset: controller2.text.length - 1,
-        ),
-      );
-    });
+      expect(controller2.selection, TextSelection.collapsed(offset: controller2.text.length - 1));
+    }, variant: TargetPlatformVariant.all());
 
-    testWidgets('Selection is updated when the field has focus and the new selection is invalid', (WidgetTester tester) async {
+    testWidgets('Selection is updated when the field has focus and the new selection is invalid', (
+      WidgetTester tester,
+    ) async {
       // Regression test for https://github.com/flutter/flutter/issues/120631.
-      final TextEditingController controller = TextEditingController();
       controller.text = 'Text';
-      final FocusNode focusNode = FocusNode();
 
       await tester.pumpWidget(
         MaterialApp(
@@ -16067,10 +17456,7 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       );
 
       expect(focusNode.hasFocus, isFalse);
-      expect(
-        controller.selection,
-        const TextSelection.collapsed(offset: -1),
-      );
+      expect(controller.selection, const TextSelection.collapsed(offset: -1));
 
       // Tab to focus the field.
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
@@ -16079,13 +17465,8 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       expect(
         controller.selection,
         kIsWeb
-          ? TextSelection(
-              baseOffset: 0,
-              extentOffset: controller.text.length,
-            )
-          : TextSelection.collapsed(
-              offset: controller.text.length,
-            ),
+            ? TextSelection(baseOffset: 0, extentOffset: controller.text.length)
+            : TextSelection.collapsed(offset: controller.text.length),
       );
 
       // Update text without specifying the selection.
@@ -16096,104 +17477,252 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
       expect(
         controller.selection,
         kIsWeb
-          ? TextSelection(
-              baseOffset: 0,
-              extentOffset: controller.text.length,
-            )
-          : TextSelection.collapsed(
-              offset: controller.text.length,
-            ),
+            ? TextSelection(baseOffset: 0, extentOffset: controller.text.length)
+            : TextSelection.collapsed(offset: controller.text.length),
       );
     });
 
-    testWidgets('when having focus stolen between frames on web', (WidgetTester tester) async {
-      final TextEditingController controller1 = TextEditingController();
-      controller1.text = 'Text1';
-      final FocusNode focusNode1 = FocusNode();
-      final FocusNode focusNode2 = FocusNode();
+    testWidgets(
+      'when having focus stolen between frames on web',
+      (WidgetTester tester) async {
+        controller.text = 'Text1';
+        final focusNode1 = FocusNode();
+        addTearDown(focusNode1.dispose);
+        final focusNode2 = FocusNode();
+        addTearDown(focusNode2.dispose);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                EditableText(
+                  key: ValueKey<String>(controller.text),
+                  controller: controller,
+                  focusNode: focusNode1,
+                  style: Typography.material2018().black.titleMedium!,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                ),
+                const SizedBox(height: 200.0),
+                Focus(focusNode: focusNode2, child: const SizedBox.shrink()),
+                const SizedBox(height: 100.0),
+              ],
+            ),
+          ),
+        );
+
+        expect(focusNode1.hasFocus, isFalse);
+        expect(focusNode2.hasFocus, isFalse);
+        expect(controller.selection, const TextSelection.collapsed(offset: -1));
+
+        final EditableTextState state = tester.state<EditableTextState>(
+          find.byType(EditableText).first,
+        );
+
+        // Set the text editing value in order to trigger an internal call to
+        // requestFocus.
+        state.userUpdateTextEditingValue(controller.value, SelectionChangedCause.keyboard);
+        // Focus takes a frame to update, so it hasn't changed yet.
+        expect(focusNode1.hasFocus, isFalse);
+        expect(focusNode2.hasFocus, isFalse);
+
+        // Before EditableText's listener on widget.focusNode can be called, change
+        // the focus again
+        focusNode2.requestFocus();
+        await tester.pump();
+        expect(focusNode1.hasFocus, isFalse);
+        expect(focusNode2.hasFocus, isTrue);
+
+        // Focus the EditableText again, which should cause the field to be selected
+        // on web.
+        focusNode1.requestFocus();
+        await tester.pumpAndSettle();
+        expect(focusNode1.hasFocus, isTrue);
+        expect(focusNode2.hasFocus, isFalse);
+        expect(
+          controller.selection,
+          TextSelection(baseOffset: 0, extentOffset: controller.text.length),
+        );
+      },
+      skip: !kIsWeb, // [intended]
+    );
+
+    // Regression test for https://github.com/flutter/flutter/issues/163399.
+    testWidgets('when selectAllOnFocus is turned off', (WidgetTester tester) async {
+      controller.text = 'Text';
 
       await tester.pumpWidget(
         MaterialApp(
-          home: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children:  <Widget>[
-              EditableText(
-                key: ValueKey<String>(controller1.text),
-                controller: controller1,
-                focusNode: focusNode1,
-                style: Typography.material2018().black.titleMedium!,
-                cursorColor: Colors.blue,
-                backgroundCursorColor: Colors.grey,
-              ),
-              const SizedBox(height: 200.0),
-              Focus(
-                focusNode: focusNode2,
-                child: const SizedBox.shrink(),
-              ),
-              const SizedBox(height: 100.0),
-            ],
+          home: EditableText(
+            key: ValueKey<String>(controller.text),
+            controller: controller,
+            focusNode: focusNode,
+            style: Typography.material2018().black.titleMedium!,
+            cursorColor: Colors.blue,
+            backgroundCursorColor: Colors.grey,
+            selectAllOnFocus: false,
           ),
         ),
       );
 
-      expect(focusNode1.hasFocus, isFalse);
-      expect(focusNode2.hasFocus, isFalse);
-      expect(
-        controller1.selection,
-        const TextSelection.collapsed(offset: -1),
-      );
+      expect(focusNode.hasFocus, isFalse);
+      const initialSelection = TextSelection.collapsed(offset: 1);
+      controller.selection = initialSelection;
 
-      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText).first);
-
-      // Set the text editing value in order to trigger an internal call to
-      // requestFocus.
-      state.userUpdateTextEditingValue(
-        controller1.value,
-        SelectionChangedCause.keyboard,
-      );
-      // Focus takes a frame to update, so it hasn't changed yet.
-      expect(focusNode1.hasFocus, isFalse);
-      expect(focusNode2.hasFocus, isFalse);
-
-      // Before EditableText's listener on widget.focusNode can be called, change
-      // the focus again
-      focusNode2.requestFocus();
-      await tester.pump();
-      expect(focusNode1.hasFocus, isFalse);
-      expect(focusNode2.hasFocus, isTrue);
-
-      // Focus the EditableText again, which should cause the field to be selected
-      // on web.
-      focusNode1.requestFocus();
+      // Tab to focus the field.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
-      expect(focusNode1.hasFocus, isTrue);
-      expect(focusNode2.hasFocus, isFalse);
-      expect(
-        controller1.selection,
-        TextSelection(
-          baseOffset: 0,
-          extentOffset: controller1.text.length,
+      expect(focusNode.hasFocus, isTrue);
+      expect(controller.selection, initialSelection);
+    }, variant: TargetPlatformVariant.all());
+
+    // Regression test for https://github.com/flutter/flutter/issues/163399.
+    testWidgets('when selectAllOnFocus is turned on', (WidgetTester tester) async {
+      controller.text = 'Text';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            key: ValueKey<String>(controller.text),
+            controller: controller,
+            focusNode: focusNode,
+            style: Typography.material2018().black.titleMedium!,
+            cursorColor: Colors.blue,
+            backgroundCursorColor: Colors.grey,
+            selectAllOnFocus: true,
+          ),
         ),
       );
-    },
-      skip: !kIsWeb, // [intended]
-    );
+
+      expect(focusNode.hasFocus, isFalse);
+      const initialSelection = TextSelection.collapsed(offset: 1);
+      controller.selection = initialSelection;
+
+      // Tab to focus the field.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(focusNode.hasFocus, isTrue);
+      expect(
+        controller.selection,
+        TextSelection(baseOffset: 0, extentOffset: controller.text.length),
+      );
+    }, variant: TargetPlatformVariant.all());
+
+    // Regression test for https://github.com/flutter/flutter/issues/156078.
+    testWidgets('when having focus regained after the app resumed', (WidgetTester tester) async {
+      final controller = TextEditingController(text: 'Flutter!');
+      addTearDown(controller.dispose);
+      final focusNode = FocusNode();
+      addTearDown(focusNode.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: EditableText(
+              key: ValueKey<String>(controller.text),
+              controller: controller,
+              focusNode: focusNode,
+              autofocus: true,
+              style: Typography.material2018().black.titleMedium!,
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+            ),
+          ),
+        ),
+      );
+
+      expect(focusNode.hasFocus, true);
+      expect(controller.selection, collapsedAtEnd('Flutter!').selection);
+
+      await setAppLifecycleState(AppLifecycleState.inactive);
+      await setAppLifecycleState(AppLifecycleState.resumed);
+
+      expect(focusNode.hasFocus, true);
+      expect(controller.selection, collapsedAtEnd('Flutter!').selection);
+    }, variant: TargetPlatformVariant.all());
+
+    testWidgets('moving focus after the app resumed should select all the content on desktop', (
+      WidgetTester tester,
+    ) async {
+      final controller1 = TextEditingController.fromValue(collapsedAtEnd('Flutter!'));
+      addTearDown(controller1.dispose);
+      final controller2 = TextEditingController.fromValue(collapsedAtEnd('Dart!'));
+      addTearDown(controller2.dispose);
+      final focusNode1 = FocusNode();
+      addTearDown(focusNode1.dispose);
+      final focusNode2 = FocusNode();
+      addTearDown(focusNode2.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: Column(
+              children: <Widget>[
+                EditableText(
+                  key: ValueKey<String>(controller1.text),
+                  controller: controller1,
+                  focusNode: focusNode1,
+                  autofocus: true,
+                  style: Typography.material2018().black.titleMedium!,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                ),
+                EditableText(
+                  key: ValueKey<String>(controller2.text),
+                  controller: controller2,
+                  focusNode: focusNode2,
+                  style: Typography.material2018().black.titleMedium!,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(focusNode1.hasFocus, true);
+      expect(focusNode2.hasFocus, false);
+      expect(controller1.selection, collapsedAtEnd('Flutter!').selection);
+      expect(controller2.selection, collapsedAtEnd('Dart!').selection);
+
+      // Pause and resume the application.
+      await setAppLifecycleState(AppLifecycleState.inactive);
+      await setAppLifecycleState(AppLifecycleState.resumed);
+
+      // Change focus to the second EditableText.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+
+      expect(focusNode1.hasFocus, false);
+      expect(focusNode2.hasFocus, true);
+      expect(controller1.selection, collapsedAtEnd('Flutter!').selection);
+
+      // The text of the second EditableText should be entirely selected.
+      expect(
+        controller2.selection,
+        TextSelection(baseOffset: 0, extentOffset: controller2.text.length),
+      );
+    }, variant: TargetPlatformVariant.desktop());
   });
 
   testWidgets('EditableText respects MediaQuery.boldText', (WidgetTester tester) async {
-    await tester.pumpWidget(Directionality(
-      textDirection: TextDirection.ltr,
-      child: MediaQuery(
-        data: const MediaQueryData(boldText: true),
-        child: EditableText(
-          controller: controller,
-          focusNode: focusNode,
-          style: const TextStyle(fontWeight: FontWeight.normal),
-          cursorColor: Colors.red,
-          backgroundCursorColor: Colors.green,
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: MediaQuery(
+          data: const MediaQueryData(boldText: true),
+          child: EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            style: const TextStyle(fontWeight: FontWeight.normal),
+            cursorColor: Colors.red,
+            backgroundCursorColor: Colors.green,
+          ),
         ),
       ),
-    ));
+    );
 
     controller.text = 'foo';
     final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
@@ -16201,406 +17730,1505 @@ testWidgets('Floating cursor ending with selection', (WidgetTester tester) async
     expect(state.buildTextSpan().style!.fontWeight, FontWeight.bold);
   });
 
-  testWidgets('code points are treated as single characters in obscure mode', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(),
-          focusNode: focusNode,
-          obscureText: true,
-          toolbarOptions: const ToolbarOptions(
-            copy: true,
-            cut: true,
-            paste: true,
-            selectAll: true,
+  testWidgets(
+    'EditableText respects MediaQueryData.lineHeightScaleFactorOverride, MediaQueryData.letterSpacingOverride, and MediaQueryData.wordSpacingOverride',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: MediaQuery(
+            data: const MediaQueryData(
+              lineHeightScaleFactorOverride: 2.0,
+              letterSpacingOverride: 2.0,
+              wordSpacingOverride: 2.0,
+            ),
+            child: EditableText(
+              controller: controller,
+              focusNode: focusNode,
+              style: const TextStyle(fontWeight: FontWeight.normal),
+              strutStyle: const StrutStyle(height: 0.9),
+              cursorColor: Colors.red,
+              backgroundCursorColor: Colors.green,
+            ),
           ),
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.byType(EditableText));
-    await tester.enterText(find.byType(EditableText), '👨‍👩‍👦');
-    await tester.pump();
+      controller.text = 'foo';
+      final RenderEditable renderEditable = findRenderEditable(tester);
+      final TextStyle? resultTextStyle = renderEditable.text?.style;
+      expect(resultTextStyle?.height, 2.0);
+      expect(resultTextStyle?.letterSpacing, 2.0);
+      expect(resultTextStyle?.wordSpacing, 2.0);
+      expect(renderEditable.strutStyle?.height, 2.0);
+    },
+  );
 
-    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
-    expect(state.textEditingValue.text, '👨‍👩‍👦');
-    // 👨‍👩‍👦|
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 8),
-    );
+  testWidgets(
+    'code points are treated as single characters in obscure mode',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            focusNode: focusNode,
+            obscureText: true,
+            toolbarOptions: const ToolbarOptions(
+              copy: true,
+              cut: true,
+              paste: true,
+              selectAll: true,
+            ),
+            style: textStyle,
+            cursorColor: cursorColor,
+            selectionControls: materialTextSelectionControls,
+          ),
+        ),
+      );
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.pump();
-    // 👨‍👩‍|👦
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 6),
-    );
+      await tester.tap(find.byType(EditableText));
+      await tester.enterText(find.byType(EditableText), '👨‍👩‍👦');
+      await tester.pump();
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.pump();
-    // 👨‍👩|‍👦
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 5),
-    );
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.textEditingValue.text, '👨‍👩‍👦');
+      // 👨‍👩‍👦|
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 8));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.pump();
-    // 👨‍|👩‍👦
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 3),
-    );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      // 👨‍👩‍|👦
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 6));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.pump();
-    // 👨|‍👩‍👦
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 2),
-    );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      // 👨‍👩|‍👦
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 5));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.pump();
-    // |👨‍👩‍👦
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 0),
-    );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      // 👨‍|👩‍👦
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 3));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
-    // 👨|‍👩‍👦
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 2),
-    );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      // 👨|‍👩‍👦
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 2));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
-    // 👨‍|👩‍👦
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 3),
-    );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      // |👨‍👩‍👦
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 0));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
-    // 👨‍👩|‍👦
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 5),
-    );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      // 👨|‍👩‍👦
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 2));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
-    // 👨‍👩‍|👦
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 6),
-    );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      // 👨‍|👩‍👦
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 3));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
-    // 👨‍👩‍👦|
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 8),
-    );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      // 👨‍👩|‍👦
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 5));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
-    await tester.pump();
-    expect(state.textEditingValue.text, '👨‍👩‍');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      // 👨‍👩‍|👦
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 6));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
-    await tester.pump();
-    expect(state.textEditingValue.text, '👨‍👩');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      // 👨‍👩‍👦|
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 8));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
-    await tester.pump();
-    expect(state.textEditingValue.text, '👨‍');
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+      expect(state.textEditingValue.text, '👨‍👩‍');
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
-    await tester.pump();
-    expect(state.textEditingValue.text, '👨');
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+      expect(state.textEditingValue.text, '👨‍👩');
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
-    await tester.pump();
-    expect(state.textEditingValue.text, '');
-  },
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+      expect(state.textEditingValue.text, '👨‍');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+      expect(state.textEditingValue.text, '👨');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+      expect(state.textEditingValue.text, '');
+    },
     skip: kIsWeb, // [intended]
   );
 
-  testWidgets('when manually placing the cursor in the middle of a code point', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(),
-          focusNode: focusNode,
-          obscureText: true,
-          toolbarOptions: const ToolbarOptions(
-            copy: true,
-            cut: true,
-            paste: true,
-            selectAll: true,
+  testWidgets(
+    'when manually placing the cursor in the middle of a code point',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            focusNode: focusNode,
+            obscureText: true,
+            toolbarOptions: const ToolbarOptions(
+              copy: true,
+              cut: true,
+              paste: true,
+              selectAll: true,
+            ),
+            style: textStyle,
+            cursorColor: cursorColor,
+            selectionControls: materialTextSelectionControls,
           ),
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.byType(EditableText));
-    await tester.enterText(find.byType(EditableText), '👨‍👩‍👦');
-    await tester.pump();
+      await tester.tap(find.byType(EditableText));
+      await tester.enterText(find.byType(EditableText), '👨‍👩‍👦');
+      await tester.pump();
 
-    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
-    expect(state.textEditingValue.text, '👨‍👩‍👦');
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 8),
-    );
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.textEditingValue.text, '👨‍👩‍👦');
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 8));
 
-    // Place the cursor in the middle of the last code point, which consists of
-    // two code units.
-    await tester.tapAt(textOffsetToPosition(tester, 7));
-    await tester.pump();
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 7),
-    );
+      // Place the cursor in the middle of the last code point, which consists of
+      // two code units.
+      await tester.tapAt(textOffsetToPosition(tester, 7));
+      await tester.pump();
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 7));
 
-    // Using the arrow keys moves out of the code unit.
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.pump();
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 6),
-    );
+      // Using the arrow keys moves out of the code unit.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 6));
 
-    await tester.tapAt(textOffsetToPosition(tester, 7));
-    await tester.pump();
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 7),
-    );
+      await tester.tapAt(textOffsetToPosition(tester, 7));
+      await tester.pump();
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 7));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 8),
-    );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 8));
 
-    // Pressing delete doesn't delete only the left code unit, it deletes the
-    // entire code point (both code units, one to the left and one to the right
-    // of the cursor).
-    await tester.tapAt(textOffsetToPosition(tester, 7));
-    await tester.pump();
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 7),
-    );
+      // Pressing delete doesn't delete only the left code unit, it deletes the
+      // entire code point (both code units, one to the left and one to the right
+      // of the cursor).
+      await tester.tapAt(textOffsetToPosition(tester, 7));
+      await tester.pump();
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 7));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
-    await tester.pump();
-    expect(state.textEditingValue.text, '👨‍👩‍');
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 6),
-    );
-  },
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+      expect(state.textEditingValue.text, '👨‍👩‍');
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 6));
+    },
     skip: kIsWeb, // [intended]
   );
 
-  testWidgets('when inserting a malformed string', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(),
-          focusNode: focusNode,
-          obscureText: true,
-          toolbarOptions: const ToolbarOptions(
-            copy: true,
-            cut: true,
-            paste: true,
-            selectAll: true,
+  testWidgets(
+    'when inserting a malformed string',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            focusNode: focusNode,
+            obscureText: true,
+            toolbarOptions: const ToolbarOptions(
+              copy: true,
+              cut: true,
+              paste: true,
+              selectAll: true,
+            ),
+            style: textStyle,
+            cursorColor: cursorColor,
+            selectionControls: materialTextSelectionControls,
           ),
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.byType(EditableText));
-    // This malformed string is the result of removing the final code unit from
-    // the extended grapheme cluster "👨‍👩‍👦", so that the final
-    // surrogate pair (the "👦" emoji or "\uD83D\uDC66"), only has its high
-    // surrogate.
-    await tester.enterText(find.byType(EditableText), '👨‍👩‍\uD83D');
-    await tester.pump();
+      await tester.tap(find.byType(EditableText));
+      // This malformed string is the result of removing the final code unit from
+      // the extended grapheme cluster "👨‍👩‍👦", so that the final
+      // surrogate pair (the "👦" emoji or "\uD83D\uDC66"), only has its high
+      // surrogate.
+      await tester.enterText(find.byType(EditableText), '👨‍👩‍\uD83D');
+      await tester.pump();
 
-    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
-    expect(state.textEditingValue.text, '👨‍👩‍\uD83D');
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 7),
-    );
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.textEditingValue.text, '👨‍👩‍\uD83D');
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 7));
 
-    // The dangling high surrogate is treated as a single rune.
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.pump();
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 6),
-    );
+      // The dangling high surrogate is treated as a single rune.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 6));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 7),
-    );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 7));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
-    await tester.pump();
-    expect(state.textEditingValue.text, '👨‍👩‍');
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 6),
-    );
-  },
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+      expect(state.textEditingValue.text, '👨‍👩‍');
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 6));
+    },
     skip: kIsWeb, // [intended]
   );
 
-  testWidgets('when inserting a malformed string that is a sequence of dangling high surrogates', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EditableText(
-          backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(),
-          focusNode: focusNode,
-          obscureText: true,
-          toolbarOptions: const ToolbarOptions(
-            copy: true,
-            cut: true,
-            paste: true,
-            selectAll: true,
+  testWidgets(
+    'when inserting a malformed string that is a sequence of dangling high surrogates',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            focusNode: focusNode,
+            obscureText: true,
+            toolbarOptions: const ToolbarOptions(
+              copy: true,
+              cut: true,
+              paste: true,
+              selectAll: true,
+            ),
+            style: textStyle,
+            cursorColor: cursorColor,
+            selectionControls: materialTextSelectionControls,
           ),
-          style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.byType(EditableText));
-    // This string is the high surrogate from the emoji "👦" ("\uD83D\uDC66"),
-    // repeated.
-    await tester.enterText(find.byType(EditableText), '\uD83D\uD83D\uD83D\uD83D\uD83D\uD83D');
-    await tester.pump();
+      await tester.tap(find.byType(EditableText));
+      // This string is the high surrogate from the emoji "👦" ("\uD83D\uDC66"),
+      // repeated.
+      await tester.enterText(find.byType(EditableText), '\uD83D\uD83D\uD83D\uD83D\uD83D\uD83D');
+      await tester.pump();
 
-    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
-    expect(state.textEditingValue.text, '\uD83D\uD83D\uD83D\uD83D\uD83D\uD83D');
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 6),
-    );
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.textEditingValue.text, '\uD83D\uD83D\uD83D\uD83D\uD83D\uD83D');
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 6));
 
-    // Each dangling high surrogate is treated as a single character.
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.pump();
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 5),
-    );
+      // Each dangling high surrogate is treated as a single character.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 5));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 6),
-    );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 6));
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
-    await tester.pump();
-    expect(state.textEditingValue.text, '\uD83D\uD83D\uD83D\uD83D\uD83D');
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 5),
-    );
-  },
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+      expect(state.textEditingValue.text, '\uD83D\uD83D\uD83D\uD83D\uD83D');
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 5));
+    },
     skip: kIsWeb, // [intended]
   );
 
-  testWidgets('when inserting a malformed string that is a sequence of dangling low surrogates', (WidgetTester tester) async {
+  testWidgets(
+    'when inserting a malformed string that is a sequence of dangling low surrogates',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            focusNode: focusNode,
+            obscureText: true,
+            toolbarOptions: const ToolbarOptions(
+              copy: true,
+              cut: true,
+              paste: true,
+              selectAll: true,
+            ),
+            style: textStyle,
+            cursorColor: cursorColor,
+            selectionControls: materialTextSelectionControls,
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(EditableText));
+      // This string is the low surrogate from the emoji "👦" ("\uD83D\uDC66"),
+      // repeated.
+      await tester.enterText(find.byType(EditableText), '\uDC66\uDC66\uDC66\uDC66\uDC66\uDC66');
+      await tester.pump();
+
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      expect(state.textEditingValue.text, '\uDC66\uDC66\uDC66\uDC66\uDC66\uDC66');
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 6));
+
+      // Each dangling high surrogate is treated as a single character.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 5));
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 6));
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+      expect(state.textEditingValue.text, '\uDC66\uDC66\uDC66\uDC66\uDC66');
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: 5));
+    },
+    skip: kIsWeb, // [intended]
+  );
+
+  group('hasStrings', () {
+    late int calls;
+    setUp(() {
+      calls = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (MethodCall methodCall) {
+          if (methodCall.method == 'Clipboard.hasStrings') {
+            calls += 1;
+          }
+          return Future<void>.value();
+        },
+      );
+    });
+    tearDown(() {
+      TestWidgetsFlutterBinding.ensureInitialized().defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
+    });
+
+    testWidgets('web avoids the paste permissions prompt by not calling hasStrings', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            focusNode: focusNode,
+            obscureText: true,
+            toolbarOptions: const ToolbarOptions(
+              copy: true,
+              cut: true,
+              paste: true,
+              selectAll: true,
+            ),
+            style: textStyle,
+            cursorColor: cursorColor,
+            selectionControls: materialTextSelectionControls,
+          ),
+        ),
+      );
+
+      expect(calls, equals(kIsWeb ? 0 : 1));
+
+      // Long-press to bring up the context menu.
+      final Finder textFinder = find.byType(EditableText);
+      await tester.longPress(textFinder);
+      tester.state<EditableTextState>(textFinder).showToolbar();
+      await tester.pumpAndSettle();
+
+      expect(calls, equals(kIsWeb ? 0 : 2));
+    });
+  });
+
+  testWidgets('Cursor color with an opacity is respected', (WidgetTester tester) async {
+    final GlobalKey key = GlobalKey();
+    const opacity = 0.55;
+    controller.text = 'blah blah';
+
     await tester.pumpWidget(
       MaterialApp(
         home: EditableText(
+          key: key,
+          cursorColor: cursorColor.withOpacity(opacity),
           backgroundCursorColor: Colors.grey,
-          controller: TextEditingController(),
+          controller: controller,
           focusNode: focusNode,
-          obscureText: true,
-          toolbarOptions: const ToolbarOptions(
-            copy: true,
-            cut: true,
-            paste: true,
-            selectAll: true,
-          ),
           style: textStyle,
-          cursorColor: cursorColor,
-          selectionControls: materialTextSelectionControls,
         ),
       ),
     );
 
-    await tester.tap(find.byType(EditableText));
-    // This string is the low surrogate from the emoji "👦" ("\uD83D\uDC66"),
-    // repeated.
-    await tester.enterText(find.byType(EditableText), '\uDC66\uDC66\uDC66\uDC66\uDC66\uDC66');
-    await tester.pump();
+    // Tap to show the cursor.
+    await tester.tap(find.byKey(key));
+    await tester.pumpAndSettle();
 
     final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
-    expect(state.textEditingValue.text, '\uDC66\uDC66\uDC66\uDC66\uDC66\uDC66');
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 6),
+    expect(state.renderEditable.cursorColor, cursorColor.withOpacity(opacity));
+  });
+
+  testWidgets('should notify on size change', (WidgetTester tester) async {
+    var notifyCount = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NotificationListener<SizeChangedLayoutNotification>(
+            onNotification: (SizeChangedLayoutNotification notification) {
+              notifyCount += 1;
+              return false;
+            },
+            child: EditableText(
+              backgroundCursorColor: Colors.grey,
+              cursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              maxLines: 3,
+              minLines: 1,
+              style: textStyle,
+            ),
+          ),
+        ),
+      ),
     );
 
-    // Each dangling high surrogate is treated as a single character.
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.pump();
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 5),
+    expect(notifyCount, equals(0));
+    await tester.enterText(find.byType(EditableText), '\n');
+    await tester.pumpAndSettle();
+    expect(notifyCount, equals(1));
+  });
+
+  testWidgets('ShowCaretOnScreen is correctly scheduled within a SliverMainAxisGroup', (
+    WidgetTester tester,
+  ) async {
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
+    final Widget widget = MaterialApp(
+      home: Scaffold(
+        body: CustomScrollView(
+          controller: scrollController,
+          slivers: const <Widget>[
+            SliverMainAxisGroup(
+              slivers: <Widget>[
+                SliverToBoxAdapter(child: SizedBox(height: 600)),
+                SliverToBoxAdapter(child: SizedBox(height: 44, child: TestTextField())),
+                SliverToBoxAdapter(child: SizedBox(height: 500)),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 6),
+    await tester.pumpWidget(widget);
+    expect(find.byType(EditableText), findsNothing);
+    await tester.showKeyboard(find.byType(EditableText, skipOffstage: false));
+    await tester.pumpAndSettle();
+    expect(find.byType(EditableText), findsOneWidget);
+    // Verify scroll offset.
+    final RenderSliverMainAxisGroup groupRenderer = tester.renderObject(
+      find.byType(SliverMainAxisGroup),
+    );
+    final RenderSliver sliverWithTextField = tester.renderObject(
+      find.ancestor(of: find.byType(TestTextField), matching: find.byType(SliverToBoxAdapter)),
     );
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
-    await tester.pump();
-    expect(state.textEditingValue.text, '\uDC66\uDC66\uDC66\uDC66\uDC66');
-    expect(
-      state.textEditingValue.selection,
-      const TextSelection.collapsed(offset: 5),
+    // Calculate scroll offset of the sliver containing the input field relative to
+    // the parent SliverMainAxisGroup.
+    final double childScrollOffset = groupRenderer.childScrollOffset(sliverWithTextField)!;
+    // The sliver before the input field has a height of 600, so the scroll offset of the sliver
+    // with the input field is 600.
+    expect(childScrollOffset, 600.0);
+
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+    final RenderEditable renderEditable = state.renderEditable;
+
+    // Calculate offset of EditableText relative to its SliverToBoxAdapter parent.
+    // This value varies depending on the padding added by decorators. TestTextField
+    // does not have any additional padding so this should be 0.0.
+    final double editableOffsetInParentSliver = renderEditable
+        .localToGlobal(Offset.zero, ancestor: sliverWithTextField)
+        .dy;
+    expect(editableOffsetInParentSliver, 0.0);
+
+    // Calculate the height of the caret and selection handle. The input field
+    // should be scrolled so that the bottom of the selection handle is visible.
+    final double lineHeight = renderEditable.preferredLineHeight;
+    final double handleHeight = state.selectionOverlay!.selectionControls!
+        .getHandleSize(lineHeight)
+        .height;
+    final double interactiveHandleHeight = math.max(handleHeight, kMinInteractiveDimension);
+    final Offset anchor = state.selectionOverlay!.selectionControls!.getHandleAnchor(
+      TextSelectionHandleType.collapsed,
+      lineHeight,
     );
-  },
+    final double handleCenter = handleHeight / 2 - anchor.dy;
+    final double bottomSpacing = math.max(
+      handleCenter + interactiveHandleHeight / 2,
+      state.widget.scrollPadding.bottom,
+    );
+
+    final Rect caretRect = renderEditable.getLocalRectForCaret(const TextPosition(offset: 0));
+    final double caretBottomFromEditableTop = caretRect.bottom + bottomSpacing;
+
+    // Calculate the total scroll offset required to bring the bottom of the
+    // selection handle to the bottom of the viewport.
+    final double totalTargetY =
+        childScrollOffset + editableOffsetInParentSliver + caretBottomFromEditableTop;
+    expect(scrollController.offset, totalTargetY - scrollController.position.viewportDimension);
+  });
+
+  testWidgets(
+    'getPositionForPoint is correct when EditableText is scaled',
+    (WidgetTester tester) async {
+      final GlobalKey key = GlobalKey();
+      controller.text = 'Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7\nLine8';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: Transform.scale(
+              scale: 0.5,
+              child: EditableText(
+                key: key,
+                cursorColor: cursorColor,
+                backgroundCursorColor: Colors.grey,
+                controller: controller,
+                focusNode: focusNode,
+                maxLines: 2,
+                minLines: 2,
+                style: textStyle,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // With no scroll, the top left is the first character.
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      final Offset topLeft = tester.getTopLeft(find.byType(EditableText));
+      expect(state.renderEditable.getPositionForPoint(topLeft), const TextPosition(offset: 0));
+
+      // After scrolling to view the fourth line, the top left is the start of the
+      // third line.
+      state.bringIntoView(const TextPosition(offset: 18));
+      await tester.pumpAndSettle();
+      expect(state.renderEditable.getPositionForPoint(topLeft), const TextPosition(offset: 12));
+    },
     skip: kIsWeb, // [intended]
+  );
+
+  testWidgets(
+    'selectPositionAt is correct when EditableText is scaled',
+    (WidgetTester tester) async {
+      final GlobalKey key = GlobalKey();
+      controller.text = 'Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7\nLine8';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: Transform.scale(
+              scale: 0.5,
+              child: EditableText(
+                key: key,
+                cursorColor: cursorColor,
+                backgroundCursorColor: Colors.grey,
+                controller: controller,
+                focusNode: focusNode,
+                maxLines: 2,
+                minLines: 2,
+                style: textStyle,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      final Offset topLeft = tester.getTopLeft(find.byType(EditableText));
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: -1));
+
+      // Scroll to the fourth line and select the full line above that.
+      state.bringIntoView(const TextPosition(offset: 18));
+      await tester.pumpAndSettle();
+      state.renderEditable.selectPositionAt(
+        from: topLeft,
+        to: topLeft + const Offset(100.0, 0.0),
+        cause: SelectionChangedCause.drag,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        state.textEditingValue.selection,
+        const TextSelection(baseOffset: 12, extentOffset: 17),
+      );
+    },
+    skip: kIsWeb, // [intended]
+  );
+
+  testWidgets(
+    'selectWordsInRange is correct when EditableText is scaled',
+    (WidgetTester tester) async {
+      final GlobalKey key = GlobalKey();
+      controller.text = 'Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7\nLine8';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: Transform.scale(
+              scale: 0.5,
+              child: EditableText(
+                key: key,
+                cursorColor: cursorColor,
+                backgroundCursorColor: Colors.grey,
+                controller: controller,
+                focusNode: focusNode,
+                maxLines: 2,
+                minLines: 2,
+                style: textStyle,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+      final Offset topLeft = tester.getTopLeft(find.byType(EditableText));
+      expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: -1));
+
+      // Scroll to the fourth line and select the full line above that.
+      state.bringIntoView(const TextPosition(offset: 18));
+      await tester.pumpAndSettle();
+      state.renderEditable.selectWordsInRange(
+        from: topLeft,
+        to: topLeft + const Offset(100.0, 0.0),
+        cause: SelectionChangedCause.drag,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        state.textEditingValue.selection,
+        const TextSelection(baseOffset: 12, extentOffset: 17),
+      );
+    },
+    skip: kIsWeb, // [intended]
+  );
+
+  testWidgets('selectWordEdge is correct when EditableText is scaled', (WidgetTester tester) async {
+    final GlobalKey key = GlobalKey();
+    controller.text = 'Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7\nLine8';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: Transform.scale(
+            scale: 0.5,
+            child: EditableText(
+              key: key,
+              cursorColor: cursorColor,
+              backgroundCursorColor: Colors.grey,
+              controller: controller,
+              focusNode: focusNode,
+              maxLines: 2,
+              minLines: 2,
+              style: textStyle,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+    //final Offset topLeft = tester.getTopLeft(find.byType(EditableText));
+    expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: -1));
+
+    // Scroll to the fourth line.
+    state.bringIntoView(const TextPosition(offset: 18));
+    await tester.pumpAndSettle();
+
+    // Secondary tap inside of the 3rd line.
+    state.renderEditable.handleSecondaryTapDown(
+      TapDownDetails(globalPosition: textOffsetToPosition(tester, 13)),
+    );
+    expect(state.textEditingValue.selection, const TextSelection.collapsed(offset: -1));
+
+    // selectWordEdge moves the selection to the end of the 3rd line.
+    state.renderEditable.selectWordEdge(cause: SelectionChangedCause.tap);
+    expect(
+      state.textEditingValue.selection,
+      const TextSelection.collapsed(offset: 17, affinity: TextAffinity.upstream),
+    );
+  });
+
+  testWidgets('Composing region can truncate grapheme', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: EditableText(
+            autofocus: true,
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    assert(focusNode.hasFocus);
+
+    controller.value = const TextEditingValue(
+      text: 'Á',
+      selection: TextSelection(baseOffset: 1, extentOffset: 2),
+      composing: TextSelection(baseOffset: 1, extentOffset: 2),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Can implement TextEditingController', (WidgetTester tester) async {
+    final controller = _TextEditingControllerImpl();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: EditableText(
+            autofocus: true,
+            backgroundCursorColor: Colors.grey,
+            controller: controller,
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+  });
+
+  // Regression test for https://github.com/flutter/flutter/issues/159259.
+  testWidgets(
+    'showToolbar does nothing and returns false when already shown',
+    (WidgetTester tester) async {
+      controller.text = 'Lorem ipsum dolor sit amet';
+      final GlobalKey<EditableTextState> editableTextKey = GlobalKey();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EditableText(
+            key: editableTextKey,
+            autofocus: true,
+            controller: controller,
+            backgroundCursorColor: Colors.grey,
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+            selectionControls: materialTextSelectionHandleControls,
+            contextMenuBuilder: (BuildContext context, EditableTextState editableTextState) {
+              return AdaptiveTextSelectionToolbar.editableText(
+                editableTextState: editableTextState,
+              );
+            },
+          ),
+        ),
+      );
+
+      expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
+
+      expect(editableTextKey.currentState!.showToolbar(), isTrue);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AdaptiveTextSelectionToolbar), findsOneWidget);
+
+      expect(editableTextKey.currentState!.showToolbar(), isFalse);
+      await tester.pump();
+
+      expect(find.byType(AdaptiveTextSelectionToolbar), findsOneWidget);
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AdaptiveTextSelectionToolbar), findsOneWidget);
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.iOS}),
+    skip: kIsWeb, // [intended]
+  );
+
+  testWidgets('onTapOutside is called upon tap outside', (WidgetTester tester) async {
+    var tapOutsideCount = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Center(
+            child: Column(
+              children: <Widget>[
+                const Text('Outside'),
+                EditableText(
+                  autofocus: true,
+                  controller: controller,
+                  focusNode: focusNode,
+                  style: textStyle,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                  onTapOutside: (PointerEvent event) {
+                    tapOutsideCount += 1;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(); // Wait for autofocus to take effect.
+
+    expect(tapOutsideCount, 0);
+    await tester.tap(find.byType(EditableText));
+    await tester.tap(find.text('Outside'));
+    await tester.tap(find.text('Outside'));
+    await tester.tap(find.text('Outside'));
+    expect(tapOutsideCount, 3);
+  });
+
+  // Regression test for https://github.com/flutter/flutter/issues/134341.
+  testWidgets('onTapOutside is not called upon tap outside when field is not focused', (
+    WidgetTester tester,
+  ) async {
+    var tapOutsideCount = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Center(
+            child: Column(
+              children: <Widget>[
+                const Text('Outside'),
+                EditableText(
+                  controller: controller,
+                  focusNode: focusNode,
+                  style: textStyle,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                  onTapOutside: (PointerEvent event) {
+                    tapOutsideCount += 1;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tapOutsideCount, 0);
+    await tester.tap(find.text('Outside'));
+    await tester.tap(find.text('Outside'));
+    await tester.tap(find.text('Outside'));
+    expect(tapOutsideCount, 0);
+  });
+
+  testWidgets('onTapUpOutside is called upon tap up outside', (WidgetTester tester) async {
+    var tapOutsideCount = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Center(
+            child: Column(
+              children: <Widget>[
+                const Text('Outside'),
+                EditableText(
+                  autofocus: true,
+                  controller: controller,
+                  focusNode: focusNode,
+                  style: textStyle,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                  onTapUpOutside: (PointerEvent event) {
+                    tapOutsideCount += 1;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(); // Wait for autofocus to take effect.
+
+    expect(tapOutsideCount, 0);
+    await tester.tap(find.byType(EditableText));
+    await tester.tap(find.text('Outside'));
+    await tester.tap(find.text('Outside'));
+    await tester.tap(find.text('Outside'));
+    expect(tapOutsideCount, 3);
+  });
+
+  // Regression test for https://github.com/flutter/flutter/issues/162573
+  testWidgets('onTapUpOutside is not called upon tap up outside when field is not focused', (
+    WidgetTester tester,
+  ) async {
+    var tapOutsideCount = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Center(
+            child: Column(
+              children: <Widget>[
+                const Text('Outside'),
+                EditableText(
+                  controller: controller,
+                  focusNode: focusNode,
+                  style: textStyle,
+                  cursorColor: Colors.blue,
+                  backgroundCursorColor: Colors.grey,
+                  onTapUpOutside: (PointerEvent event) {
+                    tapOutsideCount += 1;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tapOutsideCount, 0);
+    await tester.tap(find.text('Outside'));
+    await tester.tap(find.text('Outside'));
+    await tester.tap(find.text('Outside'));
+    expect(tapOutsideCount, 0);
+  });
+
+  testWidgets('Disabling interactive selection disables shortcuts', (WidgetTester tester) async {
+    controller.text = 'Hello world';
+
+    TextSelection? selection;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: EditableText(
+            controller: controller,
+            autofocus: true,
+            focusNode: focusNode,
+            enableInteractiveSelection: false,
+            style: textStyle,
+            cursorColor: Colors.blue,
+            backgroundCursorColor: Colors.grey,
+            onSelectionChanged: (TextSelection newSelection, SelectionChangedCause? newCause) {
+              selection = newSelection;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(selection?.start, 11);
+    expect(selection?.end, 11);
+
+    // Select all shortcut should be ignored.
+    await sendKeys(
+      tester,
+      <LogicalKeyboardKey>[LogicalKeyboardKey.keyA],
+      shortcutModifier: true,
+      targetPlatform: defaultTargetPlatform,
+    );
+    expect(selection?.start, 11);
+    expect(selection?.end, 11);
+
+    // Select all programatically.
+    controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+
+    // Set the clipboard.
+    await Clipboard.setData(const ClipboardData(text: 'foo'));
+
+    // Paste shortcut should be ignored.
+    await sendKeys(
+      tester,
+      <LogicalKeyboardKey>[LogicalKeyboardKey.keyV],
+      shortcutModifier: true,
+      targetPlatform: defaultTargetPlatform,
+    );
+    expect(controller.text, 'Hello world');
+
+    // Copy shortcut.
+    await sendKeys(
+      tester,
+      <LogicalKeyboardKey>[LogicalKeyboardKey.keyC],
+      shortcutModifier: true,
+      targetPlatform: defaultTargetPlatform,
+    );
+
+    final ClipboardData? data = await Clipboard.getData('text/plain');
+    expect(controller.text, 'Hello world');
+    expect(data?.text, 'foo');
+  });
+
+  testWidgets(
+    'Does not crash when editing value changes between consecutive scrolls',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/179164.
+      controller.value = TextEditingValue(text: 'text ' * 10000);
+      final Widget editable = EditableText(
+        maxLines: null,
+        style: textStyle,
+        cursorColor: cursorColor,
+        backgroundCursorColor: const Color(0xFF424242), // grey.
+        focusNode: focusNode,
+        selectionControls: testTextSelectionHandleControls,
+        contextMenuBuilder: (context, editableTextState) {
+          return const SizedBox.shrink();
+        },
+        controller: controller,
+      );
+      final entry = OverlayEntry(
+        builder: (BuildContext context) {
+          return Center(child: editable);
+        },
+      );
+      addTearDown(
+        () => entry
+          ..remove()
+          ..dispose(),
+      );
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: MediaQuery(
+            data: const MediaQueryData(size: Size(800.0, 600.0)),
+            child: Overlay(initialEntries: <OverlayEntry>[entry]),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder editableText = find.byType(EditableText);
+      final EditableTextState editableTextState = tester.state<EditableTextState>(
+        find.byType(EditableText),
+      );
+      // Long press to select the first word and show the toolbar.
+      await tester.longPressAt(textOffsetToPosition(tester, 0));
+      await tester.pumpAndSettle();
+      expect(editableTextState.showToolbar(), true);
+      await tester.pumpAndSettle();
+      expect(editableTextState.selectionOverlay?.toolbarIsVisible, true);
+      expect(controller.selection, const TextSelection(baseOffset: 0, extentOffset: 4));
+
+      // Scroll down so selection is not visible, and toolbar is scheduled to be shown
+      // when the selection is once again visible.
+      final TestGesture gesture = await tester.startGesture(tester.getCenter(editableText));
+      await gesture.moveBy(const Offset(0.0, -200.0));
+      await tester.pump();
+      await gesture.up();
+
+      // Scroll again before the post-frame callback from the first scroll is run to invalidate
+      // the data from the first scroll.
+      controller.value = const TextEditingValue(text: 'a different value');
+
+      await gesture.down(tester.getCenter(editableText));
+      await gesture.moveBy(const Offset(0.0, -100.0));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      // This test should reach the end without crashing.
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+    // [intended] only applies to platforms where we supply the context menu.
+    skip: kIsWeb,
+  );
+
+  testWidgets(
+    'toolbar should not reappear when editing value changes during a scroll',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/179164.
+      controller.value = TextEditingValue(text: 'text ' * 10000);
+      final Widget editable = EditableText(
+        maxLines: null,
+        style: textStyle,
+        cursorColor: cursorColor,
+        backgroundCursorColor: const Color(0xFF424242), // grey.
+        focusNode: focusNode,
+        selectionControls: testTextSelectionHandleControls,
+        contextMenuBuilder: (context, editableTextState) {
+          return const SizedBox.shrink();
+        },
+        controller: controller,
+      );
+      final entry = OverlayEntry(
+        builder: (BuildContext context) {
+          return Center(child: editable);
+        },
+      );
+      addTearDown(
+        () => entry
+          ..remove()
+          ..dispose(),
+      );
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: MediaQuery(
+            data: const MediaQueryData(size: Size(800.0, 600.0)),
+            child: Overlay(initialEntries: <OverlayEntry>[entry]),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder editableText = find.byType(EditableText);
+      final EditableTextState editableTextState = tester.state<EditableTextState>(
+        find.byType(EditableText),
+      );
+      // Long press to select the first word and show the toolbar.
+      await tester.longPressAt(textOffsetToPosition(tester, 0));
+      await tester.pumpAndSettle();
+      expect(editableTextState.showToolbar(), true);
+      await tester.pumpAndSettle();
+      expect(editableTextState.selectionOverlay?.toolbarIsVisible, true);
+      expect(controller.selection, const TextSelection(baseOffset: 0, extentOffset: 4));
+
+      // Scroll down so selection is not visible, and toolbar is scheduled to be shown
+      // when the selection is once again visible.
+      final TestGesture gesture = await tester.startGesture(tester.getCenter(editableText));
+      await gesture.moveBy(const Offset(0.0, -200.0));
+      await tester.pump();
+      await gesture.up();
+      // Change the editing value before the post-frame callback from the scroll is run,
+      // this should invalidate the data from the scroll and cause the toolbar to not
+      // reappear.
+      controller.value = const TextEditingValue(text: 'a different value');
+      // Pump and settle to allow postFrameCallbacks to complete.
+      await tester.pumpAndSettle();
+      expect(editableTextState.selectionOverlay?.toolbarIsVisible, false);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+    // [intended] only applies to platforms where we supply the context menu.
+    skip: kIsWeb,
+  );
+
+  testWidgets('EditableText does not crash at zero area', (WidgetTester tester) async {
+    tester.view.physicalSize = Size.zero;
+    final controller = TextEditingController(text: 'X');
+    addTearDown(tester.view.reset);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Center(
+          child: EditableText(
+            controller: controller,
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+            backgroundCursorColor: const Color(0xFFAABBCC),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byType(EditableText)), Size.zero);
+    controller.selection = const TextSelection.collapsed(offset: 0);
+    await tester.pump();
+  });
+
+  testWidgets(
+    'Prevent last character visibility in obscure text when obscureText is toggled on mobile',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/184483.
+      var obscureText = true;
+      late StateSetter setState;
+
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: StatefulBuilder(
+            builder: (BuildContext context, StateSetter stateSetter) {
+              setState = stateSetter;
+              return EditableText(
+                controller: controller,
+                backgroundCursorColor: const Color(0xFFF7F7F7),
+                focusNode: focusNode,
+                style: textStyle,
+                cursorColor: cursorColor,
+                obscureText: obscureText,
+              );
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(EditableText));
+      await tester.showKeyboard(find.byType(EditableText));
+      await tester.idle();
+
+      await tester.enterText(find.byType(EditableText), 'H');
+      await tester.pump();
+      await tester.enterText(find.byType(EditableText), 'HH');
+      await tester.pump();
+
+      expect((findRenderEditable(tester).text! as TextSpan).text, '•H');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect((findRenderEditable(tester).text! as TextSpan).text, '••');
+
+      await tester.enterText(find.byType(EditableText), 'HHH');
+      await tester.pump();
+
+      expect((findRenderEditable(tester).text! as TextSpan).text, '••H');
+
+      // set obscureText = false.
+      setState(() {
+        obscureText = false;
+      });
+      await tester.pump();
+      expect((findRenderEditable(tester).text! as TextSpan).text, 'HHH');
+
+      // set obscureText = true.
+      setState(() {
+        obscureText = true;
+      });
+      await tester.pump();
+      expect((findRenderEditable(tester).text! as TextSpan).text, '•••');
+    },
+    // Reveal the latest character in an obscured field only on mobile.
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.iOS,
+      TargetPlatform.android,
+      TargetPlatform.fuchsia,
+    }),
+  );
+
+  testWidgets(
+    'Does not reveal obscured character when input is rejected by inputFormatters',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/141560.
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: EditableText(
+            controller: controller,
+            backgroundCursorColor: const Color(0xFFF7F7F7),
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+            obscureText: true,
+            inputFormatters: <TextInputFormatter>[
+              LengthLimitingTextInputFormatter(
+                5,
+                maxLengthEnforcement: MaxLengthEnforcement.enforced,
+              ),
+            ],
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(EditableText));
+      await tester.showKeyboard(find.byType(EditableText));
+      await tester.idle();
+
+      // Type up to the 4th character, then type the 5th character.
+      await tester.enterText(find.byType(EditableText), 'abcd');
+      await tester.pump();
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(text: 'abcde', selection: TextSelection.collapsed(offset: 5)),
+      );
+      await tester.pump();
+      expect((findRenderEditable(tester).text! as TextSpan).text, '••••e');
+
+      // Wait for the revealed character to be obscured.
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect((findRenderEditable(tester).text! as TextSpan).text, '•••••');
+
+      // Move cursor to the middle of the string (offset 2).
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(text: 'abcde', selection: TextSelection.collapsed(offset: 2)),
+      );
+      await tester.pump();
+      expect((findRenderEditable(tester).text! as TextSpan).text, '•••••');
+
+      // Attempt to insert a character in the middle when already at maxLength.
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(text: 'abzcde', selection: TextSelection.collapsed(offset: 3)),
+      );
+      await tester.pump();
+      expect(controller.text, 'abcde');
+      expect((findRenderEditable(tester).text! as TextSpan).text, '•••••');
+
+      // Moving the cursor afterward should also not reveal the character at offset 2.
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(text: 'abcde', selection: TextSelection.collapsed(offset: 3)),
+      );
+      await tester.pump();
+      expect((findRenderEditable(tester).text! as TextSpan).text, '•••••');
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.iOS,
+      TargetPlatform.android,
+      TargetPlatform.fuchsia,
+    }),
+  );
+
+  testWidgets(
+    'Rejected input re-obscures a character that is still revealed',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/141560.
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: EditableText(
+            controller: controller,
+            backgroundCursorColor: const Color(0xFFF7F7F7),
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+            obscureText: true,
+            inputFormatters: <TextInputFormatter>[
+              LengthLimitingTextInputFormatter(
+                5,
+                maxLengthEnforcement: MaxLengthEnforcement.enforced,
+              ),
+            ],
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(EditableText));
+      await tester.showKeyboard(find.byType(EditableText));
+      await tester.idle();
+
+      await tester.enterText(find.byType(EditableText), 'abcd');
+      await tester.pump();
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(text: 'abcde', selection: TextSelection.collapsed(offset: 5)),
+      );
+      await tester.pump();
+      expect((findRenderEditable(tester).text! as TextSpan).text, '••••e');
+
+      // While the last character is still revealed, a sixth character is
+      // rejected by the formatter. The rejected edit leaves the value unchanged,
+      // so nothing else would rebuild; the revealed character must be hidden
+      // immediately rather than lingering until the reveal timer expires.
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(text: 'abcdef', selection: TextSelection.collapsed(offset: 6)),
+      );
+      await tester.pump();
+      expect(controller.text, 'abcde');
+      expect((findRenderEditable(tester).text! as TextSpan).text, '•••••');
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.iOS,
+      TargetPlatform.android,
+      TargetPlatform.fuchsia,
+    }),
+  );
+
+  testWidgets(
+    'Does not reveal obscured character indefinitely when the cursor is not blinking',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/pull/195022#pullrequestreview-3387006553.
+      // With showCursor: false there is no cursor timer to count the reveal
+      // down, so the character must not be revealed in the first place.
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: EditableText(
+            controller: controller,
+            backgroundCursorColor: const Color(0xFFF7F7F7),
+            focusNode: focusNode,
+            style: textStyle,
+            cursorColor: cursorColor,
+            obscureText: true,
+            showCursor: false,
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(EditableText));
+      await tester.showKeyboard(find.byType(EditableText));
+      await tester.idle();
+
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(text: 'a', selection: TextSelection.collapsed(offset: 1)),
+      );
+      await tester.pump();
+      expect((findRenderEditable(tester).text! as TextSpan).text, '•');
+
+      await tester.pump(const Duration(seconds: 2));
+      expect((findRenderEditable(tester).text! as TextSpan).text, '•');
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.iOS,
+      TargetPlatform.android,
+      TargetPlatform.fuchsia,
+    }),
+  );
+
+  testWidgets(
+    'context menu reappears after a non-fling scroll that keeps selection in view while semantics are disabled',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/185052.
+      controller.text = 'Lorem ipsum dolor sit amet ' * 200;
+      await tester.pumpWidget(
+        TestWidgetsApp(
+          home: Center(
+            child: EditableText(
+              maxLines: null,
+              style: textStyle,
+              cursorColor: cursorColor,
+              backgroundCursorColor: const Color(0xFF424242),
+              focusNode: focusNode,
+              selectionControls: testTextSelectionHandleControls,
+              contextMenuBuilder: (context, editableTextState) {
+                return const SizedBox.shrink();
+              },
+              controller: controller,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder editableText = find.byType(EditableText);
+      final EditableTextState editableTextState = tester.state<EditableTextState>(editableText);
+
+      // Long press at the center of the widget to select a word that is
+      // well within the viewport.
+      await tester.longPressAt(tester.getCenter(editableText));
+      await tester.pumpAndSettle();
+      expect(editableTextState.showToolbar(), true);
+      await tester.pumpAndSettle();
+      expect(editableTextState.selectionOverlay?.toolbarIsVisible, true);
+
+      // Perform a short scroll that keeps the selection in view.
+      final TestGesture gesture = await tester.startGesture(tester.getCenter(editableText));
+      await gesture.moveBy(const Offset(0.0, -20.0));
+      await tester.pump();
+
+      // The toolbar should be hidden during the scroll.
+      expect(editableTextState.selectionOverlay?.toolbarIsVisible, false);
+
+      // Release the gesture / end the scroll.
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // The toolbar should re-appear since the selection is still in view.
+      expect(editableTextState.selectionOverlay?.toolbarIsVisible, true);
+    },
+    // semanticsEnabled is set to false to match on-device behavior. With
+    // semantics enabled (the testWidgets default), setIgnorePointer during
+    // scroll activity transitions calls markNeedsSemanticsUpdate which
+    // schedules a frame as a side effect, masking the bug.
+    semanticsEnabled: false,
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    }), // Only applies to platforms where the context menu hides on scroll.
+    // [intended] only applies to platforms where we supply the context menu.
+    skip: kIsWeb,
   );
 }
 
@@ -16620,10 +19248,7 @@ class MockTextFormatter extends TextInputFormatter {
   late TextEditingValue lastNewValue;
 
   @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
     lastOldValue = oldValue;
     lastNewValue = newValue;
     formatCallCount++;
@@ -16637,17 +19262,24 @@ class MockTextFormatter extends TextInputFormatter {
     return finalValue;
   }
 
-
   TextEditingValue _handleTextDeletion(TextEditingValue oldValue, TextEditingValue newValue) {
     final String result = 'a' * (formatCallCount - 2);
     log.add('[$formatCallCount]: deleting $result');
-    return TextEditingValue(text: newValue.text, selection: newValue.selection, composing: newValue.composing);
+    return TextEditingValue(
+      text: newValue.text,
+      selection: newValue.selection,
+      composing: newValue.composing,
+    );
   }
 
   TextEditingValue _formatText(TextEditingValue value) {
     final String result = 'a' * formatCallCount * 2;
     log.add('[$formatCallCount]: normal $result');
-    return TextEditingValue(text: value.text, selection: value.selection, composing: value.composing);
+    return TextEditingValue(
+      text: value.text,
+      selection: value.selection,
+      composing: value.composing,
+    );
   }
 }
 
@@ -16667,7 +19299,12 @@ class MockTextSelectionControls extends Fake implements TextSelectionControls {
   }
 
   @override
-  Widget buildHandle(BuildContext context, TextSelectionHandleType type, double textLineHeight, [VoidCallback? onTap]) {
+  Widget buildHandle(
+    BuildContext context,
+    TextSelectionHandleType type,
+    double textLineHeight, [
+    VoidCallback? onTap,
+  ]) {
     return const SizedBox();
   }
 
@@ -16722,10 +19359,7 @@ class MockTextSelectionControls extends Fake implements TextSelectionControls {
 
 // Fake text selection controls that call a callback when paste happens.
 class _CustomTextSelectionControls extends TextSelectionControls {
-  _CustomTextSelectionControls({
-    this.onPaste,
-    this.onCut,
-  });
+  _CustomTextSelectionControls({this.onPaste, this.onCut});
 
   static const double _kToolbarContentDistance = 8.0;
 
@@ -16743,18 +19377,23 @@ class _CustomTextSelectionControls extends TextSelectionControls {
     ValueListenable<ClipboardStatus>? clipboardStatus,
     Offset? lastSecondaryTapDownPosition,
   ) {
-    final Offset selectionMidpoint = position;
+    final selectionMidpoint = position;
     final TextSelectionPoint startTextSelectionPoint = endpoints[0];
     final TextSelectionPoint endTextSelectionPoint = endpoints.length > 1
-      ? endpoints[1]
-      : endpoints[0];
-    final Offset anchorAbove = Offset(
+        ? endpoints[1]
+        : endpoints[0];
+    final anchorAbove = Offset(
       globalEditableRegion.left + selectionMidpoint.dx,
-      globalEditableRegion.top + startTextSelectionPoint.point.dy - textLineHeight - _kToolbarContentDistance
+      globalEditableRegion.top +
+          startTextSelectionPoint.point.dy -
+          textLineHeight -
+          _kToolbarContentDistance,
     );
-    final Offset anchorBelow = Offset(
+    final anchorBelow = Offset(
       globalEditableRegion.left + selectionMidpoint.dx,
-      globalEditableRegion.top + endTextSelectionPoint.point.dy + TextSelectionToolbar.kToolbarContentDistanceBelow,
+      globalEditableRegion.top +
+          endTextSelectionPoint.point.dy +
+          TextSelectionToolbar.kToolbarContentDistanceBelow,
     );
     return _CustomTextSelectionToolbar(
       anchorAbove: anchorAbove,
@@ -16765,7 +19404,12 @@ class _CustomTextSelectionControls extends TextSelectionControls {
   }
 
   @override
-  Widget buildHandle(BuildContext context, TextSelectionHandleType type, double textLineHeight, [VoidCallback? onTap]) {
+  Widget buildHandle(
+    BuildContext context,
+    TextSelectionHandleType type,
+    double textLineHeight, [
+    VoidCallback? onTap,
+  ]) {
     return Container();
   }
 
@@ -16822,10 +19466,7 @@ class _CustomTextSelectionToolbar extends StatelessWidget {
       anchorAbove: anchorAbove,
       anchorBelow: anchorBelow,
       toolbarBuilder: (BuildContext context, Widget child) {
-        return ColoredBox(
-          color: Colors.pink,
-          child: child,
-        );
+        return ColoredBox(color: Colors.pink, child: child);
       },
       children: <Widget>[
         TextSelectionToolbarTextButton(
@@ -16850,12 +19491,9 @@ class CustomStyleEditableText extends EditableText {
     required super.cursorColor,
     required super.focusNode,
     required super.style,
-  }) : super(
-          backgroundCursorColor: Colors.grey,
-        );
+  }) : super(backgroundCursorColor: Colors.grey);
   @override
-  CustomStyleEditableTextState createState() =>
-      CustomStyleEditableTextState();
+  CustomStyleEditableTextState createState() => CustomStyleEditableTextState();
 }
 
 class CustomStyleEditableTextState extends EditableTextState {
@@ -16885,6 +19523,16 @@ class TransformedEditableText extends StatefulWidget {
 class _TransformedEditableTextState extends State<TransformedEditableText> {
   bool _isTransformed = false;
 
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return MediaQuery(
@@ -16897,8 +19545,8 @@ class _TransformedEditableTextState extends State<TransformedEditableText> {
             Transform.translate(
               offset: _isTransformed ? widget.offset : Offset.zero,
               child: EditableText(
-                controller: TextEditingController(),
-                focusNode: FocusNode(),
+                controller: _controller,
+                focusNode: _focusNode,
                 style: Typography.material2018().black.titleMedium!,
                 cursorColor: Colors.blue,
                 backgroundCursorColor: Colors.grey,
@@ -16921,7 +19569,7 @@ class _TransformedEditableTextState extends State<TransformedEditableText> {
 }
 
 class NoImplicitScrollPhysics extends AlwaysScrollableScrollPhysics {
-  const NoImplicitScrollPhysics({ super.parent });
+  const NoImplicitScrollPhysics({super.parent});
 
   @override
   bool get allowImplicitScrolling => false;
@@ -16933,7 +19581,7 @@ class NoImplicitScrollPhysics extends AlwaysScrollableScrollPhysics {
 }
 
 class SkipPainting extends SingleChildRenderObjectWidget {
-  const SkipPainting({ super.key, required Widget super.child });
+  const SkipPainting({super.key, required Widget super.child});
 
   @override
   SkipPaintingRenderObject createRenderObject(BuildContext context) => SkipPaintingRenderObject();
@@ -16941,21 +19589,125 @@ class SkipPainting extends SingleChildRenderObjectWidget {
 
 class SkipPaintingRenderObject extends RenderProxyBox {
   @override
-  void paint(PaintingContext context, Offset offset) { }
+  void paint(PaintingContext context, Offset offset) {}
 }
 
 class _AccentColorTextEditingController extends TextEditingController {
   _AccentColorTextEditingController(String text) : super(text: text);
 
   @override
-  TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing, SpellCheckConfiguration? spellCheckConfiguration}) {
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+    SpellCheckConfiguration? spellCheckConfiguration,
+  }) {
     final Color color = Theme.of(context).colorScheme.secondary;
-    return super.buildTextSpan(context: context, style: TextStyle(color: color), withComposing: withComposing);
+    return super.buildTextSpan(
+      context: context,
+      style: TextStyle(color: color),
+      withComposing: withComposing,
+    );
   }
+}
+
+class _TextEditingControllerImpl extends ChangeNotifier implements TextEditingController {
+  final TextEditingController _innerController = TextEditingController();
+
+  @override
+  void clear() => _innerController.clear();
+
+  @override
+  void clearComposing() => _innerController.clearComposing();
+
+  @override
+  TextSelection get selection => _innerController.selection;
+  @override
+  set selection(TextSelection newSelection) => _innerController.selection = newSelection;
+
+  @override
+  String get text => _innerController.text;
+  @override
+  set text(String newText) => _innerController.text = newText;
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    return _innerController.buildTextSpan(
+      context: context,
+      style: style,
+      withComposing: withComposing,
+    );
+  }
+
+  @override
+  TextEditingValue get value => _innerController.value;
+  @override
+  set value(TextEditingValue newValue) => _innerController.value = newValue;
 }
 
 class _TestScrollController extends ScrollController {
   bool get attached => hasListeners;
 }
 
-class FakeSpellCheckService extends DefaultSpellCheckService {}
+class FakeSpellCheckService extends DefaultSpellCheckService {
+  FakeSpellCheckService({this.suggestionSpansByText = const <String, List<SuggestionSpan>?>{}});
+
+  final Map<String, List<SuggestionSpan>?> suggestionSpansByText;
+  int fetchSpellCheckSuggestionsCallCount = 0;
+  String? lastSpellCheckText;
+
+  @override
+  Future<List<SuggestionSpan>?> fetchSpellCheckSuggestions(Locale locale, String text) async {
+    fetchSpellCheckSuggestionsCallCount += 1;
+    lastSpellCheckText = text;
+    return suggestionSpansByText.containsKey(text)
+        ? suggestionSpansByText[text]
+        : const <SuggestionSpan>[];
+  }
+}
+
+class FakeFlutterView extends TestFlutterView {
+  FakeFlutterView(TestFlutterView view, {required this.viewId})
+    : super(view: view, display: view.display, platformDispatcher: view.platformDispatcher);
+
+  @override
+  final int viewId;
+}
+
+// A stateful context menu.
+//
+// When the overlay entry is updated in-place (via OverlayEntry.markNeedsBuild),
+// initState is not called again and initialValue remains unchanged.
+//
+// When the overlay entry is recreated from scratch, initState runs again and
+// initialValue is reset to the new widget.value.
+class _EditableTextStatefulMenu extends StatefulWidget {
+  const _EditableTextStatefulMenu({required this.value});
+
+  final int value;
+
+  @override
+  State<_EditableTextStatefulMenu> createState() => _EditableTextStatefulMenuState();
+}
+
+class _EditableTextStatefulMenuState extends State<_EditableTextStatefulMenu> {
+  late int initialValue;
+
+  @override
+  void initState() {
+    super.initState();
+    initialValue = widget.value;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Initial: $initialValue, Current: ${widget.value}',
+      textDirection: TextDirection.ltr,
+    );
+  }
+}
